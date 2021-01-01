@@ -1,13 +1,14 @@
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use derivative::Derivative;
 use ogg::reading::{OggReadError, PacketReader};
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use std::env;
-use std::fs::{File, OpenOptions};
-use std::io::{BufReader, BufWriter, Cursor, Read};
+use std::fs::File;
+use std::io::{BufReader, BufWriter, Cursor, Read, Write};
 use std::path::{Path, PathBuf};
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use thiserror::Error;
-use derivative::Derivative;
 use std::str::FromStr;
+use tempfile::PersistError;
+use thiserror::Error;
 
 const OPUS_MIN_HEADER_SIZE: usize = 19;
 const OPUS_MAGIC: &'static [u8] = &[0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64];
@@ -25,8 +26,8 @@ enum State {
 enum ZoopError {
     #[error("Unable to open file `{0}` due to `{1}`")]
     FileOpenError(PathBuf, std::io::Error),
-    #[error("Unable to open temporary file `{0}` due to `{1}`")]
-    TempFileOpenError(PathBuf, std::io::Error),
+    #[error("Unable to open temporary file due to `{0}`")]
+    TempFileOpenError(std::io::Error),
     #[error("Ogg decoding error: `{0}`")]
     OggDecode(OggReadError),
     #[error("Error writing to file: `{0}`")]
@@ -45,6 +46,8 @@ enum ZoopError {
     GainOutOfBounds,
     #[error("Failed to rename `{0}` to `{1}` due to `{2}`")]
     FileCopy(PathBuf, PathBuf, std::io::Error),
+    #[error("Failed to persist temporary file due to `{0}``")]
+    PersistError(#[from] PersistError),
 }
 
 struct OpusHeader<'a> {
@@ -253,23 +256,21 @@ fn main_impl() -> Result<(), ZoopError> {
     let input_file = File::open(&input_path).map_err(|e| ZoopError::FileOpenError(input_path.clone(), e))?;
     let input_file = BufReader::new(input_file);
 
-    let output_path = {
-        let mut path = input_path.clone();
-        path.set_extension("zoog-new");
-        path
-    };
-    let output_file = OpenOptions::new().write(true)
-        .create_new(true)
-        .open(&output_path)
-        .map_err(|e| ZoopError::TempFileOpenError(output_path.clone(), e))?;
-    let output_file = BufWriter::new(output_file);
+    let input_dir = input_path.parent().expect("Unable to find parent folder of input file").clone();
+    let input_base = input_path.file_name().expect("Unable to find name of input file").clone();
+    let mut output_file = tempfile::Builder::new()
+        .prefix(input_base)
+        .suffix("zoog")
+        .tempfile_in(input_dir)
+        .map_err(|e| ZoopError::TempFileOpenError(e))?;
 
     let rewrite_result = {
+        let mut output_file = BufWriter::new(&mut output_file);
         let mut ogg_reader = PacketReader::new(input_file);
-        let mut ogg_writer = PacketWriter::new(output_file);
+        let mut ogg_writer = PacketWriter::new(&mut output_file);
         let mut state = State::AwaitingHeader;
         let mut header_gain = None;
-        loop {
+        let result = loop {
             let packet = match ogg_reader.read_packet() {
                 Err(e) => break Err(ZoopError::OggDecode(e)),
                 Ok(packet) => packet,
@@ -333,16 +334,21 @@ fn main_impl() -> Result<(), ZoopError> {
                 packet_info,
                 packet_granule,
             ).map_err(|e| ZoopError::WriteError(e))?;
+        };
+        if let Err(e) = output_file.flush() {
+            Err(ZoopError::WriteError(e))
+        } else {
+            result
         }
     };
     match rewrite_result {
-        Err(_) => remove_file_verbose(&output_path),
-        Ok(RewriteResult::DoNothing) => remove_file_verbose(&output_path),
+        Err(_) => {},
+        Ok(RewriteResult::DoNothing) => {},
         Ok(RewriteResult::Replace) => {
             let mut backup_path = input_path.clone();
             backup_path.set_extension("zoog-orig");
             rename_file(&input_path, &backup_path)?;
-            rename_file(&output_path, &input_path)?;
+            output_file.persist_noclobber(&input_path)?;
             remove_file_verbose(&backup_path);
         }
     }
