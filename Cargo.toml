@@ -1,0 +1,10 @@
+[package]
+name = "zero-opus-output-gain"
+version = "0.1.0"
+authors = ["Francis Russell <francis@unchartedbackwaters.co.uk>"]
+edition = "2018"
+
+[dependencies]
+byteorder = "1.3.4"
+ogg = "0.7.1"
+thiserror = "1.0.23"
