@@ -2,6 +2,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
 use ogg::reading::{OggReadError, PacketReader};
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
+use std::collections::VecDeque;
 use std::env;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Cursor, Read, Write};
@@ -15,6 +16,7 @@ const OPUS_MAGIC: &'static [u8] = &[0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x
 const COMMENT_MAGIC: &'static [u8] = &[0x4f, 0x70, 0x75, 0x73, 0x54, 0x61, 0x67, 0x73];
 const TAG_TRACK_GAIN: &'static str = "R128_TRACK_GAIN";
 const TAG_ALBUM_GAIN: &'static str = "R128_ALBUM_GAIN";
+const R128_LUFS: f64 = -23.0;
 
 enum State {
     AwaitingHeader,
@@ -79,15 +81,13 @@ impl OutputGain {
     }
 
     fn checked_add(&self, rhs: &OutputGain) -> Option<OutputGain> {
-        let new_value = self.value.checked_add(rhs.value);
-        if let Some(value) = new_value {
-            Some(OutputGain {
-                value,
-            })
-        } else {
-            None
-        }
+        self.value.checked_add(rhs.value).map(|value| OutputGain { value })
     }
+
+    fn checked_neg(&self) -> Option<OutputGain> {
+        self.value.checked_neg().map(|value| OutputGain { value })
+    }
+
 }
 
 impl FromStr for OutputGain {
@@ -124,6 +124,17 @@ impl<'a> OpusHeader<'a> {
         let mut writer = Cursor::new(&mut self.data[16..18]);
         writer.write_i16::<LittleEndian>(gain.value).expect("Error writing gain");
     }
+
+    fn adjust_output_gain(&mut self, adjustment: OutputGain) -> Result<(), ZoopError> {
+        let gain = self.get_output_gain();
+        if let Some(gain) = gain.checked_add(&adjustment) {
+            self.set_output_gain(gain);
+            Ok(())
+        } else {
+            Err(ZoopError::GainOutOfBounds)
+        }
+    }
+
 }
 
 #[derive(Derivative)]
@@ -187,22 +198,36 @@ impl<'a> CommentHeader<'a> {
         self.user_comments.push((String::from(key), String::from(value)));
     }
 
-    fn get_gain_from_tag(&self, tag: &str) -> Result<OutputGain, ZoopError> {
-        self.get_first(tag)
-            .map(|v| v.parse::<OutputGain>().map_err(|_| ZoopError::InvalidR128Tag))
-            .unwrap_or(Ok(OutputGain::default()))
+    fn get_gain_from_tag(&self, tag: &str) -> Result<Option<OutputGain>, ZoopError> {
+        let parsed = self.get_first(tag)
+            .map(|v| v.parse::<OutputGain>().map_err(|_| ZoopError::InvalidR128Tag));
+        match parsed {
+            Some(Ok(v)) => Ok(Some(v)),
+            Some(Err(e)) => Err(e),
+            None => Ok(None),
+        }
+    }
+
+    fn get_album_or_track_gain(&self) -> Result<Option<OutputGain>, ZoopError> {
+        for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
+            if let Some(gain) = self.get_gain_from_tag(*tag)? {
+                return Ok(Some(gain))
+            }
+        }
+        return Ok(None)
     }
 
     fn adjust_gains(&mut self, adjustment: OutputGain) -> Result<(), ZoopError> {
         if adjustment.is_none() { return Ok(()); }
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
-            let gain = self.get_gain_from_tag(*tag)?;
-            let gain = if let Some(gain) = gain.checked_add(&adjustment) {
-                gain
-            } else {
-                return Err(ZoopError::GainOutOfBounds);
-            };
-            self.replace(*tag, &format!("{}", gain.as_fixed_point()));
+            if let Some(gain) = self.get_gain_from_tag(*tag)? {
+                let gain = if let Some(gain) = gain.checked_add(&adjustment) {
+                    gain
+                } else {
+                    return Err(ZoopError::GainOutOfBounds);
+                };
+                self.replace(*tag, &format!("{}", gain.as_fixed_point()));
+            }
         }
         Ok(())
     }
@@ -233,9 +258,13 @@ impl<'a> Drop for CommentHeader<'a> {
     }
 }
 
-fn print_gains<'a>(header: &CommentHeader<'a>) -> Result<(), ZoopError> {
-    println!("{}={}dB", TAG_ALBUM_GAIN, header.get_gain_from_tag(TAG_ALBUM_GAIN)?.as_decibels());
-    println!("{}={}dB", TAG_TRACK_GAIN, header.get_gain_from_tag(TAG_TRACK_GAIN)?.as_decibels());
+fn print_gains<'a>(opus_header: &OpusHeader<'a>, comment_header: &CommentHeader<'a>) -> Result<(), ZoopError> {
+    println!("{}: {}db", "Output Gain", opus_header.get_output_gain().as_decibels());
+    for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
+        if let Some(gain) = comment_header.get_gain_from_tag(tag)? {
+            println!("{}: {}dB", tag, gain.as_decibels());
+        }
+    }
     Ok(())
 }
 
@@ -261,6 +290,11 @@ enum RewriteResult {
     DoNothing,
 }
 
+enum OperationMode {
+    ZeroInputGain,
+    TargetLUFS(f64),
+}
+
 fn remove_file_verbose<P: AsRef<Path>>(path: P) {
     let path = path.as_ref();
     if let Err(e) = std::fs::remove_file(path) {
@@ -275,6 +309,7 @@ fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), Zoo
 }
 
 fn main_impl() -> Result<(), ZoopError> {
+    let mode = OperationMode::TargetLUFS(-18.0);
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 { usage(); }
     let input_path = PathBuf::from(&args[1]);
@@ -294,71 +329,104 @@ fn main_impl() -> Result<(), ZoopError> {
         let mut ogg_reader = PacketReader::new(input_file);
         let mut ogg_writer = PacketWriter::new(&mut output_file);
         let mut state = State::AwaitingHeader;
-        let mut header_gain = None;
+        let mut header_packet = None;
+        let mut packet_queue = VecDeque::new();
         let result = loop {
             let packet = match ogg_reader.read_packet() {
                 Err(e) => break Err(ZoopError::OggDecode(e)),
                 Ok(packet) => packet,
             };
-            let packet = match packet {
+            let mut packet = match packet {
                 None => break Ok(RewriteResult::Replace),
                 Some(packet) => packet,
             };
-            let mut packet_data = packet.data.clone();
-
             match state {
                 State::AwaitingHeader => {
-                    let mut header = if let Some(header) = OpusHeader::try_new(&mut packet_data) {
-                        header
-                    } else {
-                        break Err(ZoopError::MissingOpusStream)
-                    };
-                    let original_gain = header.get_output_gain();
-                    header_gain = Some(original_gain);
-                    println!("Original header gain: {}dB", original_gain.as_decibels());
-                    header.set_output_gain(OutputGain::from_decibels(0.0));
-                    println!("New header gain: {}dB", header.get_output_gain().as_decibels());
+                    header_packet = Some(packet);
                     state = State::AwaitingComments;
                 },
                 State::AwaitingComments => {
-                    let mut header = match CommentHeader::try_new(&mut packet_data) {
-                        Ok(Some(header)) => header,
-                        Ok(None) => break Err(ZoopError::MissingCommentHeader),
-                        Err(e) => break Err(e),
-                    };
-                    let header_gain = header_gain.expect("Could not find header output gain");
-                    if header_gain.is_none() {
-                        println!("Header gain is 0dB so making no changes");
-                        break Ok(RewriteResult::DoNothing);
-                    } else {
-                        println!("\nOriginal tags gain values:");
-                        if let Err(e) = print_gains(&header) { break Err(e); }
-                        if let Err(e) = header.adjust_gains(header_gain) {
-                            break Err(e);
+                    // Parse Opus header
+                    let mut opus_header_packet = header_packet.take().expect("Missing header packet");
+                    {
+                        let mut opus_header = if let Some(header) = OpusHeader::try_new(&mut opus_header_packet.data) {
+                            header
+                        } else {
+                            break Err(ZoopError::MissingOpusStream)
+                        };
+
+                        // Parse comment header
+                        let mut comment_header = match CommentHeader::try_new(&mut packet.data) {
+                            Ok(Some(header)) => header,
+                            Ok(None) => break Err(ZoopError::MissingCommentHeader),
+                            Err(e) => break Err(e),
+                        };
+
+                        let header_gain = opus_header.get_output_gain();
+                        let comment_gain = match comment_header.get_album_or_track_gain() {
+                            Err(e) => break Err(e),
+                            Ok(None) => {
+                                eprintln!("No R128 tags detected so doing nothing to this file");
+                                break Ok(RewriteResult::DoNothing);
+                            },
+                            Ok(Some(gain)) => gain,
+                        };
+
+                        println!("\nOriginal gain values:");
+                        if let Err(e) = print_gains(&opus_header, &comment_header) { break Err(e); }
+                        match mode {
+                            OperationMode::ZeroInputGain => {
+                                // Set Opus header gain
+                                opus_header.set_output_gain(OutputGain::default());
+                                // Set comment header gain
+                                if header_gain.is_none() {
+                                    println!("Output gain is already 0dB so not making any changes");
+                                    break Ok(RewriteResult::DoNothing);
+                                } else {
+                                    if let Err(e) = comment_header.adjust_gains(header_gain) { break Err(e); }
+                                }
+                            }
+                            OperationMode::TargetLUFS(target_lufs) => {
+                                // FIXME: Check this conversion is valid
+                                let header_delta = OutputGain::from_decibels(comment_gain.as_decibels() + target_lufs - R128_LUFS);
+                                let comment_delta = if let Some(negated) = header_delta.checked_neg() {
+                                    negated
+                                } else {
+                                    break Err(ZoopError::GainOutOfBounds);
+                                };
+                                if let Err(e) = opus_header.adjust_output_gain(header_delta) { break Err(e); }
+                                if let Err(e) = comment_header.adjust_gains(comment_delta) { break Err(e); }
+                            }
                         }
-                        println!("\nNew tags gain values:");
-                        if let Err(e) = print_gains(&header) { break Err(e); }
+                        println!("\nNew gain values:");
+                        if let Err(e) = print_gains(&opus_header, &comment_header) { break Err(e); }
                     }
+                    packet_queue.push_back(opus_header_packet);
+                    packet_queue.push_back(packet);
                     state = State::Forwarding;
                 }
-                State::Forwarding => {},
+                State::Forwarding => {
+                    packet_queue.push_back(packet);
+                },
             }
 
-            let packet_info = if packet.last_in_stream() {
-                PacketWriteEndInfo::EndStream
-            } else if packet.last_in_page() {
-                PacketWriteEndInfo::EndPage
-            } else {
-                PacketWriteEndInfo::NormalPacket
-            };
-            let packet_serial = packet.stream_serial();
-            let packet_granule = packet.absgp_page();
+            while let Some(packet) = packet_queue.pop_front() {
+                let packet_info = if packet.last_in_stream() {
+                    PacketWriteEndInfo::EndStream
+                } else if packet.last_in_page() {
+                    PacketWriteEndInfo::EndPage
+                } else {
+                    PacketWriteEndInfo::NormalPacket
+                };
+                let packet_serial = packet.stream_serial();
+                let packet_granule = packet.absgp_page();
 
-            ogg_writer.write_packet(packet_data.into_boxed_slice(),
-                packet_serial,
-                packet_info,
-                packet_granule,
-            ).map_err(|e| ZoopError::WriteError(e))?;
+                ogg_writer.write_packet(packet.data.into_boxed_slice(),
+                    packet_serial,
+                    packet_info,
+                    packet_granule,
+                ).map_err(|e| ZoopError::WriteError(e))?;
+            }
         };
         if let Err(e) = output_file.flush() {
             Err(ZoopError::WriteError(e))
