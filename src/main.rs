@@ -25,7 +25,7 @@ enum State {
 }
 
 #[derive(Debug, Error)]
-enum ZoopError {
+enum ZoogError {
     #[error("Unable to open file `{0}` due to `{1}`")]
     FileOpenError(PathBuf, std::io::Error),
     #[error("Unable to open temporary file due to `{0}`")]
@@ -125,13 +125,13 @@ impl<'a> OpusHeader<'a> {
         writer.write_i16::<LittleEndian>(gain.value).expect("Error writing gain");
     }
 
-    fn adjust_output_gain(&mut self, adjustment: OutputGain) -> Result<(), ZoopError> {
+    fn adjust_output_gain(&mut self, adjustment: OutputGain) -> Result<(), ZoogError> {
         let gain = self.get_output_gain();
         if let Some(gain) = gain.checked_add(&adjustment) {
             self.set_output_gain(gain);
             Ok(())
         } else {
-            Err(ZoopError::GainOutOfBounds)
+            Err(ZoogError::GainOutOfBounds)
         }
     }
 
@@ -147,23 +147,23 @@ struct CommentHeader<'a> {
 }
 
 impl<'a> CommentHeader<'a> {
-    fn try_parse(data: &'a mut Vec<u8>) -> Result<CommentHeader<'a>, ZoopError> {
+    fn try_parse(data: &'a mut Vec<u8>) -> Result<CommentHeader<'a>, ZoogError> {
         let mut reader = Cursor::new(&data[COMMENT_MAGIC.len()..]);
-        let vendor_len = reader.read_u32::<LittleEndian>().map_err(|_| ZoopError::MalformedCommentHeader)?;
+        let vendor_len = reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)?;
         let mut vendor = vec![0u8; vendor_len as usize];
-        reader.read_exact(&mut vendor[..]).map_err(|_| ZoopError::MalformedCommentHeader)?;
+        reader.read_exact(&mut vendor[..]).map_err(|_| ZoogError::MalformedCommentHeader)?;
         let vendor = String::from_utf8(vendor)?;
-        let num_comments = reader.read_u32::<LittleEndian>().map_err(|_| ZoopError::MalformedCommentHeader)?;
+        let num_comments = reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)?;
         let mut user_comments = Vec::with_capacity(num_comments as usize);
         for _ in 0..num_comments {
-            let comment_len = reader.read_u32::<LittleEndian>().map_err(|_| ZoopError::MalformedCommentHeader)?;
+            let comment_len = reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)?;
             let mut comment = vec![0u8; comment_len as usize];
-            reader.read_exact(&mut comment[..]).map_err(|_| ZoopError::MalformedCommentHeader)?;
+            reader.read_exact(&mut comment[..]).map_err(|_| ZoogError::MalformedCommentHeader)?;
             let comment = String::from_utf8(comment)?;
             let offset = if let Some(offset) = comment.find("=") {
                 offset
             } else {
-                return Err(ZoopError::MalformedCommentHeader);
+                return Err(ZoogError::MalformedCommentHeader);
             };
             let (key, value) = comment.split_at(offset);
             user_comments.push((String::from(key), String::from(&value[1..])));
@@ -176,7 +176,7 @@ impl<'a> CommentHeader<'a> {
         Ok(result)
     }
 
-    fn try_new(data: &'a mut Vec<u8>) -> Result<Option<CommentHeader<'a>>, ZoopError> {
+    fn try_new(data: &'a mut Vec<u8>) -> Result<Option<CommentHeader<'a>>, ZoogError> {
         let identical = data.iter().take(COMMENT_MAGIC.len()).eq(COMMENT_MAGIC.iter());
         if !identical { return Ok(None); }
          Self::try_parse(data).map(|v| Some(v))
@@ -198,9 +198,9 @@ impl<'a> CommentHeader<'a> {
         self.user_comments.push((String::from(key), String::from(value)));
     }
 
-    fn get_gain_from_tag(&self, tag: &str) -> Result<Option<OutputGain>, ZoopError> {
+    fn get_gain_from_tag(&self, tag: &str) -> Result<Option<OutputGain>, ZoogError> {
         let parsed = self.get_first(tag)
-            .map(|v| v.parse::<OutputGain>().map_err(|_| ZoopError::InvalidR128Tag));
+            .map(|v| v.parse::<OutputGain>().map_err(|_| ZoogError::InvalidR128Tag));
         match parsed {
             Some(Ok(v)) => Ok(Some(v)),
             Some(Err(e)) => Err(e),
@@ -208,7 +208,7 @@ impl<'a> CommentHeader<'a> {
         }
     }
 
-    fn get_album_or_track_gain(&self) -> Result<Option<OutputGain>, ZoopError> {
+    fn get_album_or_track_gain(&self) -> Result<Option<OutputGain>, ZoogError> {
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
             if let Some(gain) = self.get_gain_from_tag(*tag)? {
                 return Ok(Some(gain))
@@ -217,14 +217,14 @@ impl<'a> CommentHeader<'a> {
         return Ok(None)
     }
 
-    fn adjust_gains(&mut self, adjustment: OutputGain) -> Result<(), ZoopError> {
+    fn adjust_gains(&mut self, adjustment: OutputGain) -> Result<(), ZoogError> {
         if adjustment.is_none() { return Ok(()); }
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
             if let Some(gain) = self.get_gain_from_tag(*tag)? {
                 let gain = if let Some(gain) = gain.checked_add(&adjustment) {
                     gain
                 } else {
-                    return Err(ZoopError::GainOutOfBounds);
+                    return Err(ZoogError::GainOutOfBounds);
                 };
                 self.replace(*tag, &format!("{}", gain.as_fixed_point()));
             }
@@ -258,7 +258,7 @@ impl<'a> Drop for CommentHeader<'a> {
     }
 }
 
-fn print_gains<'a>(opus_header: &OpusHeader<'a>, comment_header: &CommentHeader<'a>) -> Result<(), ZoopError> {
+fn print_gains<'a>(opus_header: &OpusHeader<'a>, comment_header: &CommentHeader<'a>) -> Result<(), ZoogError> {
     println!("{}: {}db", "Output Gain", opus_header.get_output_gain().as_decibels());
     for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
         if let Some(gain) = comment_header.get_gain_from_tag(tag)? {
@@ -302,18 +302,18 @@ fn remove_file_verbose<P: AsRef<Path>>(path: P) {
     }
 }
 
-fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), ZoopError> {
+fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), ZoogError> {
     std::fs::rename(from.as_ref(), to.as_ref()).map_err(|e| {
-        ZoopError::FileCopy(PathBuf::from(from.as_ref()), PathBuf::from(to.as_ref()), e)
+        ZoogError::FileCopy(PathBuf::from(from.as_ref()), PathBuf::from(to.as_ref()), e)
     })
 }
 
-fn main_impl() -> Result<(), ZoopError> {
+fn main_impl() -> Result<(), ZoogError> {
     let mode = OperationMode::TargetLUFS(-18.0);
     let args: Vec<String> = env::args().collect();
     if args.len() < 2 { usage(); }
     let input_path = PathBuf::from(&args[1]);
-    let input_file = File::open(&input_path).map_err(|e| ZoopError::FileOpenError(input_path.clone(), e))?;
+    let input_file = File::open(&input_path).map_err(|e| ZoogError::FileOpenError(input_path.clone(), e))?;
     let input_file = BufReader::new(input_file);
 
     let input_dir = input_path.parent().expect("Unable to find parent folder of input file").clone();
@@ -322,7 +322,7 @@ fn main_impl() -> Result<(), ZoopError> {
         .prefix(input_base)
         .suffix("zoog")
         .tempfile_in(input_dir)
-        .map_err(|e| ZoopError::TempFileOpenError(e))?;
+        .map_err(|e| ZoogError::TempFileOpenError(e))?;
 
     let rewrite_result = {
         let mut output_file = BufWriter::new(&mut output_file);
@@ -333,7 +333,7 @@ fn main_impl() -> Result<(), ZoopError> {
         let mut packet_queue = VecDeque::new();
         let result = loop {
             let packet = match ogg_reader.read_packet() {
-                Err(e) => break Err(ZoopError::OggDecode(e)),
+                Err(e) => break Err(ZoogError::OggDecode(e)),
                 Ok(packet) => packet,
             };
             let mut packet = match packet {
@@ -352,13 +352,13 @@ fn main_impl() -> Result<(), ZoopError> {
                         let mut opus_header = if let Some(header) = OpusHeader::try_new(&mut opus_header_packet.data) {
                             header
                         } else {
-                            break Err(ZoopError::MissingOpusStream)
+                            break Err(ZoogError::MissingOpusStream)
                         };
 
                         // Parse comment header
                         let mut comment_header = match CommentHeader::try_new(&mut packet.data) {
                             Ok(Some(header)) => header,
-                            Ok(None) => break Err(ZoopError::MissingCommentHeader),
+                            Ok(None) => break Err(ZoogError::MissingCommentHeader),
                             Err(e) => break Err(e),
                         };
 
@@ -392,7 +392,7 @@ fn main_impl() -> Result<(), ZoopError> {
                                 let comment_delta = if let Some(negated) = header_delta.checked_neg() {
                                     negated
                                 } else {
-                                    break Err(ZoopError::GainOutOfBounds);
+                                    break Err(ZoogError::GainOutOfBounds);
                                 };
                                 if let Err(e) = opus_header.adjust_output_gain(header_delta) { break Err(e); }
                                 if let Err(e) = comment_header.adjust_gains(comment_delta) { break Err(e); }
@@ -425,11 +425,11 @@ fn main_impl() -> Result<(), ZoopError> {
                     packet_serial,
                     packet_info,
                     packet_granule,
-                ).map_err(|e| ZoopError::WriteError(e))?;
+                ).map_err(|e| ZoogError::WriteError(e))?;
             }
         };
         if let Err(e) = output_file.flush() {
-            Err(ZoopError::WriteError(e))
+            Err(ZoogError::WriteError(e))
         } else {
             result
         }
