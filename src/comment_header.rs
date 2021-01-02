@@ -30,11 +30,7 @@ impl<'a> CommentHeader<'a> {
             let mut comment = vec![0u8; comment_len as usize];
             reader.read_exact(&mut comment[..]).map_err(|_| ZoogError::MalformedCommentHeader)?;
             let comment = String::from_utf8(comment)?;
-            let offset = if let Some(offset) = comment.find('=') {
-                offset
-            } else {
-                return Err(ZoogError::MalformedCommentHeader);
-            };
+            let offset = comment.find('=').ok_or(ZoogError::MalformedCommentHeader)?;
             let (key, value) = comment.split_at(offset);
             user_comments.push((String::from(key), String::from(&value[1..])));
         }
@@ -91,11 +87,7 @@ impl<'a> CommentHeader<'a> {
         if adjustment.is_none() { return Ok(()); }
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
             if let Some(gain) = self.get_gain_from_tag(*tag)? {
-                let gain = if let Some(gain) = gain.checked_add(adjustment) {
-                    gain
-                } else {
-                    return Err(ZoogError::GainOutOfBounds);
-                };
+                let gain = gain.checked_add(adjustment).ok_or(ZoogError::GainOutOfBounds)?;
                 self.replace(*tag, &format!("{}", gain.as_fixed_point()));
             }
         }

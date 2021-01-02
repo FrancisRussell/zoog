@@ -112,12 +112,8 @@ impl<W: Write> Rewriter<W> {
                 // Parse Opus header
                 let mut opus_header_packet = self.header_packet.take().expect("Missing header packet");
                 {
-                    let mut opus_header = if let Some(header) = OpusHeader::try_new(&mut opus_header_packet.data) {
-                        header
-                    } else {
-                        return Err(ZoogError::MissingOpusStream)
-                    };
-
+                    let mut opus_header = OpusHeader::try_new(&mut opus_header_packet.data)
+                        .ok_or(ZoogError::MissingOpusStream)?;
                     // Parse comment header
                     let mut comment_header = match CommentHeader::try_new(&mut packet.data) {
                         Ok(Some(header)) => header,
@@ -150,11 +146,7 @@ impl<W: Write> Rewriter<W> {
                             let header_delta = Gain::from_decibels(comment_gain.as_decibels() + target_lufs - R128_LUFS);
                             let header_delta = header_delta.ok_or(ZoogError::GainOutOfBounds)?;
                             if header_delta.is_none() { return Ok(RewriteResult::AlreadyNormalized); }
-                            let comment_delta = if let Some(negated) = header_delta.checked_neg() {
-                                negated
-                            } else {
-                                return Err(ZoogError::GainOutOfBounds);
-                            };
+                            let comment_delta = header_delta.checked_neg().ok_or(ZoogError::GainOutOfBounds)?;
                             opus_header.adjust_output_gain(header_delta)?;
                             comment_header.adjust_gains(comment_delta)?;
                         }

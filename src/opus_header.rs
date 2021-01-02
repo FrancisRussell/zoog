@@ -36,12 +36,9 @@ impl<'a> OpusHeader<'a> {
 
     pub fn adjust_output_gain(&mut self, adjustment: Gain) -> Result<(), ZoogError> {
         let gain = self.get_output_gain();
-        if let Some(gain) = gain.checked_add(adjustment) {
-            self.set_output_gain(gain);
-            Ok(())
-        } else {
-            Err(ZoogError::GainOutOfBounds)
-        }
+        let gain = gain.checked_add(adjustment).ok_or(ZoogError::GainOutOfBounds)?;
+        self.set_output_gain(gain);
+        Ok(())
     }
 
 }
