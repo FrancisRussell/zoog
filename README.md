@@ -55,9 +55,13 @@ The following options are available:
 * `--preset=rg`: In this mode, Zoog will set the output gain in the Opus binary
   header to the value that ensures playback will occur at -18 LUFS, which
   should match the loudness of ReplayGain normalized files.  This is probably
-  the best option if you have a player which supports ReplayGain for other file
-  formats, but doesn't know about `R128` tags. This will use the album
-  normalization value if present, and the track normalization value if not.
+  the best option when you have a player that doesn't know about Opus `R128`
+  tags, but:
+    * does support ReplayGain for the other file formats you use, and/or
+    * the files you play have been adjusted in a player-agnostic way
+      ([mp3gain](http://mp3gain.sourceforge.net/) and
+      [aacgain](http://aacgain.altosdesign.com/) can do this) to the ReplayGain
+      reference volume.
 
 * `--preset=r128`: In this mode, Zoog will set the output gain in the Opus
   binary header to the value that ensures playback will occur at -23 LUFS,
@@ -70,6 +74,18 @@ The following options are available:
 
 If neither the `R128_ALBUM_GAIN` or `R128_TRACK_GAIN` tags are found in the
 input file, Zoog will not modify the file.
+
+## What Zoog doesn't do
+
+* Zorg doesn't actually compute the loudness of the input file itself, hence the requirements
+for either the `R128_ALBUM_GAIN` or `R128_TRACK_GAIN` tags.
+
+* Due to the first point, Zorg cannot do anything about clipping. If
+`--preset=none` is set, the clipping will be the same as would have existed
+if `opusenc` had been used on an input file without any loudness information.
+On audio with high levels of 
+[dynamic range compression](https://en.wikipedia.org/wiki/Dynamic_range_compression),
+clipping is unlikely to occur on the other presets.
 
 ## Disclaimer
 
