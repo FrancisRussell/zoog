@@ -1,3 +1,4 @@
+use ogg::Packet;
 use ogg::reading::PacketReader;
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use std::collections::VecDeque;
@@ -42,8 +43,9 @@ fn main() {
 
 #[derive(Debug)]
 enum RewriteResult {
-    Replace,
-    DoNothing,
+    Ready,
+    NoR128Tags,
+    AlreadyNormalized,
 }
 
 enum OperationMode {
@@ -64,6 +66,119 @@ fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), Zoo
     })
 }
 
+struct Rewriter<W: Write> {
+    packet_writer: PacketWriter<W>,
+    header_packet: Option<Packet>,
+    state: State,
+    packet_queue: VecDeque<Packet>,
+    mode: OperationMode,
+    verbose: bool,
+}
+
+impl<W: Write> Rewriter<W> {
+    pub fn new(mode: OperationMode, packet_writer: PacketWriter<W>, verbose: bool) -> Rewriter<W> {
+        Rewriter {
+            packet_writer,
+            header_packet: None,
+            state: State::AwaitingHeader,
+            packet_queue: VecDeque::new(),
+            mode,
+            verbose,
+        }
+    }
+
+    pub fn submit(&mut self, mut packet: Packet) -> Result<RewriteResult, ZoogError> {
+        match self.state {
+            State::AwaitingHeader => {
+                self.header_packet = Some(packet);
+                self.state = State::AwaitingComments;
+            },
+            State::AwaitingComments => {
+                // Parse Opus header
+                let mut opus_header_packet = self.header_packet.take().expect("Missing header packet");
+                {
+                    let mut opus_header = if let Some(header) = OpusHeader::try_new(&mut opus_header_packet.data) {
+                        header
+                    } else {
+                        return Err(ZoogError::MissingOpusStream)
+                    };
+
+                    // Parse comment header
+                    let mut comment_header = match CommentHeader::try_new(&mut packet.data) {
+                        Ok(Some(header)) => header,
+                        Ok(None) => return Err(ZoogError::MissingCommentHeader),
+                        Err(e) => return Err(e),
+                    };
+
+                    let header_gain = opus_header.get_output_gain();
+                    let comment_gain = match comment_header.get_album_or_track_gain() {
+                        Err(e) => return Err(e),
+                        Ok(None) => return Ok(RewriteResult::NoR128Tags),
+                        Ok(Some(gain)) => gain,
+                    };
+                    if self.verbose {
+                        println!("\nOriginal gain values:");
+                        print_gains(&opus_header, &comment_header)?;
+                    }
+                    match self.mode {
+                        OperationMode::ZeroInputGain => {
+                            // Set Opus header gain
+                            opus_header.set_output_gain(Gain::default());
+                            // Set comment header gain
+                            if header_gain.is_none() {
+                                return Ok(RewriteResult::AlreadyNormalized);
+                            } else {
+                                comment_header.adjust_gains(header_gain)?;
+                            }
+                        }
+                        OperationMode::TargetLUFS(target_lufs) => {
+                            // FIXME: Check this conversion is valid
+                            let header_delta = Gain::from_decibels(comment_gain.as_decibels() + target_lufs - R128_LUFS);
+                            if header_delta.is_none() { return Ok(RewriteResult::AlreadyNormalized); }
+                            let comment_delta = if let Some(negated) = header_delta.checked_neg() {
+                                negated
+                            } else {
+                                return Err(ZoogError::GainOutOfBounds);
+                            };
+                            opus_header.adjust_output_gain(header_delta)?;
+                            comment_header.adjust_gains(comment_delta)?;
+                        }
+                    }
+                    if self.verbose {
+                        println!("\nNew gain values:");
+                        print_gains(&opus_header, &comment_header)?;
+                    }
+                }
+                self.packet_queue.push_back(opus_header_packet);
+                self.packet_queue.push_back(packet);
+                self.state = State::Forwarding;
+            }
+            State::Forwarding => {
+                self.packet_queue.push_back(packet);
+            },
+        }
+
+        while let Some(packet) = self.packet_queue.pop_front() {
+            let packet_info = if packet.last_in_stream() {
+                PacketWriteEndInfo::EndStream
+            } else if packet.last_in_page() {
+                PacketWriteEndInfo::EndPage
+            } else {
+                PacketWriteEndInfo::NormalPacket
+            };
+            let packet_serial = packet.stream_serial();
+            let packet_granule = packet.absgp_page();
+
+            self.packet_writer.write_packet(packet.data.into_boxed_slice(),
+                packet_serial,
+                packet_info,
+                packet_granule,
+            ).map_err(|e| ZoogError::WriteError(e))?;
+        }
+        Ok(RewriteResult::Ready)
+    }
+}
+
 fn main_impl() -> Result<(), ZoogError> {
     let mode = OperationMode::TargetLUFS(-18.0);
     let args: Vec<String> = env::args().collect();
@@ -81,125 +196,44 @@ fn main_impl() -> Result<(), ZoogError> {
         .map_err(|e| ZoogError::TempFileOpenError(e))?;
 
     let rewrite_result = {
-        let mut output_file = BufWriter::new(&mut output_file);
         let mut ogg_reader = PacketReader::new(input_file);
-        let mut ogg_writer = PacketWriter::new(&mut output_file);
-        let mut state = State::AwaitingHeader;
-        let mut header_packet = None;
-        let mut packet_queue = VecDeque::new();
-        let result = loop {
-            let packet = match ogg_reader.read_packet() {
+        let mut output_file = BufWriter::new(&mut output_file);
+        let ogg_writer = PacketWriter::new(&mut output_file);
+        let mut rewriter = Rewriter::new(mode, ogg_writer, true);
+        loop {
+            match ogg_reader.read_packet() {
                 Err(e) => break Err(ZoogError::OggDecode(e)),
-                Ok(packet) => packet,
-            };
-            let mut packet = match packet {
-                None => break Ok(RewriteResult::Replace),
-                Some(packet) => packet,
-            };
-            match state {
-                State::AwaitingHeader => {
-                    header_packet = Some(packet);
-                    state = State::AwaitingComments;
+                Ok(None) => {
+                    // Make sure to flush the buffered writer
+                    break output_file.flush()
+                        .map(|_| RewriteResult::Ready)
+                        .map_err(|e| ZoogError::WriteError(e));
                 },
-                State::AwaitingComments => {
-                    // Parse Opus header
-                    let mut opus_header_packet = header_packet.take().expect("Missing header packet");
-                    {
-                        let mut opus_header = if let Some(header) = OpusHeader::try_new(&mut opus_header_packet.data) {
-                            header
-                        } else {
-                            break Err(ZoogError::MissingOpusStream)
-                        };
-
-                        // Parse comment header
-                        let mut comment_header = match CommentHeader::try_new(&mut packet.data) {
-                            Ok(Some(header)) => header,
-                            Ok(None) => break Err(ZoogError::MissingCommentHeader),
-                            Err(e) => break Err(e),
-                        };
-
-                        let header_gain = opus_header.get_output_gain();
-                        let comment_gain = match comment_header.get_album_or_track_gain() {
-                            Err(e) => break Err(e),
-                            Ok(None) => {
-                                eprintln!("No R128 tags detected so doing nothing to this file");
-                                break Ok(RewriteResult::DoNothing);
-                            },
-                            Ok(Some(gain)) => gain,
-                        };
-
-                        println!("\nOriginal gain values:");
-                        if let Err(e) = print_gains(&opus_header, &comment_header) { break Err(e); }
-                        match mode {
-                            OperationMode::ZeroInputGain => {
-                                // Set Opus header gain
-                                opus_header.set_output_gain(Gain::default());
-                                // Set comment header gain
-                                if header_gain.is_none() {
-                                    println!("Output gain is already 0dB so not making any changes");
-                                    break Ok(RewriteResult::DoNothing);
-                                } else {
-                                    if let Err(e) = comment_header.adjust_gains(header_gain) { break Err(e); }
-                                }
-                            }
-                            OperationMode::TargetLUFS(target_lufs) => {
-                                // FIXME: Check this conversion is valid
-                                let header_delta = Gain::from_decibels(comment_gain.as_decibels() + target_lufs - R128_LUFS);
-                                let comment_delta = if let Some(negated) = header_delta.checked_neg() {
-                                    negated
-                                } else {
-                                    break Err(ZoogError::GainOutOfBounds);
-                                };
-                                if let Err(e) = opus_header.adjust_output_gain(header_delta) { break Err(e); }
-                                if let Err(e) = comment_header.adjust_gains(comment_delta) { break Err(e); }
-                            }
-                        }
-                        println!("\nNew gain values:");
-                        if let Err(e) = print_gains(&opus_header, &comment_header) { break Err(e); }
+                Ok(Some(packet)) => {
+                    let submit_result = rewriter.submit(packet);
+                    match submit_result {
+                        Ok(RewriteResult::Ready) => {},
+                        _ => break submit_result,
                     }
-                    packet_queue.push_back(opus_header_packet);
-                    packet_queue.push_back(packet);
-                    state = State::Forwarding;
-                }
-                State::Forwarding => {
-                    packet_queue.push_back(packet);
                 },
             }
-
-            while let Some(packet) = packet_queue.pop_front() {
-                let packet_info = if packet.last_in_stream() {
-                    PacketWriteEndInfo::EndStream
-                } else if packet.last_in_page() {
-                    PacketWriteEndInfo::EndPage
-                } else {
-                    PacketWriteEndInfo::NormalPacket
-                };
-                let packet_serial = packet.stream_serial();
-                let packet_granule = packet.absgp_page();
-
-                ogg_writer.write_packet(packet.data.into_boxed_slice(),
-                    packet_serial,
-                    packet_info,
-                    packet_granule,
-                ).map_err(|e| ZoogError::WriteError(e))?;
-            }
-        };
-        if let Err(e) = output_file.flush() {
-            Err(ZoogError::WriteError(e))
-        } else {
-            result
         }
     };
     match rewrite_result {
         Err(_) => {},
-        Ok(RewriteResult::DoNothing) => {},
-        Ok(RewriteResult::Replace) => {
+        Ok(RewriteResult::Ready) => {
             let mut backup_path = input_path.clone();
             backup_path.set_extension("zoog-orig");
             rename_file(&input_path, &backup_path)?;
             output_file.persist_noclobber(&input_path)?;
             remove_file_verbose(&backup_path);
         }
+        Ok(RewriteResult::NoR128Tags) => {
+            println!("No R128 tags found in file so doing nothing.");
+        },
+        Ok(RewriteResult::AlreadyNormalized) => {
+            println!("All gains are already correct so doing nothing.");
+        },
     }
     rewrite_result.map(|_| ())
 }
