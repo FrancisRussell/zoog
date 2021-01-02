@@ -2,7 +2,7 @@
 
 Zoog is a tool for setting the output gain value located in a binary header
 inside Opus files (specifically an Opus-encoded audio stream within an Ogg
-file). It is intended to solve the "Opus plays too quietly problem".
+file). It is intended to solve the "Opus plays too quietly" problem.
 
 ## Background
 
