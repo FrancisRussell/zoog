@@ -63,6 +63,9 @@ The following options are available:
       [aacgain](http://aacgain.altosdesign.com/) can do this) to the ReplayGain
       reference volume.
 
+  This will use the album normalization value if present, and the track
+  normalization value if not.
+
 * `--preset=r128`: In this mode, Zoog will set the output gain in the Opus
   binary header to the value that ensures playback will occur at -23 LUFS,
   which should match the loudness of files produced by `opusenc` from FLAC
