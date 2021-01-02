@@ -15,10 +15,9 @@ impl<'a> OpusHeader<'a> {
         if data.len() < OPUS_MIN_HEADER_SIZE { return None; }
         let identical = data.iter().take(OPUS_MAGIC.len()).eq(OPUS_MAGIC.iter());
         if !identical { return None; }
-        let header = OpusHeader {
+        Some(OpusHeader {
             data,
-        };
-        Some(header)
+        })
     }
 
     pub fn get_output_gain(&self) -> Gain {

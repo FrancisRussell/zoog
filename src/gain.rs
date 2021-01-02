@@ -44,8 +44,7 @@ impl FromStr for Gain {
     type Err = <i16 as FromStr>::Err;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> {
-        let value = s.parse::<i16>()?;
-        Ok(Gain {
+        s.parse::<i16>().map(|value| Gain {
             value,
         })
     }
