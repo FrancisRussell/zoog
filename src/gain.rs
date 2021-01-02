@@ -17,7 +17,7 @@ impl Gain {
     pub fn from_decibels(value: f64) -> Option<Gain> {
         let fixed = (value * 256.0).round();
         let value = fixed as i16;
-        if (value as f64) == fixed {
+        if ((value as f64) - fixed).abs() < std::f64::EPSILON {
             Some(Gain {
                 value,
             })
