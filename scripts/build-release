@@ -1,0 +1,48 @@
+#!/bin/bash
+set -eu
+
+TAG="$(echo ${1} | sed 's/refs\/tags\///')"
+TARGET="${2}"
+
+if echo ${TARGET} | grep -i windows > /dev/null; then
+  EXE_SUFFIX=".exe"
+  ARCHIVE_FORMAT="zip"
+else
+  EXE_SUFFIX=""
+  ARCHIVE_FORMAT="tarball"
+fi
+
+TOP="$(pwd)"
+SCRATCH=$(mktemp -d -p .)
+SCRATCH=$(readlink -e "${SCRATCH}")
+trap "rm -rf ${SCRATCH}" EXIT HUP INT QUIT TERM
+pushd "${SCRATCH}"
+NAME="zoog-${TAG}-${TARGET}"
+mkdir "${NAME}"
+cp -a "${TOP}/README.md" "${NAME}"
+cp -a "${TOP}/CHANGELOG.md" "${NAME}"
+cp -a "${TOP}/LICENSE" "${NAME}"
+for BINARY in zoog; do
+  BINARY_PATH="${TOP}/target/${TARGET}/release/${BINARY}${EXE_SUFFIX}"
+  if [ -f "${BINARY_PATH}" ]; then
+    cp -a "${BINARY_PATH}" "${NAME}"
+  fi
+done
+
+if [ "${ARCHIVE_FORMAT}" = "tarball" ]; then
+  CONTENT_TYPE="application/x-bzip2"
+  OUTPUT="${NAME}.tar.bz2"
+  tar -jcf "${OUTPUT}" "${NAME}"
+elif [ "${ARCHIVE_FORMAT}" = "zip" ]; then
+  CONTENT_TYPE="application/zip"
+  OUTPUT="${NAME}.zip"
+  zip -r "${OUTPUT}" "${NAME}"
+else
+  echo "Don't know how to generate ${ARCHIVE_FORMAT}"
+  exit 1
+fi
+
+mv "${OUTPUT}" "${TOP}"
+echo "##[set-output name=path;]${TOP}/${OUTPUT}"
+echo "##[set-output name=name;]${OUTPUT}"
+echo "##[set-output name=content_type;]${CONTENT_TYPE}"
