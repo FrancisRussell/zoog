@@ -46,21 +46,20 @@ tags. If you do not have these tags, a tool such as
 
 The following options are available:
 
-* `--replay-gain-loudness` (default): In this mode, Zoog will set the output
-  gain in the Opus binary header to the value that ensures playback will occur
-  at -18 LUFS, which should match the loudness of ReplayGain normalized files.
-  This is probably the best option if you have a player which supports
-  ReplayGain for other file formats, but doesn't know about `R128` tags. This
-  will use the album normalization value if present, and the track
-  normalization value if not.
-
-* `--no-output-gain`: In this mode, Zoog will set the output gain in the Opus
-  binary header to 0dB. In players that do not support `R128` tags, this will
-  cause the Opus file to play back at the volume of the originally encoded
-  source. You probably want this if you use a player that doesn't support any
+* `--preset=none`: In this mode, Zoog will set the output gain in the
+  Opus binary header to 0dB. In players that do not support `R128` tags, this
+  will cause the Opus file to play back at the volume of the originally encoded
+  source. You may want this if you use a player that doesn't support any
   sort of volume normalization.
 
-* `--r128-loudness`: In this mode, Zoog will set the output gain in the Opus
+* `--preset=rg`: In this mode, Zoog will set the output gain in the Opus binary
+  header to the value that ensures playback will occur at -18 LUFS, which
+  should match the loudness of ReplayGain normalized files.  This is probably
+  the best option if you have a player which supports ReplayGain for other file
+  formats, but doesn't know about `R128` tags. This will use the album
+  normalization value if present, and the track normalization value if not.
+
+* `--preset=r128`: In this mode, Zoog will set the output gain in the Opus
   binary header to the value that ensures playback will occur at -23 LUFS,
   which should match the loudness of files produced by `opusenc` from FLAC
   files which contained ReplayGain information. You're unlikely to want this
@@ -69,6 +68,11 @@ The following options are available:
   normalization value if not.
 
 
-
 If neither the `R128_ALBUM_GAIN` or `R128_TRACK_GAIN` tags are found in the
 input file, Zoog will not modify the file.
+
+## Disclaimer
+
+Please see LICENSE. Unless you have a source you can easily reconstruct your Opus files
+from, the author recommends making a backup of any files you intend to modify first, and
+running `opusinfo` afterwards on any processed files.
