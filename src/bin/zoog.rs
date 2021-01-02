@@ -2,12 +2,23 @@ use ogg::Packet;
 use ogg::reading::PacketReader;
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use std::collections::VecDeque;
-use std::env;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 use zoog::{Gain, OpusHeader, ZoogError, CommentHeader};
-use zoog::constants::{TAG_TRACK_GAIN, TAG_ALBUM_GAIN, R128_LUFS};
+use zoog::constants::{TAG_TRACK_GAIN, TAG_ALBUM_GAIN, R128_LUFS, REPLAY_GAIN_LUFS};
+use clap::{App,Arg};
+
+pub const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
+pub const AUTHORS: Option<&'static str> = option_env!("CARGO_PKG_AUTHORS");
+
+fn get_version() -> String {
+    VERSION.map(String::from).unwrap_or(String::from("Unknown version"))
+}
+
+fn get_authors() -> String {
+    AUTHORS.map(String::from).unwrap_or(String::from("Unknown author"))
+}
 
 enum State {
     AwaitingHeader,
@@ -16,26 +27,20 @@ enum State {
 }
 
 fn print_gains<'a>(opus_header: &OpusHeader<'a>, comment_header: &CommentHeader<'a>) -> Result<(), ZoogError> {
-    println!("{}: {}db", "Output Gain", opus_header.get_output_gain().as_decibels());
+    println!("\t{}: {}db", "Output Gain", opus_header.get_output_gain().as_decibels());
     for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
         if let Some(gain) = comment_header.get_gain_from_tag(tag)? {
-            println!("{}: {}dB", tag, gain.as_decibels());
+            println!("\t{}: {}dB", tag, gain.as_decibels());
         }
     }
     Ok(())
-}
-
-fn usage() {
-    let args: Vec<String> = env::args().collect();
-    eprintln!("Usage: {} input.ogg", args[0]);
-    std::process::exit(1);
 }
 
 fn main() {
     match main_impl() {
         Ok(()) => {},
         Err(e) => {
-            eprintln!("{}", e);
+            eprintln!("Error was: {}", e);
             std::process::exit(1);
         },
     }
@@ -48,9 +53,19 @@ enum RewriteResult {
     AlreadyNormalized,
 }
 
+#[derive(Clone, Copy, Debug)]
 enum OperationMode {
-    ZeroInputGain,
+    ZeroOutputGain,
     TargetLUFS(f64),
+}
+
+impl OperationMode {
+    fn to_friendly_string(&self) -> String {
+        match *self {
+            OperationMode::ZeroOutputGain => String::from("original input"),
+            OperationMode::TargetLUFS(lufs) => format!("{} LUFS", lufs),
+        }
+    }
 }
 
 fn remove_file_verbose<P: AsRef<Path>>(path: P) {
@@ -117,11 +132,11 @@ impl<W: Write> Rewriter<W> {
                         Ok(Some(gain)) => gain,
                     };
                     if self.verbose {
-                        println!("\nOriginal gain values:");
+                        println!("Original gain values:");
                         print_gains(&opus_header, &comment_header)?;
                     }
                     match self.mode {
-                        OperationMode::ZeroInputGain => {
+                        OperationMode::ZeroOutputGain => {
                             // Set Opus header gain
                             opus_header.set_output_gain(Gain::default());
                             // Set comment header gain
@@ -145,7 +160,7 @@ impl<W: Write> Rewriter<W> {
                         }
                     }
                     if self.verbose {
-                        println!("\nNew gain values:");
+                        println!("New gain values:");
                         print_gains(&opus_header, &comment_header)?;
                     }
                 }
@@ -180,60 +195,100 @@ impl<W: Write> Rewriter<W> {
 }
 
 fn main_impl() -> Result<(), ZoogError> {
-    let mode = OperationMode::TargetLUFS(-18.0);
-    let args: Vec<String> = env::args().collect();
-    if args.len() < 2 { usage(); }
-    let input_path = PathBuf::from(&args[1]);
-    let input_file = File::open(&input_path).map_err(|e| ZoogError::FileOpenError(input_path.clone(), e))?;
-    let input_file = BufReader::new(input_file);
+    let matches = App::new("Zoog")
+        .author(get_authors().as_str())
+        .about("Modifies Opus output gain values and R128 tags")
+        .version(get_version().as_str())
+        .arg(Arg::with_name("preset")
+            .long("preset")
+            .possible_values(&["rg", "r128", "none"])
+            .default_value("rg")
+            .multiple(false)
+            .help("Normalizes to loudness used by ReplayGain (rg), EBU R 128 (r128) or original (none)"))
+        .arg(Arg::with_name("input_files")
+            .multiple(true)
+            .required(true)
+            .help("The Opus files to process"))
+        .get_matches();
 
-    let input_dir = input_path.parent().expect("Unable to find parent folder of input file").clone();
-    let input_base = input_path.file_name().expect("Unable to find name of input file").clone();
-    let mut output_file = tempfile::Builder::new()
-        .prefix(input_base)
-        .suffix("zoog")
-        .tempfile_in(input_dir)
-        .map_err(|e| ZoogError::TempFileOpenError(e))?;
-
-    let rewrite_result = {
-        let mut ogg_reader = PacketReader::new(input_file);
-        let mut output_file = BufWriter::new(&mut output_file);
-        let ogg_writer = PacketWriter::new(&mut output_file);
-        let mut rewriter = Rewriter::new(mode, ogg_writer, true);
-        loop {
-            match ogg_reader.read_packet() {
-                Err(e) => break Err(ZoogError::OggDecode(e)),
-                Ok(None) => {
-                    // Make sure to flush the buffered writer
-                    break output_file.flush()
-                        .map(|_| RewriteResult::Ready)
-                        .map_err(|e| ZoogError::WriteError(e));
-                },
-                Ok(Some(packet)) => {
-                    let submit_result = rewriter.submit(packet);
-                    match submit_result {
-                        Ok(RewriteResult::Ready) => {},
-                        _ => break submit_result,
-                    }
-                },
-            }
-        }
+    let mode = match matches.value_of("preset").unwrap() {
+        "rg" => OperationMode::TargetLUFS(REPLAY_GAIN_LUFS),
+        "r128" => OperationMode::TargetLUFS(R128_LUFS),
+        "none" => OperationMode::ZeroOutputGain,
+        p => panic!("Unknown preset: {}", p),
     };
-    match rewrite_result {
-        Err(_) => {},
-        Ok(RewriteResult::Ready) => {
-            let mut backup_path = input_path.clone();
-            backup_path.set_extension("zoog-orig");
-            rename_file(&input_path, &backup_path)?;
-            output_file.persist_noclobber(&input_path)?;
-            remove_file_verbose(&backup_path);
+
+    let mut num_processed: usize = 0;
+    let mut num_already_normalized: usize = 0;
+    let mut num_missing_r128: usize = 0;
+
+    let input_files = matches.values_of("input_files").expect("No input files");
+    for input_path in input_files {
+        let input_path = PathBuf::from(input_path);
+        println!("Processing file {:#?} with target loudness of {}...", input_path, mode.to_friendly_string());
+        let input_file = File::open(&input_path).map_err(|e| ZoogError::FileOpenError(input_path.clone(), e))?;
+        let input_file = BufReader::new(input_file);
+
+        let input_dir = input_path.parent().expect("Unable to find parent folder of input file").clone();
+        let input_base = input_path.file_name().expect("Unable to find name of input file").clone();
+        let mut output_file = tempfile::Builder::new()
+            .prefix(input_base)
+            .suffix("zoog")
+            .tempfile_in(input_dir)
+            .map_err(|e| ZoogError::TempFileOpenError(e))?;
+
+        let rewrite_result = {
+            let mut ogg_reader = PacketReader::new(input_file);
+            let mut output_file = BufWriter::new(&mut output_file);
+            let ogg_writer = PacketWriter::new(&mut output_file);
+            let mut rewriter = Rewriter::new(mode, ogg_writer, true);
+            loop {
+                match ogg_reader.read_packet() {
+                    Err(e) => break Err(ZoogError::OggDecode(e)),
+                    Ok(None) => {
+                        // Make sure to flush the buffered writer
+                        break output_file.flush()
+                            .map(|_| RewriteResult::Ready)
+                            .map_err(|e| ZoogError::WriteError(e));
+                    },
+                    Ok(Some(packet)) => {
+                        let submit_result = rewriter.submit(packet);
+                        match submit_result {
+                            Ok(RewriteResult::Ready) => {},
+                            _ => break submit_result,
+                        }
+                    },
+                }
+            }
+        };
+
+        num_processed += 1;
+        match rewrite_result {
+            Err(e) => {
+                println!("Failure during processing of {:#?}.", input_path);
+                return Err(e)
+            },
+            Ok(RewriteResult::Ready) => {
+                let mut backup_path = input_path.clone();
+                backup_path.set_extension("zoog-orig");
+                rename_file(&input_path, &backup_path)?;
+                output_file.persist_noclobber(&input_path)?;
+                remove_file_verbose(&backup_path);
+            }
+            Ok(RewriteResult::NoR128Tags) => {
+                println!("No R128 tags found in file so doing nothing.");
+                num_missing_r128 += 1;
+            },
+            Ok(RewriteResult::AlreadyNormalized) => {
+                println!("All gains are already correct so doing nothing.");
+                num_already_normalized += 1;
+            },
         }
-        Ok(RewriteResult::NoR128Tags) => {
-            println!("No R128 tags found in file so doing nothing.");
-        },
-        Ok(RewriteResult::AlreadyNormalized) => {
-            println!("All gains are already correct so doing nothing.");
-        },
+        println!("");
     }
-    rewrite_result.map(|_| ())
+    println!("Processing complete.");
+    println!("Total files processed: {}", num_processed);
+    println!("Files processed but already normalized: {}", num_already_normalized);
+    println!("Files skipped due to missing R128 tags: {}", num_missing_r128);
+    Ok(())
 }
