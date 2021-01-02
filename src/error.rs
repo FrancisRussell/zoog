@@ -21,8 +21,8 @@ pub enum ZoogError {
     MalformedCommentHeader,
     #[error("UTF-8 encoding error")]
     UTF8Error(#[from] std::string::FromUtf8Error),
-    #[error("R128 tag has invalid value")]
-    InvalidR128Tag,
+    #[error("R128 tag has invalid value: `{0}`")]
+    InvalidR128Tag(String),
     #[error("A computed gain value was not representable")]
     GainOutOfBounds,
     #[error("Failed to rename `{0}` to `{1}` due to `{2}`")]

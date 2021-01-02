@@ -66,7 +66,7 @@ impl<'a> CommentHeader<'a> {
 
     pub fn get_gain_from_tag(&self, tag: &str) -> Result<Option<Gain>, ZoogError> {
         let parsed = self.get_first(tag)
-            .map(|v| v.parse::<Gain>().map_err(|_| ZoogError::InvalidR128Tag));
+            .map(|v| v.parse::<Gain>().map_err(|_| ZoogError::InvalidR128Tag(v.to_string())));
         match parsed {
             Some(Ok(v)) => Ok(Some(v)),
             Some(Err(e)) => Err(e),
