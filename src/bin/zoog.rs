@@ -147,8 +147,8 @@ impl<W: Write> Rewriter<W> {
                             }
                         }
                         OperationMode::TargetLUFS(target_lufs) => {
-                            // FIXME: Check this conversion is valid
                             let header_delta = Gain::from_decibels(comment_gain.as_decibels() + target_lufs - R128_LUFS);
+                            let header_delta = header_delta.ok_or(ZoogError::GainOutOfBounds)?;
                             if header_delta.is_none() { return Ok(RewriteResult::AlreadyNormalized); }
                             let comment_delta = if let Some(negated) = header_delta.checked_neg() {
                                 negated

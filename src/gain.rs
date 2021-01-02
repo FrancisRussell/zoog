@@ -14,9 +14,15 @@ impl Gain {
         self.value
     }
 
-    pub fn from_decibels(value: f64) -> Gain {
-        Gain {
-            value: (value * 256.0) as i16,
+    pub fn from_decibels(value: f64) -> Option<Gain> {
+        let fixed = (value * 256.0).round();
+        let value = fixed as i16;
+        if (value as f64) == fixed {
+            Some(Gain {
+                value,
+            })
+        } else {
+            None
         }
     }
 
