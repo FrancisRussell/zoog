@@ -5,7 +5,7 @@ use crate::error::ZoogError;
 use crate::gain::Gain;
 use crate::constants::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 
-const COMMENT_MAGIC: &'static [u8] = &[0x4f, 0x70, 0x75, 0x73, 0x54, 0x61, 0x67, 0x73];
+const COMMENT_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x54, 0x61, 0x67, 0x73];
 
 #[derive(Derivative)]
 #[derivative(Debug)]
@@ -30,7 +30,7 @@ impl<'a> CommentHeader<'a> {
             let mut comment = vec![0u8; comment_len as usize];
             reader.read_exact(&mut comment[..]).map_err(|_| ZoogError::MalformedCommentHeader)?;
             let comment = String::from_utf8(comment)?;
-            let offset = if let Some(offset) = comment.find("=") {
+            let offset = if let Some(offset) = comment.find('=') {
                 offset
             } else {
                 return Err(ZoogError::MalformedCommentHeader);
@@ -49,14 +49,14 @@ impl<'a> CommentHeader<'a> {
     pub fn try_new(data: &'a mut Vec<u8>) -> Result<Option<CommentHeader<'a>>, ZoogError> {
         let identical = data.iter().take(COMMENT_MAGIC.len()).eq(COMMENT_MAGIC.iter());
         if !identical { return Ok(None); }
-         Self::try_parse(data).map(|v| Some(v))
+         Self::try_parse(data).map(Some)
     }
 
     pub fn get_first(&self, key: &str) -> Option<&str> {
         for (k, v) in self.user_comments.iter() {
             if k == key { return Some(v); }
         }
-        return None;
+        None
     }
 
     pub fn remove_all(&mut self, key: &str) {
@@ -84,14 +84,14 @@ impl<'a> CommentHeader<'a> {
                 return Ok(Some(gain))
             }
         }
-        return Ok(None)
+        Ok(None)
     }
 
     pub fn adjust_gains(&mut self, adjustment: Gain) -> Result<(), ZoogError> {
         if adjustment.is_none() { return Ok(()); }
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
             if let Some(gain) = self.get_gain_from_tag(*tag)? {
-                let gain = if let Some(gain) = gain.checked_add(&adjustment) {
+                let gain = if let Some(gain) = gain.checked_add(adjustment) {
                     gain
                 } else {
                     return Err(ZoogError::GainOutOfBounds);

@@ -13,11 +13,11 @@ pub const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 pub const AUTHORS: Option<&'static str> = option_env!("CARGO_PKG_AUTHORS");
 
 fn get_version() -> String {
-    VERSION.map(String::from).unwrap_or(String::from("Unknown version"))
+    VERSION.map(String::from).unwrap_or_else(|| String::from("Unknown version"))
 }
 
 fn get_authors() -> String {
-    AUTHORS.map(String::from).unwrap_or(String::from("Unknown author"))
+    AUTHORS.map(String::from).unwrap_or_else(|| String::from("Unknown author"))
 }
 
 enum State {
@@ -188,7 +188,7 @@ impl<W: Write> Rewriter<W> {
                 packet_serial,
                 packet_info,
                 packet_granule,
-            ).map_err(|e| ZoogError::WriteError(e))?;
+            ).map_err(ZoogError::WriteError)?;
         }
         Ok(RewriteResult::Ready)
     }
@@ -229,13 +229,13 @@ fn main_impl() -> Result<(), ZoogError> {
         let input_file = File::open(&input_path).map_err(|e| ZoogError::FileOpenError(input_path.clone(), e))?;
         let input_file = BufReader::new(input_file);
 
-        let input_dir = input_path.parent().expect("Unable to find parent folder of input file").clone();
-        let input_base = input_path.file_name().expect("Unable to find name of input file").clone();
+        let input_dir = input_path.parent().expect("Unable to find parent folder of input file");
+        let input_base = input_path.file_name().expect("Unable to find name of input file");
         let mut output_file = tempfile::Builder::new()
             .prefix(input_base)
             .suffix("zoog")
             .tempfile_in(input_dir)
-            .map_err(|e| ZoogError::TempFileOpenError(e))?;
+            .map_err(ZoogError::TempFileOpenError)?;
 
         let rewrite_result = {
             let mut ogg_reader = PacketReader::new(input_file);
@@ -249,7 +249,7 @@ fn main_impl() -> Result<(), ZoogError> {
                         // Make sure to flush the buffered writer
                         break output_file.flush()
                             .map(|_| RewriteResult::Ready)
-                            .map_err(|e| ZoogError::WriteError(e));
+                            .map_err(ZoogError::WriteError);
                     },
                     Ok(Some(packet)) => {
                         let submit_result = rewriter.submit(packet);
@@ -284,7 +284,7 @@ fn main_impl() -> Result<(), ZoogError> {
                 num_already_normalized += 1;
             },
         }
-        println!("");
+        println!();
     }
     println!("Processing complete.");
     println!("Total files processed: {}", num_processed);

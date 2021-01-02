@@ -4,7 +4,7 @@ use crate::error::ZoogError;
 use crate::gain::Gain;
 
 const OPUS_MIN_HEADER_SIZE: usize = 19;
-const OPUS_MAGIC: &'static [u8] = &[0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64];
+const OPUS_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64];
 
 pub struct OpusHeader<'a> {
     data: &'a mut Vec<u8>,
@@ -36,7 +36,7 @@ impl<'a> OpusHeader<'a> {
 
     pub fn adjust_output_gain(&mut self, adjustment: Gain) -> Result<(), ZoogError> {
         let gain = self.get_output_gain();
-        if let Some(gain) = gain.checked_add(&adjustment) {
+        if let Some(gain) = gain.checked_add(adjustment) {
             self.set_output_gain(gain);
             Ok(())
         } else {

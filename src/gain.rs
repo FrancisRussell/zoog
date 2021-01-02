@@ -6,11 +6,11 @@ pub struct Gain {
 }
 
 impl Gain {
-    pub fn as_decibels(&self) -> f64 {
+    pub fn as_decibels(self) -> f64 {
         self.value as f64 / 256.0
     }
 
-    pub fn as_fixed_point(&self) -> i16 {
+    pub fn as_fixed_point(self) -> i16 {
         self.value
     }
 
@@ -20,15 +20,15 @@ impl Gain {
         }
     }
 
-    pub fn is_none(&self) -> bool {
+    pub fn is_none(self) -> bool {
         self.value == 0
     }
 
-    pub fn checked_add(&self, rhs: &Gain) -> Option<Gain> {
+    pub fn checked_add(self, rhs: Gain) -> Option<Gain> {
         self.value.checked_add(rhs.value).map(|value| Gain { value })
     }
 
-    pub fn checked_neg(&self) -> Option<Gain> {
+    pub fn checked_neg(self) -> Option<Gain> {
         self.value.checked_neg().map(|value| Gain { value })
     }
 
