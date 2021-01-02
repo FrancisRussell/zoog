@@ -23,7 +23,7 @@ pub enum ZoogError {
     UTF8Error(#[from] std::string::FromUtf8Error),
     #[error("R128 tag has invalid value")]
     InvalidR128Tag,
-    #[error("Gain out of bounds")]
+    #[error("A computed gain value was not representable")]
     GainOutOfBounds,
     #[error("Failed to rename `{0}` to `{1}` due to `{2}`")]
     FileCopy(PathBuf, PathBuf, std::io::Error),
