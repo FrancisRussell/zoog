@@ -90,6 +90,27 @@ On audio with high levels of
 [dynamic range compression](https://en.wikipedia.org/wiki/Dynamic_range_compression),
 clipping is unlikely to occur on the other presets.
 
+## Build Instructions 
+
+If you do not have Cargo, install it by following the instructions
+[here](https://doc.rust-lang.org/cargo/getting-started/installation.html).
+
+Clone the Git repository:
+
+```$ git clone https://github.com/FrancisRussell/zoog.git```
+
+Inside the cloned repository:
+
+```cargo build```
+
+or 
+
+```cargo build --release```
+
+for a release build.
+
+Built binaries can be found in `target/debug` or `target/release`.
+
 ## Releases
 
 Zoog binaries for Windows, MacOS and Linux can be found on the [releases
