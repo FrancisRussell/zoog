@@ -7,14 +7,17 @@ TARGET="${2}"
 if echo ${TARGET} | grep -i windows > /dev/null; then
   EXE_SUFFIX=".exe"
   ARCHIVE_FORMAT="zip"
+elif echo ${TARGET} | grep -i darwin > /dev/null; then
+  EXE_SUFFIX=""
+  ARCHIVE_FORMAT="zip"
 else
   EXE_SUFFIX=""
   ARCHIVE_FORMAT="tarball"
 fi
 
 TOP="$(pwd)"
-SCRATCH=$(mktemp -d -p .)
-SCRATCH=$(readlink -e "${SCRATCH}")
+SCRATCH=$(mktemp -d ./tmp.XXXXXXXXXX)
+SCRATCH="${TOP}/${SCRATCH}"
 trap "rm -rf ${SCRATCH}" EXIT HUP INT QUIT TERM
 pushd "${SCRATCH}"
 NAME="zoog-${TAG}-${TARGET}"
