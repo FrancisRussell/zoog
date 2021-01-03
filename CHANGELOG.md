@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.3
+
+* Enable link-time optimization for release builds.
+
 ## 0.1.2
 
 * Add 32-bit Windows builds.
