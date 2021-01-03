@@ -92,7 +92,7 @@ impl<'a> CommentHeader<'a> {
     }
 
     pub fn adjust_gains(&mut self, adjustment: Gain) -> Result<(), ZoogError> {
-        if adjustment.is_none() { return Ok(()); }
+        if adjustment.is_zero() { return Ok(()); }
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
             if let Some(gain) = self.get_gain_from_tag(*tag)? {
                 let gain = gain.checked_add(adjustment).ok_or(ZoogError::GainOutOfBounds)?;

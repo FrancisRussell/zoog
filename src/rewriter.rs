@@ -102,7 +102,7 @@ impl<W: Write> Rewriter<W> {
                             // Set Opus header gain
                             opus_header.set_output_gain(Gain::default());
                             // Set comment header gain
-                            if header_gain.is_none() {
+                            if header_gain.is_zero() {
                                 return Ok(RewriteResult::AlreadyNormalized);
                             } else {
                                 comment_header.adjust_gains(header_gain)?;
@@ -111,7 +111,7 @@ impl<W: Write> Rewriter<W> {
                         OperationMode::TargetLUFS(target_lufs) => {
                             let header_delta = Gain::from_decibels(comment_gain.as_decibels() + target_lufs - R128_LUFS);
                             let header_delta = header_delta.ok_or(ZoogError::GainOutOfBounds)?;
-                            if header_delta.is_none() { return Ok(RewriteResult::AlreadyNormalized); }
+                            if header_delta.is_zero() { return Ok(RewriteResult::AlreadyNormalized); }
                             let comment_delta = header_delta.checked_neg().ok_or(ZoogError::GainOutOfBounds)?;
                             opus_header.adjust_output_gain(header_delta)?;
                             comment_header.adjust_gains(comment_delta)?;
