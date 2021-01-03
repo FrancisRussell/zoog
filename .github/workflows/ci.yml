@@ -1,10 +1,10 @@
 on: [push]
 
-name: Continuous integration
+name: CI
 
 jobs:
-  check-builds:
-    name: Check builds for all platforms
+  check-build:
+    name: Check build
     strategy:
       matrix:
         target: [x86_64-unknown-linux-musl, x86_64-pc-windows-gnu]
@@ -35,7 +35,7 @@ jobs:
           if-no-files-found: error
 
   cargo-test:
-    name: Run Cargo test suite
+    name: Cargo test
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v2
@@ -48,7 +48,7 @@ jobs:
         with:
           command: test
 
-  clippy_check:
+  clippy:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
@@ -62,7 +62,8 @@ jobs:
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
 
-  cargo_bloat:
+  cargo-bloat:
+    name: Cargo bloat
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
