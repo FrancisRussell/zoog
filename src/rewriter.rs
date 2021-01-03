@@ -81,7 +81,7 @@ impl<W: Write> Rewriter<W> {
                     let mut opus_header = OpusHeader::try_new(&mut opus_header_packet.data)
                         .ok_or(ZoogError::MissingOpusStream)?;
                     // Parse comment header
-                    let mut comment_header = match CommentHeader::try_new(&mut packet.data) {
+                    let mut comment_header = match CommentHeader::try_parse(&mut packet.data) {
                         Ok(Some(header)) => header,
                         Ok(None) => return Err(ZoogError::MissingCommentHeader),
                         Err(e) => return Err(e),
