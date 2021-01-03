@@ -21,16 +21,19 @@ jobs:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ github.ref }}
           prerelease: true
+          draft: true
           body_path: CHANGELOG.md
   build:
     name: Build binaries
     needs: create-release
-    runs-on: ubuntu-latest
     strategy:
       matrix:
-        target:
-          - x86_64-unknown-linux-musl
-          - x86_64-pc-windows-gnu
+        target: [x86_64-unknown-linux-musl, x86_64-pc-windows-gnu]
+        platform: [ubuntu-latest]
+        include:
+          - target: x86_64-apple-darwin
+            platform: macos-latest
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v2
       - uses: actions-rs/toolchain@v1
