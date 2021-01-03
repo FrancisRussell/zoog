@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.1.2
+
+* Add 32-bit Windows builds.
+* Add unit tests for gain handling and comment header manipulation.
+
 ## 0.1.1
 
 * Enable Darwin CI and release builds.
