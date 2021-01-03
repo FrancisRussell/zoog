@@ -11,6 +11,7 @@ use clap::{App,Arg};
 
 pub const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 pub const AUTHORS: Option<&'static str> = option_env!("CARGO_PKG_AUTHORS");
+pub const DESCRIPTION: Option<&'static str> = option_env!("CARGO_PKG_DESCRIPTION");
 
 fn get_version() -> String {
     VERSION.map(String::from).unwrap_or_else(|| String::from("Unknown version"))
@@ -18,6 +19,10 @@ fn get_version() -> String {
 
 fn get_authors() -> String {
     AUTHORS.map(String::from).unwrap_or_else(|| String::from("Unknown author"))
+}
+
+fn get_description() -> String {
+    DESCRIPTION.map(String::from).unwrap_or_else(|| String::from("Missing description"))
 }
 
 enum State {
@@ -189,7 +194,7 @@ impl<W: Write> Rewriter<W> {
 fn main_impl() -> Result<(), ZoogError> {
     let matches = App::new("Zoog")
         .author(get_authors().as_str())
-        .about("Modifies Opus output gain values and R128 tags")
+        .about(get_description().as_str())
         .version(get_version().as_str())
         .arg(Arg::with_name("preset")
             .long("preset")
