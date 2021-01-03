@@ -1,0 +1,58 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*.*.*'
+
+jobs:
+  create-release:
+    name: Create release
+    runs-on: ubuntu-latest
+    outputs:
+      upload_url: ${{ steps.create_release.outputs.upload_url }}
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions/create-release@v1
+        id: create_release
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          tag_name: ${{ github.ref }}
+          release_name: Release ${{ github.ref }}
+          prerelease: true
+          body_path: CHANGELOG.md
+  build:
+    name: Build binaries
+    needs: create-release
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        target:
+          - x86_64-unknown-linux-musl
+          - x86_64-pc-windows-gnu
+    steps:
+      - uses: actions/checkout@v2
+      - uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          target: ${{ matrix.target }}
+          profile: minimal
+          override: true
+      - uses: actions-rs/cargo@v1
+        with: 
+          use-cross: true
+          command: build
+          args: --release --target=${{ matrix.target }}
+      - name: Build Archive
+        run: ./scripts/build-release ${{ github.ref }} ${{ matrix.target }}
+        id: build_archive
+      - name: Upload
+        uses: actions/upload-release-asset@v1.0.2
+        with:
+          upload_url: ${{ needs.create-release.outputs.upload_url }}
+          asset_path: ${{ steps.build_archive.outputs.path }}
+          asset_name: ${{ steps.build_archive.outputs.name }}
+          asset_content_type: ${{ steps.build_archive.outputs.content_type }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
