@@ -17,18 +17,26 @@ pub struct CommentHeader<'a> {
 }
 
 impl<'a> CommentHeader<'a> {
+    fn read_length<R: Read>(mut reader: R) -> Result<u32, ZoogError> {
+        reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)
+    }
+
+    fn read_exact<R: Read>(mut reader: R, data: &mut [u8]) -> Result<(), ZoogError> {
+        reader.read_exact(data).map_err(|_| ZoogError::MalformedCommentHeader)
+    }
+
     fn try_parse(data: &'a mut Vec<u8>) -> Result<CommentHeader<'a>, ZoogError> {
         let mut reader = Cursor::new(&data[COMMENT_MAGIC.len()..]);
-        let vendor_len = reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)?;
+        let vendor_len = Self::read_length(&mut reader)?;
         let mut vendor = vec![0u8; vendor_len as usize];
-        reader.read_exact(&mut vendor[..]).map_err(|_| ZoogError::MalformedCommentHeader)?;
+        Self::read_exact(&mut reader, &mut vendor)?;
         let vendor = String::from_utf8(vendor)?;
-        let num_comments = reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)?;
+        let num_comments = Self::read_length(&mut reader)?;
         let mut user_comments = Vec::with_capacity(num_comments as usize);
         for _ in 0..num_comments {
-            let comment_len = reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)?;
+            let comment_len = Self::read_length(&mut reader)?;
             let mut comment = vec![0u8; comment_len as usize];
-            reader.read_exact(&mut comment[..]).map_err(|_| ZoogError::MalformedCommentHeader)?;
+            Self::read_exact(&mut reader, &mut comment)?;
             let comment = String::from_utf8(comment)?;
             let offset = comment.find('=').ok_or(ZoogError::MalformedCommentHeader)?;
             let (key, value) = comment.split_at(offset);
