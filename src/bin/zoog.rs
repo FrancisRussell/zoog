@@ -32,7 +32,7 @@ enum State {
 }
 
 fn print_gains<'a>(opus_header: &OpusHeader<'a>, comment_header: &CommentHeader<'a>) -> Result<(), ZoogError> {
-    println!("\t{}: {}db", "Output Gain", opus_header.get_output_gain().as_decibels());
+    println!("\tOutput Gain: {}dB", opus_header.get_output_gain().as_decibels());
     for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
         if let Some(gain) = comment_header.get_gain_from_tag(tag)? {
             println!("\t{}: {}dB", tag, gain.as_decibels());
