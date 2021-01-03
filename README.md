@@ -92,7 +92,7 @@ clipping is unlikely to occur on the other presets.
 
 ## Releases
 
-Zoog binaries for Windows and Linux can be found on the [releases
+Zoog binaries for Windows, MacOS and Linux can be found on the [releases
 page](https://github.com/FrancisRussell/zoog/releases/). Only the Linux
 binaries have undergone any testing at present.
 
