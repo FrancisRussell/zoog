@@ -1,16 +1,16 @@
-use derivative::Derivative;
-use std::io::{Cursor, Read, Write};
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use crate::constants::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::error::ZoogError;
 use crate::gain::Gain;
-use crate::constants::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use derivative::Derivative;
+use std::io::{Cursor, Read, Write};
 
 const COMMENT_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x54, 0x61, 0x67, 0x73];
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct CommentHeader<'a> {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     data: &'a mut Vec<u8>,
     vendor: String,
     user_comments: Vec<(String, String)>,
@@ -85,7 +85,7 @@ impl<'a> CommentHeader<'a> {
     pub fn get_album_or_track_gain(&self) -> Result<Option<Gain>, ZoogError> {
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
             if let Some(gain) = self.get_gain_from_tag(*tag)? {
-                return Ok(Some(gain))
+                return Ok(Some(gain));
             }
         }
         Ok(None)
@@ -123,7 +123,5 @@ impl<'a> CommentHeader<'a> {
 }
 
 impl<'a> Drop for CommentHeader<'a> {
-    fn drop(&mut self) {
-        self.commit();
-    }
+    fn drop(&mut self) { self.commit(); }
 }

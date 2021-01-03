@@ -1,13 +1,13 @@
-use ogg::Packet;
+use clap::{App, Arg};
 use ogg::reading::PacketReader;
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
+use ogg::Packet;
 use std::collections::VecDeque;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
-use zoog::{Gain, OpusHeader, ZoogError, CommentHeader};
-use zoog::constants::{TAG_TRACK_GAIN, TAG_ALBUM_GAIN, R128_LUFS, REPLAY_GAIN_LUFS};
-use clap::{App,Arg};
+use zoog::constants::{R128_LUFS, REPLAY_GAIN_LUFS, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use zoog::{CommentHeader, Gain, OpusHeader, ZoogError};
 
 pub const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 pub const AUTHORS: Option<&'static str> = option_env!("CARGO_PKG_AUTHORS");
@@ -43,11 +43,11 @@ fn print_gains<'a>(opus_header: &OpusHeader<'a>, comment_header: &CommentHeader<
 
 fn main() {
     match main_impl() {
-        Ok(()) => {},
+        Ok(()) => {}
         Err(e) => {
             eprintln!("Error was: {}", e);
             std::process::exit(1);
-        },
+        }
     }
 }
 
@@ -112,7 +112,7 @@ impl<W: Write> Rewriter<W> {
             State::AwaitingHeader => {
                 self.header_packet = Some(packet);
                 self.state = State::AwaitingComments;
-            },
+            }
             State::AwaitingComments => {
                 // Parse Opus header
                 let mut opus_header_packet = self.header_packet.take().expect("Missing header packet");
@@ -167,7 +167,7 @@ impl<W: Write> Rewriter<W> {
             }
             State::Forwarding => {
                 self.packet_queue.push_back(packet);
-            },
+            }
         }
 
         while let Some(packet) = self.packet_queue.pop_front() {
@@ -247,14 +247,14 @@ fn main_impl() -> Result<(), ZoogError> {
                         break output_file.flush()
                             .map(|_| RewriteResult::Ready)
                             .map_err(ZoogError::WriteError);
-                    },
+                    }
                     Ok(Some(packet)) => {
                         let submit_result = rewriter.submit(packet);
                         match submit_result {
-                            Ok(RewriteResult::Ready) => {},
+                            Ok(RewriteResult::Ready) => {}
                             _ => break submit_result,
                         }
-                    },
+                    }
                 }
             }
         };
@@ -263,8 +263,8 @@ fn main_impl() -> Result<(), ZoogError> {
         match rewrite_result {
             Err(e) => {
                 println!("Failure during processing of {:#?}.", input_path);
-                return Err(e)
-            },
+                return Err(e);
+            }
             Ok(RewriteResult::Ready) => {
                 let mut backup_path = input_path.clone();
                 backup_path.set_extension("zoog-orig");
@@ -275,11 +275,11 @@ fn main_impl() -> Result<(), ZoogError> {
             Ok(RewriteResult::NoR128Tags) => {
                 println!("No R128 tags found in file so doing nothing.");
                 num_missing_r128 += 1;
-            },
+            }
             Ok(RewriteResult::AlreadyNormalized) => {
                 println!("All gains are already correct so doing nothing.");
                 num_already_normalized += 1;
-            },
+            }
         }
         println!();
     }

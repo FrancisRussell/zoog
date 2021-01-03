@@ -1,7 +1,7 @@
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
-use std::io::Cursor;
 use crate::error::ZoogError;
 use crate::gain::Gain;
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use std::io::Cursor;
 
 const OPUS_MIN_HEADER_SIZE: usize = 19;
 const OPUS_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64];
@@ -23,9 +23,7 @@ impl<'a> OpusHeader<'a> {
     pub fn get_output_gain(&self) -> Gain {
         let mut reader = Cursor::new(&self.data[16..18]);
         let value = reader.read_i16::<LittleEndian>().expect("Error reading gain");
-        Gain {
-            value,
-        }
+        Gain { value }
     }
 
     pub fn set_output_gain(&mut self, gain: Gain) {
@@ -39,7 +37,4 @@ impl<'a> OpusHeader<'a> {
         self.set_output_gain(gain);
         Ok(())
     }
-
 }
-
-
