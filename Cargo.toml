@@ -25,3 +25,6 @@ features = [ "wrap_help" ]
 [dev-dependencies.rand]
 version = "0.8.0"
 features = [ "small_rng" ]
+
+[profile.release]
+lto = "thin"
