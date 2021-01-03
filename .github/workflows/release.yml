@@ -20,8 +20,6 @@ jobs:
         with:
           tag_name: ${{ github.ref }}
           release_name: Release ${{ github.ref }}
-          prerelease: true
-          draft: true
           body_path: CHANGELOG.md
   build:
     name: Build binaries
