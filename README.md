@@ -90,6 +90,12 @@ On audio with high levels of
 [dynamic range compression](https://en.wikipedia.org/wiki/Dynamic_range_compression),
 clipping is unlikely to occur on the other presets.
 
+## Releases
+
+Zoog binaries for Windows and Linux can be found on the [releases
+page](https://github.com/FrancisRussell/zoog/releases/). Only the Linux
+binaries have undergone any testing at present.
+
 ## Disclaimer
 
 Please see LICENSE. Unless you have a source you can easily reconstruct your Opus files
