@@ -1,34 +1,42 @@
-use derivative::Derivative;
-use std::io::{Cursor, Read, Write};
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use crate::constants::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::error::ZoogError;
 use crate::gain::Gain;
-use crate::constants::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+use derivative::Derivative;
+use std::io::{Cursor, Read, Write};
 
 const COMMENT_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x54, 0x61, 0x67, 0x73];
 
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct CommentHeader<'a> {
-    #[derivative(Debug="ignore")]
+    #[derivative(Debug = "ignore")]
     data: &'a mut Vec<u8>,
     vendor: String,
     user_comments: Vec<(String, String)>,
 }
 
 impl<'a> CommentHeader<'a> {
+    fn read_length<R: Read>(mut reader: R) -> Result<u32, ZoogError> {
+        reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)
+    }
+
+    fn read_exact<R: Read>(mut reader: R, data: &mut [u8]) -> Result<(), ZoogError> {
+        reader.read_exact(data).map_err(|_| ZoogError::MalformedCommentHeader)
+    }
+
     fn try_parse(data: &'a mut Vec<u8>) -> Result<CommentHeader<'a>, ZoogError> {
         let mut reader = Cursor::new(&data[COMMENT_MAGIC.len()..]);
-        let vendor_len = reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)?;
+        let vendor_len = Self::read_length(&mut reader)?;
         let mut vendor = vec![0u8; vendor_len as usize];
-        reader.read_exact(&mut vendor[..]).map_err(|_| ZoogError::MalformedCommentHeader)?;
+        Self::read_exact(&mut reader, &mut vendor)?;
         let vendor = String::from_utf8(vendor)?;
-        let num_comments = reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)?;
+        let num_comments = Self::read_length(&mut reader)?;
         let mut user_comments = Vec::with_capacity(num_comments as usize);
         for _ in 0..num_comments {
-            let comment_len = reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)?;
+            let comment_len = Self::read_length(&mut reader)?;
             let mut comment = vec![0u8; comment_len as usize];
-            reader.read_exact(&mut comment[..]).map_err(|_| ZoogError::MalformedCommentHeader)?;
+            Self::read_exact(&mut reader, &mut comment)?;
             let comment = String::from_utf8(comment)?;
             let offset = comment.find('=').ok_or(ZoogError::MalformedCommentHeader)?;
             let (key, value) = comment.split_at(offset);
@@ -77,7 +85,7 @@ impl<'a> CommentHeader<'a> {
     pub fn get_album_or_track_gain(&self) -> Result<Option<Gain>, ZoogError> {
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
             if let Some(gain) = self.get_gain_from_tag(*tag)? {
-                return Ok(Some(gain))
+                return Ok(Some(gain));
             }
         }
         Ok(None)
@@ -115,7 +123,5 @@ impl<'a> CommentHeader<'a> {
 }
 
 impl<'a> Drop for CommentHeader<'a> {
-    fn drop(&mut self) {
-        self.commit();
-    }
+    fn drop(&mut self) { self.commit(); }
 }

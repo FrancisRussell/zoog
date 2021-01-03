@@ -1,7 +1,7 @@
-use thiserror::Error;
+use ogg::reading::OggReadError;
 use std::path::PathBuf;
 use tempfile::PersistError;
-use ogg::reading::OggReadError;
+use thiserror::Error;
 
 #[derive(Debug, Error)]
 pub enum ZoogError {
@@ -30,5 +30,3 @@ pub enum ZoogError {
     #[error("Failed to persist temporary file due to `{0}``")]
     PersistError(#[from] PersistError),
 }
-
-
