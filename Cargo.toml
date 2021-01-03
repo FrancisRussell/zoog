@@ -1,6 +1,6 @@
 [package]
 name = "zoog"
-version = "0.1.1"
+version = "0.1.2"
 authors = ["Francis Russell <francis@unchartedbackwaters.co.uk>"]
 edition = "2018"
 homepage = "https://github.com/FrancisRussell/zoog"
@@ -21,3 +21,7 @@ thiserror = "1.0.23"
 version = "2.33.3"
 default-features = false
 features = [ "wrap_help" ]
+
+[dev-dependencies.rand]
+version = "0.8.0"
+features = [ "small_rng" ]
