@@ -1,5 +1,9 @@
 # Changelog
 
+## 0.1.4
+
+* Strip debug info from release binaries (requires Rust nightly).
+
 ## 0.1.3
 
 * Enable link-time optimization for release builds.
