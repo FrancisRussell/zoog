@@ -43,7 +43,7 @@ fn remove_file_verbose<P: AsRef<Path>>(path: P) {
 
 fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), ZoogError> {
     std::fs::rename(from.as_ref(), to.as_ref()).map_err(|e| {
-        ZoogError::FileCopy(PathBuf::from(from.as_ref()), PathBuf::from(to.as_ref()), e)
+        ZoogError::FileMove(PathBuf::from(from.as_ref()), PathBuf::from(to.as_ref()), e)
     })
 }
 
@@ -125,7 +125,9 @@ fn main_impl() -> Result<(), ZoogError> {
                 let mut backup_path = input_path.clone();
                 backup_path.set_extension("zoog-orig");
                 rename_file(&input_path, &backup_path)?;
-                output_file.persist_noclobber(&input_path)?;
+                output_file.persist_noclobber(&input_path)
+                    .map_err(ZoogError::PersistError)
+                    .and_then(|f| f.sync_all().map_err(ZoogError::WriteError))?;
                 remove_file_verbose(&backup_path);
             }
             Ok(RewriteResult::NoR128Tags) => {
