@@ -125,7 +125,9 @@ fn main_impl() -> Result<(), ZoogError> {
                 let mut backup_path = input_path.clone();
                 backup_path.set_extension("zoog-orig");
                 rename_file(&input_path, &backup_path)?;
-                output_file.persist_noclobber(&input_path)?;
+                output_file.persist_noclobber(&input_path)
+                    .map_err(ZoogError::PersistError)
+                    .and_then(|f| f.sync_all().map_err(ZoogError::WriteError))?;
                 remove_file_verbose(&backup_path);
             }
             Ok(RewriteResult::NoR128Tags) => {
