@@ -26,7 +26,7 @@ pub enum ZoogError {
     #[error("A computed gain value was not representable")]
     GainOutOfBounds,
     #[error("Failed to rename `{0}` to `{1}` due to `{2}`")]
-    FileCopy(PathBuf, PathBuf, std::io::Error),
+    FileMove(PathBuf, PathBuf, std::io::Error),
     #[error("Failed to persist temporary file due to `{0}``")]
     PersistError(#[from] PersistError),
 }

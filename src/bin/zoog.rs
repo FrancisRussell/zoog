@@ -43,7 +43,7 @@ fn remove_file_verbose<P: AsRef<Path>>(path: P) {
 
 fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), ZoogError> {
     std::fs::rename(from.as_ref(), to.as_ref()).map_err(|e| {
-        ZoogError::FileCopy(PathBuf::from(from.as_ref()), PathBuf::from(to.as_ref()), e)
+        ZoogError::FileMove(PathBuf::from(from.as_ref()), PathBuf::from(to.as_ref()), e)
     })
 }
 
