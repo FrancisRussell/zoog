@@ -1,5 +1,3 @@
-cargo-features = ["strip"]
-
 [package]
 name = "zoog"
 version = "0.1.4"
