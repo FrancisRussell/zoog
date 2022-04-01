@@ -1,6 +1,6 @@
 # Zoog: Zero Opus Output Gain
 
-Zoog is a tool for setting the output gain value located in a binary header
+Zoog is a tool for setting the output gain value located in the binary header
 inside Opus files (specifically an Opus-encoded audio stream within an Ogg
 file). It is intended to solve the "Opus plays too quietly" problem.
 
@@ -11,10 +11,10 @@ gain’](https://tools.ietf.org/html/rfc7845) value which describes a gain to be
 applied when decoding the audio. This value appears to exist in order to ensure
 that loudness changes to Opus files are *always* applied, rather than being
 dependent on decoder support for tags such as `REPLAYGAIN_TRACK_GAIN` and
-`REPLAYGAIN_ALBUM_GAIN` (used in Ogg Vorbis, but *not* Opus).
+`REPLAYGAIN_ALBUM_GAIN` which are used in Ogg Vorbis, but *not* Opus.
 
 The in-header value was intended to correspond to the album gain with
-[RFC7845](https://tools.ietf.org/html/rfc7845) defining the tag
+[RFC 7845](https://tools.ietf.org/html/rfc7845) defining the tag
 `R128_TRACK_GAIN` for single-track normalization. It seems the original intent
 of the output gain was to eliminate the need for an album gain tag, however
 `R128_ALBUM_GAIN` was later added for album normalization.
@@ -22,7 +22,7 @@ of the output gain was to eliminate the need for an album gain tag, however
 ## The problem
 
 When encoding an Opus stream using `opusenc` from a FLAC stream which has
-embedded ReplaygGain tags, the resulting Opus stream will have the output-gain
+embedded ReplayGain tags, the resulting Opus stream will have the output-gain
 field set in the Opus header. The gain value will be chosen using
 [EBU R 128](https://en.wikipedia.org/wiki/EBU_R_128) with a loudness value
 of -23 [LUFS](https://en.wikipedia.org/wiki/LKFS) (ReplayGain uses -18 LUFS).
@@ -80,7 +80,7 @@ input file, Zoog will not modify the file.
 
 ## What Zoog doesn't do
 
-* Zorg doesn't actually compute the loudness of the input file itself, hence the requirements
+* Zoog doesn't actually compute the loudness of the input file itself, hence the requirements
 for either the `R128_ALBUM_GAIN` or `R128_TRACK_GAIN` tags.
 
 * Due to the first point, Zorg cannot do anything about clipping. If

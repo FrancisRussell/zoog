@@ -27,6 +27,6 @@ pub enum ZoogError {
     GainOutOfBounds,
     #[error("Failed to rename `{0}` to `{1}` due to `{2}`")]
     FileMove(PathBuf, PathBuf, std::io::Error),
-    #[error("Failed to persist temporary file due to `{0}``")]
+    #[error("Failed to persist temporary file due to `{0}`")]
     PersistError(#[from] PersistError),
 }
