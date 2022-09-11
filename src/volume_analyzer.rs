@@ -1,13 +1,11 @@
+use audiopus::{Channels, coder::Decoder, SampleRate, TryFrom};
 use crate::comment_header::CommentHeader;
 use crate::error::ZoogError;
-use crate::gain::Gain;
 use crate::opus_header::OpusHeader;
-use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use ogg::Packet;
-use opus::{Channels, Decoder};
 
 // Opus uses this internally so we decode to this regardless of the input file sampling rate
-const OPUS_DECODE_SAMPLE_RATE: u32 = 48000;
+const OPUS_DECODE_SAMPLE_RATE: usize = 48000;
 
 // Specified in RFC6716
 const OPUS_MAX_PACKET_DURATION_MS: usize = 120;
@@ -21,6 +19,7 @@ enum State {
 
 struct DecodeState {
     channel_count: usize,
+    sample_rate: usize,
     decoder: Decoder,
 }
 
@@ -29,8 +28,6 @@ pub struct VolumeAnalyzer {
     state: State,
     verbose: bool,
 }
-
-
 
 impl VolumeAnalyzer {
     pub fn new(verbose: bool) -> VolumeAnalyzer {
@@ -52,10 +49,13 @@ impl VolumeAnalyzer {
                     2 => Channels::Stereo,
                     n => return Err(ZoogError::InvalidChannelCount(n)),
                 };
-                let decoder = Decoder::new(OPUS_DECODE_SAMPLE_RATE, channels)
+                let sample_rate = SampleRate::try_from(OPUS_DECODE_SAMPLE_RATE as i32)
+                    .expect("Unsupported decoding sample rate");
+                let decoder = Decoder::new(sample_rate, channels)
                     .map_err(|e| ZoogError::OpusError(e))?;
                 self.decode_state = Some(DecodeState {
                     channel_count,
+                    sample_rate: OPUS_DECODE_SAMPLE_RATE,
                     decoder,
                 });
                 self.state = State::AwaitingComments;
@@ -72,14 +72,13 @@ impl VolumeAnalyzer {
             State::Analyzing => {
                 let decode_state = self.decode_state.as_mut().expect("Decode state unexpectedly missing");
                 let decoder = &mut decode_state.decoder;
-                let decode_fec = true;
-                let num_samples = decoder.get_nb_samples(&packet.data)
+                let decode_fec = false;
+                let max_samples = decode_state.channel_count * decode_state.sample_rate * OPUS_MAX_PACKET_DURATION_MS
+                    / 1000;
+                let mut decode_buffer = vec![0.0f32; max_samples];
+                let num_decoded_samples = decoder.decode_float(Some(&packet.data), &mut decode_buffer, decode_fec)
                     .map_err(|e| ZoogError::OpusError(e))?;
-                let mut decode_buffer = vec![0.0f32; num_samples * decode_state.channel_count];
-                let num_decoded_samples = decoder.decode_float(&packet.data, &mut decode_buffer, decode_fec)
-                    .map_err(|e| ZoogError::OpusError(e))?;
-                assert_eq!(num_samples, num_decoded_samples, "Decoded incorrect number of samples");
-                println!("Decoded {} samples", num_samples);
+                println!("Decoded {} samples", num_decoded_samples);
             }
         }
         Ok(())

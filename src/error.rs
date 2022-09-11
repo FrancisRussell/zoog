@@ -31,6 +31,6 @@ pub enum ZoogError {
     PersistError(#[from] PersistError),
     #[error("Unsupported channel count: `{0}`")]
     InvalidChannelCount(usize),
-    #[error("libopus error: `{0}`")]
-    OpusError(opus::Error),
+    #[error("Opus error: `{0}`")]
+    OpusError(audiopus::Error),
 }
