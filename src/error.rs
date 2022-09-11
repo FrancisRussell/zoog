@@ -29,4 +29,8 @@ pub enum ZoogError {
     FileMove(PathBuf, PathBuf, std::io::Error),
     #[error("Failed to persist temporary file due to `{0}`")]
     PersistError(#[from] PersistError),
+    #[error("Unsupported channel count: `{0}`")]
+    InvalidChannelCount(usize),
+    #[error("libopus error: `{0}`")]
+    OpusError(opus::Error),
 }

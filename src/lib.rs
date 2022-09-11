@@ -4,8 +4,10 @@ pub mod error;
 pub mod gain;
 pub mod opus_header;
 pub mod rewriter;
+pub mod volume_analyzer;
 
 pub use comment_header::*;
 pub use error::*;
 pub use gain::*;
 pub use opus_header::*;
+pub use volume_analyzer::*;

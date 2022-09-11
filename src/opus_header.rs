@@ -37,4 +37,10 @@ impl<'a> OpusHeader<'a> {
         self.set_output_gain(gain);
         Ok(())
     }
+
+    pub fn num_output_channels(&self) -> Result<usize, ZoogError> {
+        let mut reader = Cursor::new(&self.data[9..10]);
+        let value = reader.read_u8().expect("Error reading output channel count");
+        Ok(value.into())
+    }
 }
