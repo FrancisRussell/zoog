@@ -1,8 +1,9 @@
-use audiopus::{Channels, coder::Decoder, SampleRate, TryFrom};
+use audiopus::{Channels, coder::Decoder, SampleRate};
 use crate::comment_header::CommentHeader;
 use crate::error::ZoogError;
 use crate::opus_header::OpusHeader;
 use ogg::Packet;
+use std::convert::{TryFrom, TryInto};
 
 // Opus uses this internally so we decode to this regardless of the input file sampling rate
 const OPUS_DECODE_SAMPLE_RATE: usize = 48000;
@@ -76,8 +77,11 @@ impl VolumeAnalyzer {
                 let max_samples = decode_state.channel_count * decode_state.sample_rate * OPUS_MAX_PACKET_DURATION_MS
                     / 1000;
                 let mut decode_buffer = vec![0.0f32; max_samples];
-                let num_decoded_samples = decoder.decode_float(Some(&packet.data), &mut decode_buffer, decode_fec)
-                    .map_err(|e| ZoogError::OpusError(e))?;
+                let num_decoded_samples = decoder.decode_float(
+                    Some((&packet.data[..]).try_into().expect("Unable to cast source packet buffer")),
+                    (&mut decode_buffer[..]).try_into().expect("Unable to cast decode buffer"),
+                    decode_fec
+                ).map_err(|e| ZoogError::OpusError(e))?;
                 println!("Decoded {} samples", num_decoded_samples);
             }
         }
