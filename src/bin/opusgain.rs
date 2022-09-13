@@ -48,6 +48,32 @@ fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), Zoo
     })
 }
 
+fn apply_volume_analysis<P: AsRef<Path>>(analyzer: &mut VolumeAnalyzer, path: P) -> Result<(), ZoogError> {
+    let input_path = path.as_ref();
+    println!("Computing loudness of file {:#?}...", input_path);
+    let input_file = File::open(&input_path).map_err(|e| ZoogError::FileOpenError(input_path.to_path_buf(), e))?;
+    let input_file = BufReader::new(input_file);
+    let mut ogg_reader = PacketReader::new(input_file);
+    loop {
+        match ogg_reader.read_packet() {
+            Err(e) => return Err(ZoogError::OggDecode(e)),
+            Ok(None) => {
+                analyzer.file_complete();
+                return Ok(());
+            }
+            Ok(Some(packet)) => analyzer.submit(packet)?,
+        }
+    }
+}
+
+fn compute_album_power<I: IntoIterator<Item=P>, P: AsRef<Path>>(paths: I) -> Result<f64, ZoogError> {
+    let mut analyzer = VolumeAnalyzer::new(true);
+    for input_path in paths.into_iter() {
+        apply_volume_analysis(&mut analyzer, input_path.as_ref())?;
+    }
+    Ok(analyzer.mean_power())
+}
+
 fn main_impl() -> Result<(), ZoogError> {
     let matches = App::new("Opusgain")
         .author(get_authors().as_str())
@@ -63,8 +89,14 @@ fn main_impl() -> Result<(), ZoogError> {
             .multiple(true)
             .required(true)
             .help("The Opus files to process"))
-        .get_matches();
+        .arg(Arg::with_name("album")
+            .long("album")
+            .short("a")
+            .takes_value(false)
+            .help("Enable album mode")
+        ).get_matches();
 
+    let album_mode = matches.is_present("album");
     let mode = match matches.value_of("preset").unwrap() {
         "rg" => OperationMode::TargetLUFS(REPLAY_GAIN_LUFS),
         "r128" => OperationMode::TargetLUFS(R128_LUFS),
@@ -76,7 +108,13 @@ fn main_impl() -> Result<(), ZoogError> {
     let mut num_already_normalized: usize = 0;
     let mut num_missing_r128: usize = 0;
 
-    let input_files = matches.values_of("input_files").expect("No input files");
+    let input_files: Vec<_> = matches.values_of("input_files").expect("No input files").collect();
+    let album_power = if album_mode {
+        Some(compute_album_power(&input_files)?)
+    } else {
+        None
+    };
+    println!("Album power: {:?}", album_power);
     for input_path in input_files {
         let input_path = PathBuf::from(input_path);
         println!("Processing file {:#?} with target loudness of {}...", input_path, mode.to_friendly_string());
@@ -85,11 +123,13 @@ fn main_impl() -> Result<(), ZoogError> {
 
         let input_dir = input_path.parent().expect("Unable to find parent folder of input file");
         let input_base = input_path.file_name().expect("Unable to find name of input file");
+        /*
         let mut output_file = tempfile::Builder::new()
             .prefix(input_base)
             .suffix("zoog")
             .tempfile_in(input_dir)
             .map_err(ZoogError::TempFileOpenError)?;
+        */
 
         let rewrite_result = {
             let mut ogg_reader = PacketReader::new(input_file);
@@ -98,10 +138,15 @@ fn main_impl() -> Result<(), ZoogError> {
                 match ogg_reader.read_packet() {
                     Err(e) => break Err(ZoogError::OggDecode(e)),
                     Ok(None) => {
+                        analyzer.file_complete();
+                        println!("Computed mean power: {} dB", analyzer.mean_power());
+                        break Ok(())
                         // Make sure to flush the buffered writer
+                        /*
                         break output_file.flush()
                             .map(|_| ())
                             .map_err(ZoogError::WriteError);
+                        */
                     }
                     Ok(Some(packet)) => {
                         let submit_result = analyzer.submit(packet);

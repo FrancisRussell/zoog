@@ -29,6 +29,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "bef38d45163c2f1dde094a7dfd33ccf595c92905c8f8f4fdc18d06fb1037718a"
 
 [[package]]
+name = "bs1770"
+version = "1.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "6332c61c205ff066246fff2cb876cdf9009557200f96e15d88d156193b16775b"
+
+[[package]]
 name = "byteorder"
 version = "1.4.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -320,6 +326,7 @@ version = "0.1.4"
 dependencies = [
  "audiopus",
  "audiopus_sys",
+ "bs1770",
  "byteorder",
  "clap",
  "derivative",
