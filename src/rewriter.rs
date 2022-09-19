@@ -1,24 +1,25 @@
-use crate::{CommentHeader, Error, FixedPointGain, OpusHeader, R128_LUFS, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use crate::{CommentHeader, Decibels, Error, FixedPointGain, OpusHeader, R128_LUFS, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use ogg::Packet;
 use std::collections::VecDeque;
+use std::convert::TryFrom;
 use std::io::Write;
 
 #[derive(Clone, Copy, Debug)]
 pub enum VolumeTarget {
     ZeroGain,
-    LUFS(f64),
+    LUFS(Decibels),
 }
 
 #[derive(Clone, Copy, Debug)]
 pub struct RewriterConfig {
     internal_gain: VolumeTarget,
-    track_volume: f64,
-    album_volume: Option<f64>,
+    track_volume: Decibels,
+    album_volume: Option<Decibels>,
 }
 
 impl RewriterConfig {
-    pub fn new(internal_gain: VolumeTarget, track_volume: f64, album_volume: Option<f64>) -> RewriterConfig {
+    pub fn new(internal_gain: VolumeTarget, track_volume: Decibels, album_volume: Option<Decibels>) -> RewriterConfig {
         RewriterConfig {
             internal_gain,
             track_volume,
@@ -26,7 +27,7 @@ impl RewriterConfig {
         }
     }
 
-    pub fn volume_for_internal_gain_calculation(&self) -> f64 {
+    pub fn volume_for_internal_gain_calculation(&self) -> Decibels {
         self.album_volume.unwrap_or(self.track_volume)
     }
 }
@@ -54,10 +55,10 @@ enum State {
 }
 
 fn print_gains<'a>(opus_header: &OpusHeader<'a>, comment_header: &CommentHeader<'a>) -> Result<(), Error> {
-    println!("\tOutput Gain: {}dB", opus_header.get_output_gain().as_decibels());
+    println!("\tOutput Gain: {}", opus_header.get_output_gain().as_decibels());
     for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
         if let Some(gain) = comment_header.get_gain_from_tag(tag)? {
-            println!("\t{}: {}dB", tag, gain.as_decibels());
+            println!("\t{}: {}", tag, gain.as_decibels());
         }
     }
     Ok(())
@@ -111,17 +112,17 @@ impl<W: Write> Rewriter<W> {
                     let new_header_gain = match self.config.internal_gain {
                         VolumeTarget::ZeroGain => FixedPointGain::default(),
                         VolumeTarget::LUFS(target_lufs) => {
-                            FixedPointGain::from_decibels(target_lufs - volume_for_internal_gain)
-                                .expect("Header gain out of bounds")
+                            FixedPointGain::try_from(target_lufs - volume_for_internal_gain)?
                         }
                     };
-                    let track_gain_r128 = FixedPointGain::from_decibels(
+                    let track_gain_r128 = FixedPointGain::try_from(
                         R128_LUFS - self.config.track_volume - new_header_gain.as_decibels()
-                    ).expect("Track gain out of bounds");
-                    let album_gain_r128 = self.config.album_volume.map(|album_volume| {
-                        FixedPointGain::from_decibels(R128_LUFS - album_volume - new_header_gain.as_decibels())
-                            .expect("Album gain out of bounds")
-                    });
+                    )?;
+                    let album_gain_r128 = if let Some(album_volume) = self.config.album_volume {
+                        Some(FixedPointGain::try_from(R128_LUFS - album_volume - new_header_gain.as_decibels())?)
+                    } else {
+                        None
+                    };
                     opus_header.set_output_gain(new_header_gain);
                     comment_header.replace(TAG_TRACK_GAIN, &format!("{}", track_gain_r128.as_fixed_point()));
                     if let Some(album_gain_r128) = album_gain_r128 {

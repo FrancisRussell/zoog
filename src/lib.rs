@@ -1,5 +1,8 @@
+#![feature(const_trait_impl)]
+
 pub mod comment_header;
 pub mod constants;
+pub mod decibels;
 pub mod error;
 pub mod fixed_point_gain;
 pub mod opus_header;
@@ -8,6 +11,7 @@ pub mod volume_analyzer;
 
 pub use comment_header::*;
 pub use constants::*;
+pub use decibels::*;
 pub use error::*;
 pub use fixed_point_gain::*;
 pub use opus_header::*;

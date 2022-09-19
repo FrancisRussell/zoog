@@ -22,12 +22,12 @@ impl<'a> OpusHeader<'a> {
     pub fn get_output_gain(&self) -> FixedPointGain {
         let mut reader = Cursor::new(&self.data[16..18]);
         let value = reader.read_i16::<LittleEndian>().expect("Error reading gain");
-        FixedPointGain { value }
+        FixedPointGain::from_integer(value)
     }
 
     pub fn set_output_gain(&mut self, gain: FixedPointGain) {
         let mut writer = Cursor::new(&mut self.data[16..18]);
-        writer.write_i16::<LittleEndian>(gain.value).expect("Error writing gain");
+        writer.write_i16::<LittleEndian>(gain.as_fixed_point()).expect("Error writing gain");
     }
 
     pub fn adjust_output_gain(&mut self, adjustment: FixedPointGain) -> Result<(), Error> {

@@ -1,22 +1,23 @@
+use crate::{Decibels, Error};
+use std::convert::TryFrom;
+use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct FixedPointGain {
-    pub(crate) value: i16,
+    value: i16,
 }
 
 impl FixedPointGain {
-    pub fn as_decibels(self) -> f64 { self.value as f64 / 256.0 }
-
     pub fn as_fixed_point(self) -> i16 { self.value }
 
-    pub fn from_decibels(value: f64) -> Option<FixedPointGain> {
-        let fixed = (value * 256.0).round();
-        let value = fixed as i16;
-        if ((value as f64) - fixed).abs() < std::f64::EPSILON {
-            Some(FixedPointGain { value })
-        } else {
-            None
+    pub fn as_decibels(self) -> Decibels {
+        Decibels::from(self.value as f64 / 256.0)
+    }
+
+    pub fn from_integer(value: i16) -> FixedPointGain {
+        FixedPointGain {
+            value,
         }
     }
 
@@ -29,10 +30,30 @@ impl FixedPointGain {
     pub fn checked_neg(self) -> Option<FixedPointGain> { self.value.checked_neg().map(|value| FixedPointGain { value }) }
 }
 
+impl TryFrom<Decibels> for FixedPointGain {
+    type Error = Error;
+
+    fn try_from(value: Decibels) -> Result<FixedPointGain, Error> {
+        let fixed = (value.as_f64() * 256.0).round();
+        let value = fixed as i16;
+        if ((value as f64) - fixed).abs() < std::f64::EPSILON {
+            Ok(FixedPointGain { value })
+        } else {
+            Err(Error::GainOutOfBounds)
+        }
+    }
+}
+
 impl FromStr for FixedPointGain {
     type Err = <i16 as FromStr>::Err;
 
     fn from_str(s: &str) -> Result<Self, Self::Err> { s.parse::<i16>().map(|value| FixedPointGain { value }) }
+}
+
+impl Display for FixedPointGain {
+    fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), std::fmt::Error> {
+        write!(formatter, "{}", self.as_decibels())
+    }
 }
 
 #[cfg(test)]

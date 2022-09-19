@@ -7,7 +7,7 @@ use std::io::{BufReader, BufWriter, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use zoog::constants::{R128_LUFS, REPLAY_GAIN_LUFS};
 use zoog::rewriter::{RewriteResult, Rewriter, RewriterConfig, VolumeTarget};
-use zoog::{Error, VolumeAnalyzer};
+use zoog::{Error, VolumeAnalyzer, Decibels};
 
 pub const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 pub const AUTHORS: Option<&'static str> = option_env!("CARGO_PKG_AUTHORS");
@@ -68,16 +68,16 @@ fn apply_volume_analysis<P: AsRef<Path>>(analyzer: &mut VolumeAnalyzer, path: P)
 
 #[derive(Debug)]
 struct AlbumVolume {
-    mean: f64,
-    tracks: HashMap<PathBuf, f64>,
+    mean: Decibels,
+    tracks: HashMap<PathBuf, Decibels>,
 }
 
 impl AlbumVolume {
-    pub fn get_album_mean(&self) -> f64 {
+    pub fn get_album_mean(&self) -> Decibels {
         self.mean
     }
 
-    pub fn get_track_mean(&self, path: &Path) -> Option<f64> {
+    pub fn get_track_mean(&self, path: &Path) -> Option<Decibels> {
         self.tracks.get(path).cloned()
     }
 }

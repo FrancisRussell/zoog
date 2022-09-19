@@ -1,4 +1,4 @@
-use crate::{CommentHeader, Error, OpusHeader};
+use crate::{CommentHeader, Decibels, Error, OpusHeader};
 use audiopus::coder::Decoder;
 use audiopus::{Channels, SampleRate};
 use bs1770::{ChannelLoudnessMeter, Power, Windows100ms};
@@ -121,7 +121,7 @@ pub struct VolumeAnalyzer {
     decode_state: Option<DecodeState>,
     state: State,
     windows: Windows100ms<Vec<Power>>,
-    track_loudness: Vec<f64>,
+    track_loudness: Vec<Decibels>,
 }
 
 impl VolumeAnalyzer {
@@ -161,9 +161,9 @@ impl VolumeAnalyzer {
         Ok(())
     }
 
-    fn gated_mean_to_lufs(windows: Windows100ms<&[Power]>) -> f64 {
+    fn gated_mean_to_lufs(windows: Windows100ms<&[Power]>) -> Decibels {
         let power = bs1770::gated_mean(windows.as_ref());
-        if power.0.is_nan() {
+        let lufs = if power.0.is_nan() {
             // Near silence can result in a NaN result (https://github.com/ruuda/bs1770/issues/1).
             // Returning a large negative value might result in the application of a massive gain and is therefore
             // not a good idea. Instead we return zero, which indicates the audio is at peak
@@ -171,7 +171,8 @@ impl VolumeAnalyzer {
             0.0
         } else {
             power.loudness_lkfs().into()
-        }
+        };
+        Decibels::from(lufs)
     }
 
     pub fn file_complete(&mut self) {
@@ -185,15 +186,15 @@ impl VolumeAnalyzer {
         self.state = State::AwaitingHeader;
     }
 
-    pub fn mean_lufs(&self) -> f64 {
+    pub fn mean_lufs(&self) -> Decibels {
         Self::gated_mean_to_lufs(self.windows.as_ref())
     }
 
-    pub fn track_lufs(&self) -> Vec<f64> {
+    pub fn track_lufs(&self) -> Vec<Decibels> {
         self.track_loudness.clone()
     }
 
-    pub fn last_track_lufs(&self) -> Option<f64> {
+    pub fn last_track_lufs(&self) -> Option<Decibels> {
         self.track_loudness.last().cloned()
     }
 }
