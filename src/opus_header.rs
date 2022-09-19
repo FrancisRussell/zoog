@@ -44,3 +44,9 @@ impl<'a> OpusHeader<'a> {
         Ok(value.into())
     }
 }
+
+impl<'a> PartialEq for OpusHeader<'a> {
+    fn eq(&self, other: &OpusHeader) -> bool {
+        self.data == other.data
+    }
+}
