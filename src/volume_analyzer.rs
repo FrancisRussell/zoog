@@ -162,11 +162,24 @@ impl VolumeAnalyzer {
         Ok(())
     }
 
+    fn gated_mean_to_lufs(windows: Windows100ms<&[Power]>) -> f64 {
+        let power = bs1770::gated_mean(windows.as_ref());
+        if power.0.is_nan() {
+            // Near silence can result in a NaN result (https://github.com/ruuda/bs1770/issues/1).
+            // Returning a large negative value might result in the application of a massive gain and is therefore
+            // not a good idea. Instead we return zero, which indicates the audio is at peak
+            // volume.
+            0.0
+        } else {
+            power.loudness_lkfs().into()
+        }
+    }
+
     pub fn file_complete(&mut self) {
         if let Some(decode_state) = self.decode_state.take() {
             let windows = decode_state.get_windows();
-            let track_power = bs1770::gated_mean(windows.as_ref());
-            self.track_loudness.push(track_power.loudness_lkfs().into());
+            let track_power = Self::gated_mean_to_lufs(windows.as_ref());
+            self.track_loudness.push(track_power);
             self.windows.inner.extend(windows.inner);
         }
         assert!(self.decode_state.is_none());
@@ -174,8 +187,7 @@ impl VolumeAnalyzer {
     }
 
     pub fn mean_lufs(&self) -> f64 {
-        let power = bs1770::gated_mean(self.windows.as_ref());
-        power.loudness_lkfs().into()
+        Self::gated_mean_to_lufs(self.windows.as_ref())
     }
 
     pub fn track_lufs(&self) -> Vec<f64> {
