@@ -1,8 +1,4 @@
-use crate::comment_header::CommentHeader;
-use crate::constants::{R128_LUFS, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
-use crate::error::ZoogError;
-use crate::gain::Gain;
-use crate::opus_header::OpusHeader;
+use crate::{CommentHeader, FixedPointGain, OpusHeader, ZoogError, R128_LUFS, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use ogg::Packet;
 use std::collections::VecDeque;
@@ -113,17 +109,17 @@ impl<W: Write> Rewriter<W> {
                     };
                     let volume_for_internal_gain = self.config.volume_for_internal_gain_calculation();
                     let new_header_gain = match self.config.internal_gain {
-                        VolumeTarget::ZeroGain => Gain::default(),
+                        VolumeTarget::ZeroGain => FixedPointGain::default(),
                         VolumeTarget::LUFS(target_lufs) => {
-                            Gain::from_decibels(target_lufs - volume_for_internal_gain)
+                            FixedPointGain::from_decibels(target_lufs - volume_for_internal_gain)
                                 .expect("Header gain out of bounds")
                         }
                     };
-                    let track_gain_r128 = Gain::from_decibels(
+                    let track_gain_r128 = FixedPointGain::from_decibels(
                         R128_LUFS - self.config.track_volume - new_header_gain.as_decibels()
                     ).expect("Track gain out of bounds");
                     let album_gain_r128 = self.config.album_volume.map(|album_volume| {
-                        Gain::from_decibels(R128_LUFS - album_volume - new_header_gain.as_decibels())
+                        FixedPointGain::from_decibels(R128_LUFS - album_volume - new_header_gain.as_decibels())
                             .expect("Album gain out of bounds")
                     });
                     opus_header.set_output_gain(new_header_gain);

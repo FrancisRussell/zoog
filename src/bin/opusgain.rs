@@ -7,8 +7,7 @@ use std::io::{BufReader, BufWriter, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use zoog::constants::{R128_LUFS, REPLAY_GAIN_LUFS};
 use zoog::rewriter::{RewriteResult, Rewriter, RewriterConfig, VolumeTarget};
-use zoog::VolumeAnalyzer;
-use zoog::ZoogError;
+use zoog::{VolumeAnalyzer, ZoogError};
 
 pub const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 pub const AUTHORS: Option<&'static str> = option_env!("CARGO_PKG_AUTHORS");

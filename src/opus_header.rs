@@ -1,5 +1,4 @@
-use crate::error::ZoogError;
-use crate::gain::Gain;
+use crate::{FixedPointGain, ZoogError};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
 
@@ -20,18 +19,18 @@ impl<'a> OpusHeader<'a> {
         })
     }
 
-    pub fn get_output_gain(&self) -> Gain {
+    pub fn get_output_gain(&self) -> FixedPointGain {
         let mut reader = Cursor::new(&self.data[16..18]);
         let value = reader.read_i16::<LittleEndian>().expect("Error reading gain");
-        Gain { value }
+        FixedPointGain { value }
     }
 
-    pub fn set_output_gain(&mut self, gain: Gain) {
+    pub fn set_output_gain(&mut self, gain: FixedPointGain) {
         let mut writer = Cursor::new(&mut self.data[16..18]);
         writer.write_i16::<LittleEndian>(gain.value).expect("Error writing gain");
     }
 
-    pub fn adjust_output_gain(&mut self, adjustment: Gain) -> Result<(), ZoogError> {
+    pub fn adjust_output_gain(&mut self, adjustment: FixedPointGain) -> Result<(), ZoogError> {
         let gain = self.get_output_gain();
         let gain = gain.checked_add(adjustment).ok_or(ZoogError::GainOutOfBounds)?;
         self.set_output_gain(gain);

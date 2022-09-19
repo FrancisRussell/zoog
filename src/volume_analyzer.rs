@@ -1,7 +1,6 @@
-use crate::comment_header::CommentHeader;
-use crate::error::ZoogError;
-use crate::opus_header::OpusHeader;
-use audiopus::{coder::Decoder, Channels, SampleRate};
+use crate::{CommentHeader, OpusHeader, ZoogError};
+use audiopus::coder::Decoder;
+use audiopus::{Channels, SampleRate};
 use bs1770::{ChannelLoudnessMeter, Power, Windows100ms};
 use ogg::Packet;
 use std::convert::{TryFrom, TryInto};
