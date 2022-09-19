@@ -9,16 +9,37 @@ use std::collections::VecDeque;
 use std::io::Write;
 
 #[derive(Clone, Copy, Debug)]
-pub enum OperationMode {
-    ZeroOutputGain,
-    TargetLUFS(f64),
+pub enum VolumeTarget {
+    ZeroGain,
+    LUFS(f64),
 }
 
-impl OperationMode {
+#[derive(Clone, Copy, Debug)]
+pub struct RewriterConfig {
+    internal_gain: VolumeTarget,
+    track_volume: f64,
+    album_volume: Option<f64>,
+}
+
+impl RewriterConfig {
+    pub fn new(internal_gain: VolumeTarget, track_volume: f64, album_volume: Option<f64>) -> RewriterConfig {
+        RewriterConfig {
+            internal_gain,
+            track_volume,
+            album_volume,
+        }
+    }
+
+    pub fn volume_for_internal_gain_calculation(&self) -> f64 {
+        self.album_volume.unwrap_or(self.track_volume)
+    }
+}
+
+impl VolumeTarget {
     pub fn to_friendly_string(&self) -> String {
         match *self {
-            OperationMode::ZeroOutputGain => String::from("original input"),
-            OperationMode::TargetLUFS(lufs) => format!("{} LUFS", lufs),
+            VolumeTarget::ZeroGain => String::from("original input"),
+            VolumeTarget::LUFS(lufs) => format!("{} LUFS", lufs),
         }
     }
 }
@@ -26,7 +47,6 @@ impl OperationMode {
 #[derive(Clone, Copy, Debug)]
 pub enum RewriteResult {
     Ready,
-    NoR128Tags,
     AlreadyNormalized,
 }
 
@@ -52,18 +72,18 @@ pub struct Rewriter<W: Write> {
     header_packet: Option<Packet>,
     state: State,
     packet_queue: VecDeque<Packet>,
-    mode: OperationMode,
+    config: RewriterConfig,
     verbose: bool,
 }
 
 impl<W: Write> Rewriter<W> {
-    pub fn new(mode: OperationMode, packet_writer: PacketWriter<W>, verbose: bool) -> Rewriter<W> {
+    pub fn new(config: &RewriterConfig, packet_writer: PacketWriter<W>, verbose: bool) -> Rewriter<W> {
         Rewriter {
             packet_writer,
             header_packet: None,
             state: State::AwaitingHeader,
             packet_queue: VecDeque::new(),
-            mode,
+            config: *config,
             verbose,
         }
     }
@@ -78,6 +98,11 @@ impl<W: Write> Rewriter<W> {
                 // Parse Opus header
                 let mut opus_header_packet = self.header_packet.take().expect("Missing header packet");
                 {
+                    // Create copies of Opus and comment header to check if they have changed
+                    let mut opus_header_packet_data_orig = opus_header_packet.data.clone();
+                    let mut comment_header_data_orig = packet.data.clone();
+
+                    // Parse Opus header
                     let mut opus_header = OpusHeader::try_new(&mut opus_header_packet.data)
                         .ok_or(ZoogError::MissingOpusStream)?;
                     // Parse comment header
@@ -86,36 +111,38 @@ impl<W: Write> Rewriter<W> {
                         Ok(None) => return Err(ZoogError::MissingCommentHeader),
                         Err(e) => return Err(e),
                     };
-
-                    let header_gain = opus_header.get_output_gain();
-                    let comment_gain = match comment_header.get_album_or_track_gain() {
-                        Err(e) => return Err(e),
-                        Ok(None) => return Ok(RewriteResult::NoR128Tags),
-                        Ok(Some(gain)) => gain,
+                    let volume_for_internal_gain = self.config.volume_for_internal_gain_calculation();
+                    let new_header_gain = match self.config.internal_gain {
+                        VolumeTarget::ZeroGain => Gain::default(),
+                        VolumeTarget::LUFS(target_lufs) => {
+                            Gain::from_decibels(target_lufs - volume_for_internal_gain)
+                                .expect("Header gain out of bounds")
+                        },
                     };
-                    if self.verbose {
-                        println!("Original gain values:");
-                        print_gains(&opus_header, &comment_header)?;
+                    let track_gain_r128 = Gain::from_decibels(
+                        R128_LUFS - self.config.track_volume - new_header_gain.as_decibels()
+                    ).expect("Track gain out of bounds");
+                    let album_gain_r128 = self.config.album_volume.map(|album_volume| {
+                        Gain::from_decibels(R128_LUFS - album_volume - new_header_gain.as_decibels())
+                            .expect("Album gain out of bounds")
+                    });
+                    opus_header.set_output_gain(new_header_gain);
+                    comment_header.replace(TAG_TRACK_GAIN, &format!("{}", track_gain_r128.as_fixed_point()));
+                    if let Some(album_gain_r128) = album_gain_r128 {
+                        comment_header.replace(TAG_ALBUM_GAIN, &format!("{}", album_gain_r128.as_fixed_point()));
+                    } else {
+                        comment_header.remove_all(TAG_ALBUM_GAIN);
                     }
-                    match self.mode {
-                        OperationMode::ZeroOutputGain => {
-                            // Set Opus header gain
-                            opus_header.set_output_gain(Gain::default());
-                            // Set comment header gain
-                            if header_gain.is_zero() {
-                                return Ok(RewriteResult::AlreadyNormalized);
-                            } else {
-                                comment_header.adjust_gains(header_gain)?;
-                            }
-                        }
-                        OperationMode::TargetLUFS(target_lufs) => {
-                            let header_delta = Gain::from_decibels(comment_gain.as_decibels() + target_lufs - R128_LUFS);
-                            let header_delta = header_delta.ok_or(ZoogError::GainOutOfBounds)?;
-                            if header_delta.is_zero() { return Ok(RewriteResult::AlreadyNormalized); }
-                            let comment_delta = header_delta.checked_neg().ok_or(ZoogError::GainOutOfBounds)?;
-                            opus_header.adjust_output_gain(header_delta)?;
-                            comment_header.adjust_gains(comment_delta)?;
-                        }
+
+                    // We have decoded both of these already, so these should never fail
+                    let opus_header_orig = OpusHeader::try_new(&mut opus_header_packet_data_orig)
+                        .expect("Unexpectedly failed to decode Opus header");
+                    let comment_header_orig = CommentHeader::try_parse(&mut comment_header_data_orig)
+                        .expect("Unexpectedly failed to decode comment header")
+                        .expect("Comment header unexpectedly missing");
+
+                    if opus_header == opus_header_orig && comment_header == comment_header_orig {
+                        return Ok(RewriteResult::AlreadyNormalized);
                     }
                     if self.verbose {
                         println!("New gain values:");
@@ -151,5 +178,3 @@ impl<W: Write> Rewriter<W> {
         Ok(RewriteResult::Ready)
     }
 }
-
-

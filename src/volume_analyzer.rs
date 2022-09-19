@@ -58,13 +58,13 @@ impl DecodeState {
             channel_states.push(DecodeStateChannel::new(sample_rate));
         }
         assert_eq!(channel_states.len(), channel_count);
-        let MS_PER_SECOND: usize = 1000;
+        let ms_per_second: usize = 1000;
         let state = DecodeState {
             channel_count,
             sample_rate,
             decoder,
             channel_states,
-            sample_buffer: vec![0.0f32; channel_count * sample_rate * OPUS_MAX_PACKET_DURATION_MS / MS_PER_SECOND],
+            sample_buffer: vec![0.0f32; channel_count * sample_rate * OPUS_MAX_PACKET_DURATION_MS / ms_per_second],
         };
         Ok(state)
     }
@@ -122,17 +122,17 @@ impl DecodeState {
 pub struct VolumeAnalyzer {
     decode_state: Option<DecodeState>,
     state: State,
-    verbose: bool,
     windows: Windows100ms<Vec<Power>>,
+    track_loudness: Vec<f64>,
 }
 
 impl VolumeAnalyzer {
-    pub fn new(verbose: bool) -> VolumeAnalyzer {
+    pub fn new() -> VolumeAnalyzer {
         VolumeAnalyzer {
             decode_state: None,
             state: State::AwaitingHeader,
-            verbose,
             windows: Windows100ms::new(),
+            track_loudness: Vec::new(),
         }
     }
 
@@ -149,7 +149,7 @@ impl VolumeAnalyzer {
             State::AwaitingComments => {
                 // Check comment header is valid
                 match CommentHeader::try_parse(&mut packet.data) {
-                    Ok(Some(header)) => (),
+                    Ok(Some(_)) => (),
                     Ok(None) => return Err(ZoogError::MissingCommentHeader),
                     Err(e) => return Err(e),
                 }
@@ -166,15 +166,24 @@ impl VolumeAnalyzer {
     pub fn file_complete(&mut self) {
         if let Some(decode_state) = self.decode_state.take() {
             let windows = decode_state.get_windows();
+            let track_power = bs1770::gated_mean(windows.as_ref());
+            self.track_loudness.push(track_power.loudness_lkfs().into());
             self.windows.inner.extend(windows.inner);
         }
         assert!(self.decode_state.is_none());
         self.state = State::AwaitingHeader;
-        println!("Volume analyzer has windows for around {} seconds of audio", self.windows.inner.len() as f64 * 0.1);
     }
 
-    pub fn mean_power(&self) -> f64 {
+    pub fn mean_lufs(&self) -> f64 {
         let power = bs1770::gated_mean(self.windows.as_ref());
         power.loudness_lkfs().into()
+    }
+
+    pub fn track_lufs(&self) -> Vec<f64> {
+        self.track_loudness.clone()
+    }
+
+    pub fn last_track_lufs(&self) -> Option<f64> {
+        self.track_loudness.last().cloned()
     }
 }
