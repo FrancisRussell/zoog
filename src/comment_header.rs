@@ -138,6 +138,12 @@ impl<'a> Drop for CommentHeader<'a> {
     fn drop(&mut self) { self.commit(); }
 }
 
+impl<'a> PartialEq for CommentHeader<'a> {
+    fn eq(&self, other: &CommentHeader<'a>) -> bool {
+        self.vendor == other.vendor && self.user_comments == other.user_comments
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
