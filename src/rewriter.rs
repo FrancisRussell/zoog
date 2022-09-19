@@ -1,4 +1,4 @@
-use crate::{CommentHeader, FixedPointGain, OpusHeader, ZoogError, R128_LUFS, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use crate::{CommentHeader, Error, FixedPointGain, OpusHeader, R128_LUFS, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use ogg::Packet;
 use std::collections::VecDeque;
@@ -53,7 +53,7 @@ enum State {
     Forwarding,
 }
 
-fn print_gains<'a>(opus_header: &OpusHeader<'a>, comment_header: &CommentHeader<'a>) -> Result<(), ZoogError> {
+fn print_gains<'a>(opus_header: &OpusHeader<'a>, comment_header: &CommentHeader<'a>) -> Result<(), Error> {
     println!("\tOutput Gain: {}dB", opus_header.get_output_gain().as_decibels());
     for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
         if let Some(gain) = comment_header.get_gain_from_tag(tag)? {
@@ -84,7 +84,7 @@ impl<W: Write> Rewriter<W> {
         }
     }
 
-    pub fn submit(&mut self, mut packet: Packet) -> Result<RewriteResult, ZoogError> {
+    pub fn submit(&mut self, mut packet: Packet) -> Result<RewriteResult, Error> {
         match self.state {
             State::AwaitingHeader => {
                 self.header_packet = Some(packet);
@@ -100,11 +100,11 @@ impl<W: Write> Rewriter<W> {
 
                     // Parse Opus header
                     let mut opus_header = OpusHeader::try_new(&mut opus_header_packet.data)
-                        .ok_or(ZoogError::MissingOpusStream)?;
+                        .ok_or(Error::MissingOpusStream)?;
                     // Parse comment header
                     let mut comment_header = match CommentHeader::try_parse(&mut packet.data) {
                         Ok(Some(header)) => header,
-                        Ok(None) => return Err(ZoogError::MissingCommentHeader),
+                        Ok(None) => return Err(Error::MissingCommentHeader),
                         Err(e) => return Err(e),
                     };
                     let volume_for_internal_gain = self.config.volume_for_internal_gain_calculation();
@@ -169,7 +169,7 @@ impl<W: Write> Rewriter<W> {
                 packet_serial,
                 packet_info,
                 packet_granule,
-            ).map_err(ZoogError::WriteError)?;
+            ).map_err(Error::WriteError)?;
         }
         Ok(RewriteResult::Ready)
     }

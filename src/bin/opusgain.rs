@@ -7,7 +7,7 @@ use std::io::{BufReader, BufWriter, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use zoog::constants::{R128_LUFS, REPLAY_GAIN_LUFS};
 use zoog::rewriter::{RewriteResult, Rewriter, RewriterConfig, VolumeTarget};
-use zoog::{VolumeAnalyzer, ZoogError};
+use zoog::{Error, VolumeAnalyzer};
 
 pub const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 pub const AUTHORS: Option<&'static str> = option_env!("CARGO_PKG_AUTHORS");
@@ -42,21 +42,21 @@ fn remove_file_verbose<P: AsRef<Path>>(path: P) {
     }
 }
 
-fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), ZoogError> {
+fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), Error> {
     std::fs::rename(from.as_ref(), to.as_ref()).map_err(|e| {
-        ZoogError::FileMove(PathBuf::from(from.as_ref()), PathBuf::from(to.as_ref()), e)
+        Error::FileMove(PathBuf::from(from.as_ref()), PathBuf::from(to.as_ref()), e)
     })
 }
 
-fn apply_volume_analysis<P: AsRef<Path>>(analyzer: &mut VolumeAnalyzer, path: P) -> Result<(), ZoogError> {
+fn apply_volume_analysis<P: AsRef<Path>>(analyzer: &mut VolumeAnalyzer, path: P) -> Result<(), Error> {
     let input_path = path.as_ref();
     println!("Computing loudness of file {:#?}...", input_path);
-    let input_file = File::open(&input_path).map_err(|e| ZoogError::FileOpenError(input_path.to_path_buf(), e))?;
+    let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
     let input_file = BufReader::new(input_file);
     let mut ogg_reader = PacketReader::new(input_file);
     loop {
         match ogg_reader.read_packet() {
-            Err(e) => return Err(ZoogError::OggDecode(e)),
+            Err(e) => return Err(Error::OggDecode(e)),
             Ok(None) => {
                 analyzer.file_complete();
                 return Ok(());
@@ -82,7 +82,7 @@ impl AlbumVolume {
     }
 }
 
-fn compute_album_volume<I: IntoIterator<Item=P>, P: AsRef<Path>>(paths: I) -> Result<AlbumVolume, ZoogError> {
+fn compute_album_volume<I: IntoIterator<Item=P>, P: AsRef<Path>>(paths: I) -> Result<AlbumVolume, Error> {
     let mut analyzer = VolumeAnalyzer::new();
     let mut tracks = HashMap::new();
     for input_path in paths.into_iter() {
@@ -99,18 +99,18 @@ fn compute_album_volume<I: IntoIterator<Item=P>, P: AsRef<Path>>(paths: I) -> Re
     Ok(album_volume)
 }
 
-fn rewrite_stream<R: Read + Seek, W: Write>(input: R, mut output: W, config: &RewriterConfig) -> Result<RewriteResult, ZoogError> {
+fn rewrite_stream<R: Read + Seek, W: Write>(input: R, mut output: W, config: &RewriterConfig) -> Result<RewriteResult, Error> {
     let mut ogg_reader = PacketReader::new(input);
     let ogg_writer = PacketWriter::new(&mut output);
     let mut rewriter = Rewriter::new(config, ogg_writer, true);
     loop {
         match ogg_reader.read_packet() {
-            Err(e) => break Err(ZoogError::OggDecode(e)),
+            Err(e) => break Err(Error::OggDecode(e)),
             Ok(None) => {
                 // Make sure to flush any buffered data
                 break output.flush()
                     .map(|_| RewriteResult::Ready)
-                    .map_err(ZoogError::WriteError);
+                    .map_err(Error::WriteError);
             }
             Ok(Some(packet)) => {
                 let submit_result = rewriter.submit(packet);
@@ -123,7 +123,7 @@ fn rewrite_stream<R: Read + Seek, W: Write>(input: R, mut output: W, config: &Re
     }
 }
 
-fn main_impl() -> Result<(), ZoogError> {
+fn main_impl() -> Result<(), Error> {
     let matches = App::new("Opusgain")
         .author(get_authors().as_str())
         .about(get_description().as_str())
@@ -183,14 +183,14 @@ fn main_impl() -> Result<(), ZoogError> {
 
         let input_dir = input_path.parent().expect("Unable to find parent folder of input file");
         let input_base = input_path.file_name().expect("Unable to find name of input file");
-        let input_file = File::open(&input_path).map_err(|e| ZoogError::FileOpenError(input_path.to_path_buf(), e))?;
+        let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
         let mut input_file = BufReader::new(input_file);
 
         let mut output_file = tempfile::Builder::new()
             .prefix(input_base)
             .suffix("zoog")
             .tempfile_in(input_dir)
-            .map_err(ZoogError::TempFileOpenError)?;
+            .map_err(Error::TempFileOpenError)?;
         let rewrite_result = {
             let mut output_file = BufWriter::new(&mut output_file);
             rewrite_stream(&mut input_file, &mut output_file, &rewriter_config)
@@ -207,8 +207,8 @@ fn main_impl() -> Result<(), ZoogError> {
                 backup_path.set_extension("zoog-orig");
                 rename_file(&input_path, &backup_path)?;
                 output_file.persist_noclobber(&input_path)
-                    .map_err(ZoogError::PersistError)
-                    .and_then(|f| f.sync_all().map_err(ZoogError::WriteError))?;
+                    .map_err(Error::PersistError)
+                    .and_then(|f| f.sync_all().map_err(Error::WriteError))?;
                 remove_file_verbose(&backup_path);
             }
             Ok(RewriteResult::AlreadyNormalized) => {

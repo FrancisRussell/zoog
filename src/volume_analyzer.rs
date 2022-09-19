@@ -1,4 +1,4 @@
-use crate::{CommentHeader, OpusHeader, ZoogError};
+use crate::{CommentHeader, Error, OpusHeader};
 use audiopus::coder::Decoder;
 use audiopus::{Channels, SampleRate};
 use bs1770::{ChannelLoudnessMeter, Power, Windows100ms};
@@ -41,16 +41,16 @@ struct DecodeState {
 }
 
 impl DecodeState {
-    fn new(channel_count: usize, sample_rate: usize) -> Result<DecodeState, ZoogError> {
+    fn new(channel_count: usize, sample_rate: usize) -> Result<DecodeState, Error> {
         let sample_rate_typed = SampleRate::try_from(sample_rate as i32)
             .expect("Unsupported decoding sample rate");
         let channel_count_typed = match channel_count {
             1 => Channels::Mono,
             2 => Channels::Stereo,
-            n => return Err(ZoogError::InvalidChannelCount(n)),
+            n => return Err(Error::InvalidChannelCount(n)),
         };
         let decoder = Decoder::new(sample_rate_typed, channel_count_typed)
-            .map_err(ZoogError::OpusError)?;
+            .map_err(Error::OpusError)?;
         let mut channel_states = Vec::with_capacity(channel_count);
         for _ in 0..channel_count {
             channel_states.push(DecodeStateChannel::new(sample_rate));
@@ -67,14 +67,14 @@ impl DecodeState {
         Ok(state)
     }
 
-    fn push_packet(&mut self, packet: &[u8]) -> Result<(), ZoogError> {
+    fn push_packet(&mut self, packet: &[u8]) -> Result<(), Error> {
         // Decode to interleaved PCM
         let decode_fec = false;
         let num_decoded_samples = self.decoder.decode_float(
             Some(packet.try_into().expect("Unable to cast source packet buffer")),
             (&mut self.sample_buffer[..]).try_into().expect("Unable to cast decode buffer"),
             decode_fec
-        ).map_err(ZoogError::OpusError)?;
+        ).map_err(Error::OpusError)?;
 
         for (c, channel_state) in &mut self.channel_states.iter_mut().enumerate() {
             channel_state.sample_buffer.resize(num_decoded_samples, 0.0f32);
@@ -134,11 +134,11 @@ impl VolumeAnalyzer {
         }
     }
 
-    pub fn submit(&mut self, mut packet: Packet) -> Result<(), ZoogError> {
+    pub fn submit(&mut self, mut packet: Packet) -> Result<(), Error> {
         match self.state {
             State::AwaitingHeader => {
                 let header = OpusHeader::try_new(&mut packet.data)
-                        .ok_or(ZoogError::MissingOpusStream)?;
+                        .ok_or(Error::MissingOpusStream)?;
                 let channel_count = header.num_output_channels()?;
                 let sample_rate = OPUS_DECODE_SAMPLE_RATE;
                 self.decode_state = Some(DecodeState::new(channel_count, sample_rate)?);
@@ -148,7 +148,7 @@ impl VolumeAnalyzer {
                 // Check comment header is valid
                 match CommentHeader::try_parse(&mut packet.data) {
                     Ok(Some(_)) => (),
-                    Ok(None) => return Err(ZoogError::MissingCommentHeader),
+                    Ok(None) => return Err(Error::MissingCommentHeader),
                     Err(e) => return Err(e),
                 }
                 self.state = State::Analyzing;

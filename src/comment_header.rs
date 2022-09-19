@@ -1,4 +1,4 @@
-use crate::{FixedPointGain, ZoogError, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use crate::{Error, FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
 use std::io::{Cursor, Read, Write};
@@ -15,12 +15,12 @@ pub struct CommentHeader<'a> {
 }
 
 impl<'a> CommentHeader<'a> {
-    fn read_length<R: Read>(mut reader: R) -> Result<u32, ZoogError> {
-        reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)
+    fn read_length<R: Read>(mut reader: R) -> Result<u32, Error> {
+        reader.read_u32::<LittleEndian>().map_err(|_| Error::MalformedCommentHeader)
     }
 
-    fn read_exact<R: Read>(mut reader: R, data: &mut [u8]) -> Result<(), ZoogError> {
-        reader.read_exact(data).map_err(|_| ZoogError::MalformedCommentHeader)
+    fn read_exact<R: Read>(mut reader: R, data: &mut [u8]) -> Result<(), Error> {
+        reader.read_exact(data).map_err(|_| Error::MalformedCommentHeader)
     }
 
     pub fn empty(data: &'a mut Vec<u8>) -> CommentHeader<'a> {
@@ -35,7 +35,7 @@ impl<'a> CommentHeader<'a> {
         self.vendor = vendor.to_string();
     }
 
-    pub fn try_parse(data: &'a mut Vec<u8>) -> Result<Option<CommentHeader<'a>>, ZoogError> {
+    pub fn try_parse(data: &'a mut Vec<u8>) -> Result<Option<CommentHeader<'a>>, Error> {
         let identical = data.iter().take(COMMENT_MAGIC.len()).eq(COMMENT_MAGIC.iter());
         if !identical { return Ok(None); }
         let mut reader = Cursor::new(&data[COMMENT_MAGIC.len()..]);
@@ -50,7 +50,7 @@ impl<'a> CommentHeader<'a> {
             let mut comment = vec![0u8; comment_len as usize];
             Self::read_exact(&mut reader, &mut comment)?;
             let comment = String::from_utf8(comment)?;
-            let offset = comment.find('=').ok_or(ZoogError::MalformedCommentHeader)?;
+            let offset = comment.find('=').ok_or(Error::MalformedCommentHeader)?;
             let (key, value) = comment.split_at(offset);
             user_comments.push((String::from(key), String::from(&value[1..])));
         }
@@ -82,9 +82,9 @@ impl<'a> CommentHeader<'a> {
         self.user_comments.push((String::from(key), String::from(value)));
     }
 
-    pub fn get_gain_from_tag(&self, tag: &str) -> Result<Option<FixedPointGain>, ZoogError> {
+    pub fn get_gain_from_tag(&self, tag: &str) -> Result<Option<FixedPointGain>, Error> {
         let parsed = self.get_first(tag)
-            .map(|v| v.parse::<FixedPointGain>().map_err(|_| ZoogError::InvalidR128Tag(v.to_string())));
+            .map(|v| v.parse::<FixedPointGain>().map_err(|_| Error::InvalidR128Tag(v.to_string())));
         match parsed {
             Some(Ok(v)) => Ok(Some(v)),
             Some(Err(e)) => Err(e),
@@ -92,7 +92,7 @@ impl<'a> CommentHeader<'a> {
         }
     }
 
-    pub fn get_album_or_track_gain(&self) -> Result<Option<FixedPointGain>, ZoogError> {
+    pub fn get_album_or_track_gain(&self) -> Result<Option<FixedPointGain>, Error> {
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
             if let Some(gain) = self.get_gain_from_tag(*tag)? {
                 return Ok(Some(gain));
@@ -101,11 +101,11 @@ impl<'a> CommentHeader<'a> {
         Ok(None)
     }
 
-    pub fn adjust_gains(&mut self, adjustment: FixedPointGain) -> Result<(), ZoogError> {
+    pub fn adjust_gains(&mut self, adjustment: FixedPointGain) -> Result<(), Error> {
         if adjustment.is_zero() { return Ok(()); }
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
             if let Some(gain) = self.get_gain_from_tag(*tag)? {
-                let gain = gain.checked_add(adjustment).ok_or(ZoogError::GainOutOfBounds)?;
+                let gain = gain.checked_add(adjustment).ok_or(Error::GainOutOfBounds)?;
                 self.replace(*tag, &format!("{}", gain.as_fixed_point()));
             }
         }
@@ -218,7 +218,7 @@ mod tests {
     fn truncated_header() {
         let mut header: Vec<u8> = COMMENT_MAGIC.iter().cloned().collect();
         match CommentHeader::try_parse(&mut header) {
-            Err(ZoogError::MalformedCommentHeader) => {}
+            Err(Error::MalformedCommentHeader) => {}
             _ => assert!(false, "Wrong error for malformed header"),
         };
     }

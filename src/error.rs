@@ -4,7 +4,7 @@ use tempfile::PersistError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum ZoogError {
+pub enum Error {
     #[error("Unable to open file `{0}` due to `{1}`")]
     FileOpenError(PathBuf, std::io::Error),
     #[error("Unable to open temporary file due to `{0}`")]
