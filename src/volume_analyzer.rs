@@ -124,8 +124,8 @@ pub struct VolumeAnalyzer {
     track_loudness: Vec<Decibels>,
 }
 
-impl VolumeAnalyzer {
-    pub fn new() -> VolumeAnalyzer {
+impl Default for VolumeAnalyzer {
+    fn default() -> VolumeAnalyzer {
         VolumeAnalyzer {
             decode_state: None,
             state: State::AwaitingHeader,
@@ -133,7 +133,9 @@ impl VolumeAnalyzer {
             track_loudness: Vec::new(),
         }
     }
+}
 
+impl VolumeAnalyzer {
     pub fn submit(&mut self, mut packet: Packet) -> Result<(), Error> {
         match self.state {
             State::AwaitingHeader => {

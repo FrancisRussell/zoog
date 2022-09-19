@@ -70,7 +70,7 @@ impl<'a> CommentHeader<'a> {
     }
 
     pub fn remove_all(&mut self, key: &str) {
-        self.user_comments = self.user_comments.iter().filter(|(k, _)| key != k).cloned().collect();
+        self.user_comments.retain(|(k, _)| key != k);
     }
 
     pub fn replace(&mut self, key: &str, value: &str) {
@@ -94,7 +94,7 @@ impl<'a> CommentHeader<'a> {
 
     pub fn get_album_or_track_gain(&self) -> Result<Option<FixedPointGain>, Error> {
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
-            if let Some(gain) = self.get_gain_from_tag(*tag)? {
+            if let Some(gain) = self.get_gain_from_tag(tag)? {
                 return Ok(Some(gain));
             }
         }
@@ -104,9 +104,9 @@ impl<'a> CommentHeader<'a> {
     pub fn adjust_gains(&mut self, adjustment: FixedPointGain) -> Result<(), Error> {
         if adjustment.is_zero() { return Ok(()); }
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
-            if let Some(gain) = self.get_gain_from_tag(*tag)? {
+            if let Some(gain) = self.get_gain_from_tag(tag)? {
                 let gain = gain.checked_add(adjustment).ok_or(Error::GainOutOfBounds)?;
-                self.replace(*tag, &format!("{}", gain.as_fixed_point()));
+                self.replace(tag, &format!("{}", gain.as_fixed_point()));
             }
         }
         Ok(())

@@ -51,7 +51,7 @@ fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), Err
 fn apply_volume_analysis<P: AsRef<Path>>(analyzer: &mut VolumeAnalyzer, path: P) -> Result<(), Error> {
     let input_path = path.as_ref();
     println!("Computing loudness of file {:#?}...", input_path);
-    let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
+    let input_file = File::open(input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
     let input_file = BufReader::new(input_file);
     let mut ogg_reader = PacketReader::new(input_file);
     loop {
@@ -83,7 +83,7 @@ impl AlbumVolume {
 }
 
 fn compute_album_volume<I: IntoIterator<Item=P>, P: AsRef<Path>>(paths: I) -> Result<AlbumVolume, Error> {
-    let mut analyzer = VolumeAnalyzer::new();
+    let mut analyzer = VolumeAnalyzer::default();
     let mut tracks = HashMap::new();
     for input_path in paths.into_iter() {
         apply_volume_analysis(&mut analyzer, input_path.as_ref())?;
@@ -167,7 +167,7 @@ fn main_impl() -> Result<(), Error> {
         println!("Processing file {:#?} with target loudness of {}...", &input_path, mode.to_friendly_string());
         let track_volume = match &album_volume {
             None => {
-                let mut analyzer = VolumeAnalyzer::new();
+                let mut analyzer = VolumeAnalyzer::default();
                 apply_volume_analysis(&mut analyzer, &input_path)?;
                 analyzer.last_track_lufs().expect("Last track volume unexpectedly missing")
             },
