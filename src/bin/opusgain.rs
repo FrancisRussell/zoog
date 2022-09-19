@@ -1,14 +1,14 @@
 use clap::{App, Arg};
 use ogg::reading::PacketReader;
 use ogg::writing::PacketWriter;
+use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Write, Read, Seek};
+use std::io::{BufReader, BufWriter, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use zoog::constants::{R128_LUFS, REPLAY_GAIN_LUFS};
-use zoog::rewriter::{RewriteResult, VolumeTarget, RewriterConfig, Rewriter};
-use zoog::ZoogError;
+use zoog::rewriter::{RewriteResult, Rewriter, RewriterConfig, VolumeTarget};
 use zoog::VolumeAnalyzer;
-use std::collections::HashMap;
+use zoog::ZoogError;
 
 pub const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
 pub const AUTHORS: Option<&'static str> = option_env!("CARGO_PKG_AUTHORS");

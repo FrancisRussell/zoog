@@ -1,8 +1,8 @@
-use audiopus::{Channels, coder::Decoder, SampleRate};
-use bs1770::{ChannelLoudnessMeter, Power, Windows100ms};
 use crate::comment_header::CommentHeader;
 use crate::error::ZoogError;
 use crate::opus_header::OpusHeader;
+use audiopus::{coder::Decoder, Channels, SampleRate};
+use bs1770::{ChannelLoudnessMeter, Power, Windows100ms};
 use ogg::Packet;
 use std::convert::{TryFrom, TryInto};
 
@@ -22,7 +22,6 @@ enum State {
 struct DecodeStateChannel {
     loudness_meter: ChannelLoudnessMeter,
     sample_buffer: Vec<f32>,
-
 }
 
 impl DecodeStateChannel {
@@ -54,7 +53,7 @@ impl DecodeState {
         let decoder = Decoder::new(sample_rate_typed, channel_count_typed)
             .map_err(|e| ZoogError::OpusError(e))?;
         let mut channel_states = Vec::with_capacity(channel_count);
-        for _ in 0 .. channel_count {
+        for _ in 0..channel_count {
             channel_states.push(DecodeStateChannel::new(sample_rate));
         }
         assert_eq!(channel_states.len(), channel_count);
@@ -81,7 +80,7 @@ impl DecodeState {
         for (c, channel_state) in &mut self.channel_states.iter_mut().enumerate() {
             channel_state.sample_buffer.resize(num_decoded_samples, 0.0f32);
             // Extract interleaved data
-            for i in 0 .. num_decoded_samples {
+            for i in 0..num_decoded_samples {
                 let offset = i * self.channel_count + c;
                 channel_state.sample_buffer[i] = self.sample_buffer[offset];
             }
@@ -104,7 +103,7 @@ impl DecodeState {
             assert_eq!(num_windows, channel_windows.len(), "Channels had different amounts of audio");
         }
         let mut result_windows = Vec::with_capacity(num_windows);
-        for i in 0 .. num_windows {
+        for i in 0..num_windows {
             let mut power = 0.0;
             for channel_windows in &windows {
                 let channel_windows = &channel_windows.inner;

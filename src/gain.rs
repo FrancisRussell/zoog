@@ -78,11 +78,11 @@ mod tests {
 
     #[test]
     fn parse_valid() {
-        assert_eq!("-32768".parse::<Gain>(), Ok(Gain{ value: -32768 }));
-        assert_eq!("-1".parse::<Gain>(), Ok(Gain{ value: -1 }));
-        assert_eq!("0".parse::<Gain>(), Ok(Gain{ value: 0 }));
-        assert_eq!("1".parse::<Gain>(), Ok(Gain{ value: 1 }));
-        assert_eq!("32767".parse::<Gain>(), Ok(Gain{ value: 32767 }));
+        assert_eq!("-32768".parse::<Gain>(), Ok(Gain { value: -32768 }));
+        assert_eq!("-1".parse::<Gain>(), Ok(Gain { value: -1 }));
+        assert_eq!("0".parse::<Gain>(), Ok(Gain { value: 0 }));
+        assert_eq!("1".parse::<Gain>(), Ok(Gain { value: 1 }));
+        assert_eq!("32767".parse::<Gain>(), Ok(Gain { value: 32767 }));
     }
 
     #[test]

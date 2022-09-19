@@ -147,9 +147,9 @@ impl<'a> PartialEq for CommentHeader<'a> {
 #[cfg(test)]
 mod tests {
     use super::*;
-    use rand::Rng;
     use rand::distributions::{Standard, Uniform};
     use rand::rngs::SmallRng;
+    use rand::Rng;
     use rand::SeedableRng;
 
     const MAX_STRING_LENGTH: usize = 1024;
@@ -173,7 +173,7 @@ mod tests {
         header.set_vendor(&random_string(engine, true));
         let num_comments_dist = Uniform::new_inclusive(0, MAX_COMMENTS);
         let num_comments = engine.sample(&num_comments_dist);
-        for _ in 0 .. num_comments {
+        for _ in 0..num_comments {
             let key = random_string(engine, false);
             let value = random_string(engine, true);
             header.append(key.as_str(), value.as_str());
@@ -194,7 +194,7 @@ mod tests {
     #[test]
     fn parse_and_commit_is_identity() {
         let mut rng = SmallRng::seed_from_u64(19489);
-        for _ in 0 .. NUM_IDENTITY_TESTS {
+        for _ in 0..NUM_IDENTITY_TESTS {
             let mut header_data = Vec::new();
             {
                 create_random_header(&mut rng, &mut header_data);
@@ -222,8 +222,7 @@ mod tests {
         let mut header: Vec<u8> = COMMENT_MAGIC.iter().cloned().collect();
         match CommentHeader::try_parse(&mut header) {
             Err(ZoogError::MalformedCommentHeader) => {}
-            _ => assert!(false, "Wrong error for malformed header")
+            _ => assert!(false, "Wrong error for malformed header"),
         };
     }
 }
-

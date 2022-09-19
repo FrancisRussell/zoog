@@ -117,7 +117,7 @@ impl<W: Write> Rewriter<W> {
                         VolumeTarget::LUFS(target_lufs) => {
                             Gain::from_decibels(target_lufs - volume_for_internal_gain)
                                 .expect("Header gain out of bounds")
-                        },
+                        }
                     };
                     let track_gain_r128 = Gain::from_decibels(
                         R128_LUFS - self.config.track_volume - new_header_gain.as_decibels()
