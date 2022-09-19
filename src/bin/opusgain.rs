@@ -104,7 +104,7 @@ fn rewrite_stream<R: Read + Seek, W: Write>(input: R, mut output: W, config: &Re
     let mut ogg_reader = PacketReader::new(input);
     let ogg_writer = PacketWriter::new(&mut output);
     let mut rewriter = Rewriter::new(config, ogg_writer, true);
-    let result = loop {
+    loop {
         match ogg_reader.read_packet() {
             Err(e) => break Err(ZoogError::OggDecode(e)),
             Ok(None) => {
@@ -121,8 +121,7 @@ fn rewrite_stream<R: Read + Seek, W: Write>(input: R, mut output: W, config: &Re
                 }
             }
         }
-    };
-    result
+    }
 }
 
 fn main_impl() -> Result<(), ZoogError> {

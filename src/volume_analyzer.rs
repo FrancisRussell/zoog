@@ -51,7 +51,7 @@ impl DecodeState {
             n => return Err(ZoogError::InvalidChannelCount(n)),
         };
         let decoder = Decoder::new(sample_rate_typed, channel_count_typed)
-            .map_err(|e| ZoogError::OpusError(e))?;
+            .map_err(ZoogError::OpusError)?;
         let mut channel_states = Vec::with_capacity(channel_count);
         for _ in 0..channel_count {
             channel_states.push(DecodeStateChannel::new(sample_rate));
@@ -75,7 +75,7 @@ impl DecodeState {
             Some(packet.try_into().expect("Unable to cast source packet buffer")),
             (&mut self.sample_buffer[..]).try_into().expect("Unable to cast decode buffer"),
             decode_fec
-        ).map_err(|e| ZoogError::OpusError(e))?;
+        ).map_err(ZoogError::OpusError)?;
 
         for (c, channel_state) in &mut self.channel_states.iter_mut().enumerate() {
             channel_state.sample_buffer.resize(num_decoded_samples, 0.0f32);
