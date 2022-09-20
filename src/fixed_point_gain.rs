@@ -62,7 +62,7 @@ mod tests {
 
     #[test]
     fn zero_db_is_none() {
-        assert!(FixedPointGain::from_decibels(0.0).unwrap().is_zero());
+        assert!(FixedPointGain::try_from(Decibels::default()).unwrap().is_zero());
     }
 
     #[test]
@@ -92,7 +92,7 @@ mod tests {
         for value in std::i16::MIN..=std::i16::MAX {
             let gain = FixedPointGain { value };
             let decibels = gain.as_decibels();
-            let gain2 = FixedPointGain::from_decibels(decibels).unwrap();
+            let gain2 = FixedPointGain::try_from(decibels).unwrap();
             assert_eq!(gain, gain2);
         }
     }

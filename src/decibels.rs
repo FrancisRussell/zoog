@@ -12,6 +12,12 @@ impl Decibels {
     }
 }
 
+impl Default for Decibels {
+    fn default() -> Decibels {
+        Decibels::from(0.0)
+    }
+}
+
 impl const From<f64> for Decibels {
     fn from(value: f64) -> Decibels {
         Decibels {
