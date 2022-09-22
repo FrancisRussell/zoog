@@ -3,7 +3,7 @@ use ogg::reading::PacketReader;
 use ogg::writing::PacketWriter;
 use std::collections::HashMap;
 use std::fs::File;
-use std::io::{BufReader, BufWriter, Read, Seek, Write};
+use std::io::{self, BufReader, BufWriter, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use zoog::constants::{R128_LUFS, REPLAY_GAIN_LUFS};
 use zoog::rewriter::{RewriteResult, Rewriter, RewriterConfig, VolumeTarget};
@@ -34,16 +34,22 @@ fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), Err
 
 fn apply_volume_analysis<P: AsRef<Path>>(analyzer: &mut VolumeAnalyzer, path: P) -> Result<(), Error> {
     let input_path = path.as_ref();
-    println!("Computing loudness of file {:#?}...", input_path);
+    print!("Computing loudness of {}... ", input_path.to_string_lossy());
+    io::stdout().flush().map_err(|e| Error::GenericIoError(e))?;
     let input_file = File::open(input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
     let input_file = BufReader::new(input_file);
     let mut ogg_reader = PacketReader::new(input_file);
     loop {
         match ogg_reader.read_packet() {
-            Err(e) => return Err(Error::OggDecode(e)),
+            Err(e) => {
+                println!("");
+                break Err(Error::OggDecode(e));
+            },
             Ok(None) => {
                 analyzer.file_complete();
-                return Ok(());
+                println!("{:.2} LUFS (ignoring output gain)",
+                    analyzer.last_track_lufs().expect("Last track volume unexpectedly missing").as_f64());
+                break Ok(());
             }
             Ok(Some(packet)) => analyzer.submit(packet)?,
         }
@@ -147,7 +153,8 @@ fn main_impl() -> Result<(), Error> {
     let album_volume = if album_mode { Some(compute_album_volume(&input_files)?) } else { None };
     for input_path in input_files {
         let input_path = PathBuf::from(input_path);
-        println!("Processing file {:#?} with target loudness of {}...", &input_path, mode.to_friendly_string());
+        println!("Processing file {} with target loudness of {}...", &input_path.to_string_lossy(),
+            mode.to_friendly_string());
         let track_volume = match &album_volume {
             None => {
                 let mut analyzer = VolumeAnalyzer::default();

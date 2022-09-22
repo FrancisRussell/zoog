@@ -36,7 +36,7 @@ impl VolumeTarget {
     pub fn to_friendly_string(&self) -> String {
         match *self {
             VolumeTarget::ZeroGain => String::from("original input"),
-            VolumeTarget::LUFS(lufs) => format!("{} LUFS", lufs),
+            VolumeTarget::LUFS(lufs) => format!("{:.2} LUFS", lufs.as_f64()),
         }
     }
 }
