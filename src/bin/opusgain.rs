@@ -140,7 +140,7 @@ fn main_impl() -> Result<(), Error> {
             .help("The Opus files to process"))
         .arg(Arg::with_name("album")
             .long("album")
-            .short("a")
+            .short('a')
             .takes_value(false)
             .help("Enable album mode")
         ).get_matches();
