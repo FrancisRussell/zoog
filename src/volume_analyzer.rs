@@ -113,7 +113,7 @@ impl DecodeState {
             power *= power_scale_factor;
             result_windows.push(Power(power));
         }
-        Windows100ms{ inner: result_windows }
+        Windows100ms { inner: result_windows }
     }
 }
 

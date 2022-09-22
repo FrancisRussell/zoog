@@ -1,4 +1,4 @@
-use clap::{App, Arg};
+use clap::{Parser, ValueEnum};
 use ogg::reading::PacketReader;
 use ogg::writing::PacketWriter;
 use std::collections::HashMap;
@@ -7,23 +7,7 @@ use std::io::{BufReader, BufWriter, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use zoog::constants::{R128_LUFS, REPLAY_GAIN_LUFS};
 use zoog::rewriter::{RewriteResult, Rewriter, RewriterConfig, VolumeTarget};
-use zoog::{Error, VolumeAnalyzer, Decibels};
-
-pub const VERSION: Option<&'static str> = option_env!("CARGO_PKG_VERSION");
-pub const AUTHORS: Option<&'static str> = option_env!("CARGO_PKG_AUTHORS");
-pub const DESCRIPTION: Option<&'static str> = option_env!("CARGO_PKG_DESCRIPTION");
-
-fn get_version() -> String {
-    VERSION.map(String::from).unwrap_or_else(|| String::from("Unknown version"))
-}
-
-fn get_authors() -> String {
-    AUTHORS.map(String::from).unwrap_or_else(|| String::from("Unknown author"))
-}
-
-fn get_description() -> String {
-    DESCRIPTION.map(String::from).unwrap_or_else(|| String::from("Missing description"))
-}
+use zoog::{Decibels, Error, VolumeAnalyzer};
 
 fn main() {
     match main_impl() {
@@ -89,7 +73,7 @@ fn compute_album_volume<I: IntoIterator<Item=P>, P: AsRef<Path>>(paths: I) -> Re
         apply_volume_analysis(&mut analyzer, input_path.as_ref())?;
         tracks.insert(
             input_path.as_ref().to_path_buf(),
-            analyzer.last_track_lufs().expect("Track volume unexpectedly missing")
+            analyzer.last_track_lufs().expect("Track volume unexpectedly missing"),
         );
     }
     let album_volume = AlbumVolume {
@@ -108,9 +92,7 @@ fn rewrite_stream<R: Read + Seek, W: Write>(input: R, mut output: W, config: &Re
             Err(e) => break Err(Error::OggDecode(e)),
             Ok(None) => {
                 // Make sure to flush any buffered data
-                break output.flush()
-                    .map(|_| RewriteResult::Ready)
-                    .map_err(Error::WriteError);
+                break output.flush().map(|_| RewriteResult::Ready).map_err(Error::WriteError);
             }
             Ok(Some(packet)) => {
                 let submit_result = rewriter.submit(packet);
@@ -123,45 +105,46 @@ fn rewrite_stream<R: Read + Seek, W: Write>(input: R, mut output: W, config: &Re
     }
 }
 
-fn main_impl() -> Result<(), Error> {
-    let matches = App::new("Opusgain")
-        .author(get_authors().as_str())
-        .about(get_description().as_str())
-        .version(get_version().as_str())
-        .arg(Arg::with_name("preset")
-            .long("preset")
-            .possible_values(&["rg", "r128", "none"])
-            .default_value("rg")
-            .multiple(false)
-            .help("Normalizes to loudness used by ReplayGain (rg), EBU R 128 (r128) or original (none)"))
-        .arg(Arg::with_name("input_files")
-            .multiple(true)
-            .required(true)
-            .help("The Opus files to process"))
-        .arg(Arg::with_name("album")
-            .long("album")
-            .short('a')
-            .takes_value(false)
-            .help("Enable album mode")
-        ).get_matches();
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum Preset {
+    #[clap(name = "rg")]
+    ReplayGain,
+    #[clap(name = "r128")]
+    R128,
+    #[clap(name = "none")]
+    ZeroGain,
+}
 
-    let album_mode = matches.is_present("album");
-    let mode = match matches.value_of("preset").unwrap() {
-        "rg" => VolumeTarget::LUFS(REPLAY_GAIN_LUFS),
-        "r128" => VolumeTarget::LUFS(R128_LUFS),
-        "none" => VolumeTarget::ZeroGain,
-        p => panic!("Unknown preset: {}", p),
+#[derive(Debug, Parser)]
+#[clap(author, version, about)]
+struct Cli {
+    #[clap(short, long, action)]
+    /// Enable album mode
+    album: bool,
+
+    #[clap(arg_enum, value_parser, short, long, default_value_t = Preset::ReplayGain)]
+    /// Normalizes to loudness used by ReplayGain (rg), EBU R 128 (r128) or original (none)
+    preset: Preset,
+
+    #[clap(value_parser, required(true))]
+    /// The Opus files to process
+    input_files: Vec<PathBuf>,
+}
+
+fn main_impl() -> Result<(), Error> {
+    let cli = Cli::parse();
+    let album_mode = cli.album;
+    let mode = match cli.preset {
+        Preset::ReplayGain => VolumeTarget::LUFS(REPLAY_GAIN_LUFS),
+        Preset::R128 => VolumeTarget::LUFS(R128_LUFS),
+        Preset::ZeroGain => VolumeTarget::ZeroGain,
     };
 
     let mut num_processed: usize = 0;
     let mut num_already_normalized: usize = 0;
 
-    let input_files: Vec<_> = matches.values_of("input_files").expect("No input files").collect();
-    let album_volume = if album_mode {
-        Some(compute_album_volume(&input_files)?)
-    } else {
-        None
-    };
+    let input_files = cli.input_files;
+    let album_volume = if album_mode { Some(compute_album_volume(&input_files)?) } else { None };
     for input_path in input_files {
         let input_path = PathBuf::from(input_path);
         println!("Processing file {:#?} with target loudness of {}...", &input_path, mode.to_friendly_string());
@@ -170,16 +153,13 @@ fn main_impl() -> Result<(), Error> {
                 let mut analyzer = VolumeAnalyzer::default();
                 apply_volume_analysis(&mut analyzer, &input_path)?;
                 analyzer.last_track_lufs().expect("Last track volume unexpectedly missing")
-            },
+            }
             Some(album_volume) => {
                 album_volume.get_track_mean(&input_path).expect("Could not find previously computed track volume")
-            },
+            }
         };
-        let rewriter_config = RewriterConfig::new(
-            mode,
-            track_volume,
-            album_volume.as_ref().map(|a| a.get_album_mean())
-        );
+        let rewriter_config =
+            RewriterConfig::new(mode, track_volume, album_volume.as_ref().map(|a| a.get_album_mean()));
 
         let input_dir = input_path.parent().expect("Unable to find parent folder of input file");
         let input_base = input_path.file_name().expect("Unable to find name of input file");
@@ -206,7 +186,8 @@ fn main_impl() -> Result<(), Error> {
                 let mut backup_path = input_path.clone();
                 backup_path.set_extension("zoog-orig");
                 rename_file(&input_path, &backup_path)?;
-                output_file.persist_noclobber(&input_path)
+                output_file
+                    .persist_noclobber(&input_path)
                     .map_err(Error::PersistError)
                     .and_then(|f| f.sync_all().map_err(Error::WriteError))?;
                 remove_file_verbose(&backup_path);
