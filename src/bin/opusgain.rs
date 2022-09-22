@@ -35,14 +35,14 @@ fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), Err
 fn apply_volume_analysis<P: AsRef<Path>>(analyzer: &mut VolumeAnalyzer, path: P) -> Result<(), Error> {
     let input_path = path.as_ref();
     print!("Computing loudness of {}... ", input_path.to_string_lossy());
-    io::stdout().flush().map_err(|e| Error::GenericIoError(e))?;
+    io::stdout().flush().map_err(Error::GenericIoError)?;
     let input_file = File::open(input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
     let input_file = BufReader::new(input_file);
     let mut ogg_reader = PacketReader::new(input_file);
     loop {
         match ogg_reader.read_packet() {
             Err(e) => {
-                println!("");
+                println!();
                 break Err(Error::OggDecode(e));
             },
             Ok(None) => {
@@ -152,7 +152,6 @@ fn main_impl() -> Result<(), Error> {
     let input_files = cli.input_files;
     let album_volume = if album_mode { Some(compute_album_volume(&input_files)?) } else { None };
     for input_path in input_files {
-        let input_path = PathBuf::from(input_path);
         println!("Processing file {} with target loudness of {}...", &input_path.to_string_lossy(),
             mode.to_friendly_string());
         let track_volume = match &album_volume {

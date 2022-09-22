@@ -34,7 +34,7 @@ impl DecodeStateChannel {
 
 struct DecodeState {
     channel_count: usize,
-    sample_rate: usize,
+    _sample_rate: usize,
     decoder: Decoder,
     channel_states: Vec<DecodeStateChannel>,
     sample_buffer: Vec<f32>,
@@ -59,7 +59,7 @@ impl DecodeState {
         let ms_per_second: usize = 1000;
         let state = DecodeState {
             channel_count,
-            sample_rate,
+            _sample_rate: sample_rate,
             decoder,
             channel_states,
             sample_buffer: vec![0.0f32; channel_count * sample_rate * OPUS_MAX_PACKET_DURATION_MS / ms_per_second],
