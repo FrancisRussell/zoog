@@ -32,7 +32,7 @@ pub enum Error {
     #[error("Unsupported channel count: `{0}`")]
     InvalidChannelCount(usize),
     #[error("Opus error: `{0}`")]
-    OpusError(audiopus::Error),
+    OpusError(opus::Error),
     #[error("IO error: `{0}`")]
     GenericIoError(std::io::Error),
 }

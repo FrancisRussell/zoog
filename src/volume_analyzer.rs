@@ -1,9 +1,7 @@
 use crate::{CommentHeader, Decibels, Error, OpusHeader};
-use audiopus::coder::Decoder;
-use audiopus::{Channels, SampleRate};
 use bs1770::{ChannelLoudnessMeter, Power, Windows100ms};
 use ogg::Packet;
-use std::convert::{TryFrom, TryInto};
+use opus::{Channels, Decoder};
 
 // Opus uses this internally so we decode to this regardless of the input file sampling rate
 const OPUS_DECODE_SAMPLE_RATE: usize = 48000;
@@ -42,14 +40,12 @@ struct DecodeState {
 
 impl DecodeState {
     fn new(channel_count: usize, sample_rate: usize) -> Result<DecodeState, Error> {
-        let sample_rate_typed = SampleRate::try_from(sample_rate as i32)
-            .expect("Unsupported decoding sample rate");
         let channel_count_typed = match channel_count {
             1 => Channels::Mono,
             2 => Channels::Stereo,
             n => return Err(Error::InvalidChannelCount(n)),
         };
-        let decoder = Decoder::new(sample_rate_typed, channel_count_typed)
+        let decoder = Decoder::new(sample_rate as u32, channel_count_typed)
             .map_err(Error::OpusError)?;
         let mut channel_states = Vec::with_capacity(channel_count);
         for _ in 0..channel_count {
@@ -71,8 +67,8 @@ impl DecodeState {
         // Decode to interleaved PCM
         let decode_fec = false;
         let num_decoded_samples = self.decoder.decode_float(
-            Some(packet.try_into().expect("Unable to cast source packet buffer")),
-            (&mut self.sample_buffer[..]).try_into().expect("Unable to cast decode buffer"),
+            packet,
+            &mut self.sample_buffer,
             decode_fec
         ).map_err(Error::OpusError)?;
 
