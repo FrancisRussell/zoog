@@ -30,8 +30,8 @@ jobs:
         with:
           name: zoog-debug-${{ matrix.target }}
           path: |
-            target/${{ matrix.target }}/debug/zoog
-            target/${{ matrix.target }}/debug/zoog.exe
+            target/${{ matrix.target }}/debug/opusgain
+            target/${{ matrix.target }}/debug/opusgain.exe
           if-no-files-found: error
 
   cargo-test:
