@@ -12,23 +12,36 @@ pub enum VolumeTarget {
 }
 
 #[derive(Clone, Copy, Debug)]
+pub enum OutputGainMode {
+    Album,
+    Track,
+}
+
+#[derive(Clone, Copy, Debug)]
 pub struct RewriterConfig {
-    internal_gain: VolumeTarget,
+    output_gain: VolumeTarget,
+    output_gain_mode: OutputGainMode,
     track_volume: Decibels,
     album_volume: Option<Decibels>,
 }
 
 impl RewriterConfig {
-    pub fn new(internal_gain: VolumeTarget, track_volume: Decibels, album_volume: Option<Decibels>) -> RewriterConfig {
+    pub fn new(output_gain: VolumeTarget, output_gain_mode: OutputGainMode, track_volume: Decibels,
+        album_volume: Option<Decibels>) -> RewriterConfig
+    {
         RewriterConfig {
-            internal_gain,
+            output_gain,
+            output_gain_mode,
             track_volume,
             album_volume,
         }
     }
 
-    pub fn volume_for_internal_gain_calculation(&self) -> Decibels {
-        self.album_volume.unwrap_or(self.track_volume)
+    pub fn volume_for_output_gain_calculation(&self) -> Decibels {
+        match self.output_gain_mode {
+            OutputGainMode::Album => self.album_volume.unwrap_or(self.track_volume),
+            OutputGainMode::Track => self.track_volume,
+        }
     }
 }
 
@@ -108,11 +121,11 @@ impl<W: Write> Rewriter<W> {
                         Ok(None) => return Err(Error::MissingCommentHeader),
                         Err(e) => return Err(e),
                     };
-                    let volume_for_internal_gain = self.config.volume_for_internal_gain_calculation();
-                    let new_header_gain = match self.config.internal_gain {
+                    let volume_for_output_gain = self.config.volume_for_output_gain_calculation();
+                    let new_header_gain = match self.config.output_gain {
                         VolumeTarget::ZeroGain => FixedPointGain::default(),
                         VolumeTarget::LUFS(target_lufs) => {
-                            FixedPointGain::try_from(target_lufs - volume_for_internal_gain)?
+                            FixedPointGain::try_from(target_lufs - volume_for_output_gain)?
                         }
                     };
                     let track_gain_r128 = FixedPointGain::try_from(

@@ -6,7 +6,7 @@ use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Seek, Write};
 use std::path::{Path, PathBuf};
 use zoog::constants::{R128_LUFS, REPLAY_GAIN_LUFS};
-use zoog::rewriter::{RewriteResult, Rewriter, RewriterConfig, VolumeTarget};
+use zoog::rewriter::{RewriteResult, Rewriter, RewriterConfig, VolumeTarget, OutputGainMode};
 use zoog::{Decibels, Error, VolumeAnalyzer};
 
 fn main() {
@@ -121,6 +121,12 @@ enum Preset {
     ZeroGain,
 }
 
+#[derive(Copy, Clone, Debug, ValueEnum)]
+enum OutputGainSetting {
+    Auto,
+    Track,
+}
+
 #[derive(Debug, Parser)]
 #[clap(author, version, about)]
 struct Cli {
@@ -132,6 +138,12 @@ struct Cli {
     /// Normalizes to loudness used by ReplayGain (rg), EBU R 128 (r128) or original (none)
     preset: Preset,
 
+    #[clap(arg_enum, value_parser, short, long, default_value_t = OutputGainSetting::Auto)]
+    /// When "auto" is specified, each track's output gain is chosen to be per-track or per-album
+    /// dependent on whether album mode is enabled. When "track" is specified, each file's output
+    /// gain will be track-specific, even in album mode.
+    output_gain_mode: OutputGainSetting,
+
     #[clap(value_parser, required(true))]
     /// The Opus files to process
     input_files: Vec<PathBuf>,
@@ -140,7 +152,16 @@ struct Cli {
 fn main_impl() -> Result<(), Error> {
     let cli = Cli::parse();
     let album_mode = cli.album;
-    let mode = match cli.preset {
+
+    let output_gain_mode = match cli.output_gain_mode {
+        OutputGainSetting::Auto => if album_mode {
+            OutputGainMode::Album
+        } else {
+            OutputGainMode::Track
+        },
+        OutputGainSetting::Track => OutputGainMode::Track,
+    };
+    let volume_target = match cli.preset {
         Preset::ReplayGain => VolumeTarget::LUFS(REPLAY_GAIN_LUFS),
         Preset::R128 => VolumeTarget::LUFS(R128_LUFS),
         Preset::ZeroGain => VolumeTarget::ZeroGain,
@@ -153,7 +174,7 @@ fn main_impl() -> Result<(), Error> {
     let album_volume = if album_mode { Some(compute_album_volume(&input_files)?) } else { None };
     for input_path in input_files {
         println!("Processing file {} with target loudness of {}...", &input_path.to_string_lossy(),
-            mode.to_friendly_string());
+            volume_target.to_friendly_string());
         let track_volume = match &album_volume {
             None => {
                 let mut analyzer = VolumeAnalyzer::default();
@@ -164,8 +185,8 @@ fn main_impl() -> Result<(), Error> {
                 album_volume.get_track_mean(&input_path).expect("Could not find previously computed track volume")
             }
         };
-        let rewriter_config =
-            RewriterConfig::new(mode, track_volume, album_volume.as_ref().map(|a| a.get_album_mean()));
+        let rewriter_config = RewriterConfig::new(volume_target, output_gain_mode, track_volume,
+            album_volume.as_ref().map(|a| a.get_album_mean()));
 
         let input_dir = input_path.parent().expect("Unable to find parent folder of input file");
         let input_base = input_path.file_name().expect("Unable to find name of input file");
