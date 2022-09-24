@@ -107,6 +107,13 @@ If the internal gain and tag values are already correct for the specified files,
 
 ## Q & A
 
+### How is loudness calculated?
+
+Loudness is calculated using [ITU-R
+BS.1770](https://en.wikipedia.org/wiki/LKFS). This is the standard used by [EBU
+R 128](https://en.wikipedia.org/wiki/EBU_R_128) for measuring loudness and the
+one intended for use when calculating Opus `R128` tags.
+
 ### What happened to the `zoog` program?
 
 It was deprecated and removed from the repository.
