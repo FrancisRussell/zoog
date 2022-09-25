@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 (unreleased)
+## 0.2.0
 
 * `zoog` binary is deprecated and removed from the repository.
 * `opusgain` binary is added which can compute the loudness of Opus files
