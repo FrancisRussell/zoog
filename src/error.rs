@@ -1,5 +1,6 @@
-use ogg::reading::OggReadError;
 use std::path::PathBuf;
+
+use ogg::reading::OggReadError;
 use tempfile::PersistError;
 use thiserror::Error;
 

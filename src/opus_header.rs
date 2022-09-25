@@ -1,6 +1,8 @@
-use crate::{Error, FixedPointGain};
-use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use std::io::Cursor;
+
+use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
+
+use crate::{Error, FixedPointGain};
 
 const OPUS_MIN_HEADER_SIZE: usize = 19;
 const OPUS_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64];
@@ -11,12 +13,14 @@ pub struct OpusHeader<'a> {
 
 impl<'a> OpusHeader<'a> {
     pub fn try_new(data: &'a mut Vec<u8>) -> Option<OpusHeader<'a>> {
-        if data.len() < OPUS_MIN_HEADER_SIZE { return None; }
+        if data.len() < OPUS_MIN_HEADER_SIZE {
+            return None;
+        }
         let identical = data.iter().take(OPUS_MAGIC.len()).eq(OPUS_MAGIC.iter());
-        if !identical { return None; }
-        Some(OpusHeader {
-            data,
-        })
+        if !identical {
+            return None;
+        }
+        Some(OpusHeader { data })
     }
 
     pub fn get_output_gain(&self) -> FixedPointGain {
@@ -45,7 +49,5 @@ impl<'a> OpusHeader<'a> {
 }
 
 impl<'a> PartialEq for OpusHeader<'a> {
-    fn eq(&self, other: &OpusHeader) -> bool {
-        self.data == other.data
-    }
+    fn eq(&self, other: &OpusHeader) -> bool { self.data == other.data }
 }

@@ -1,7 +1,9 @@
-use crate::{Error, FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use std::io::{Cursor, Read, Write};
+
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
-use std::io::{Cursor, Read, Write};
+
+use crate::{Error, FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 
 const COMMENT_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x54, 0x61, 0x67, 0x73];
 
@@ -24,20 +26,16 @@ impl<'a> CommentHeader<'a> {
     }
 
     pub fn empty(data: &'a mut Vec<u8>) -> CommentHeader<'a> {
-        CommentHeader {
-            data,
-            vendor: String::new(),
-            user_comments: Vec::new(),
-        }
+        CommentHeader { data, vendor: String::new(), user_comments: Vec::new() }
     }
 
-    pub fn set_vendor(&mut self, vendor: &str) {
-        self.vendor = vendor.to_string();
-    }
+    pub fn set_vendor(&mut self, vendor: &str) { self.vendor = vendor.to_string(); }
 
     pub fn try_parse(data: &'a mut Vec<u8>) -> Result<Option<CommentHeader<'a>>, Error> {
         let identical = data.iter().take(COMMENT_MAGIC.len()).eq(COMMENT_MAGIC.iter());
-        if !identical { return Ok(None); }
+        if !identical {
+            return Ok(None);
+        }
         let mut reader = Cursor::new(&data[COMMENT_MAGIC.len()..]);
         let vendor_len = Self::read_length(&mut reader)?;
         let mut vendor = vec![0u8; vendor_len as usize];
@@ -54,24 +52,20 @@ impl<'a> CommentHeader<'a> {
             let (key, value) = comment.split_at(offset);
             user_comments.push((String::from(key), String::from(&value[1..])));
         }
-        let result = CommentHeader {
-            data,
-            vendor,
-            user_comments,
-        };
+        let result = CommentHeader { data, vendor, user_comments };
         Ok(Some(result))
     }
 
     pub fn get_first(&self, key: &str) -> Option<&str> {
         for (k, v) in self.user_comments.iter() {
-            if k == key { return Some(v); }
+            if k == key {
+                return Some(v);
+            }
         }
         None
     }
 
-    pub fn remove_all(&mut self, key: &str) {
-        self.user_comments.retain(|(k, _)| key != k);
-    }
+    pub fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| key != k); }
 
     pub fn replace(&mut self, key: &str, value: &str) {
         self.remove_all(key);
@@ -83,8 +77,8 @@ impl<'a> CommentHeader<'a> {
     }
 
     pub fn get_gain_from_tag(&self, tag: &str) -> Result<Option<FixedPointGain>, Error> {
-        let parsed = self.get_first(tag)
-            .map(|v| v.parse::<FixedPointGain>().map_err(|_| Error::InvalidR128Tag(v.to_string())));
+        let parsed =
+            self.get_first(tag).map(|v| v.parse::<FixedPointGain>().map_err(|_| Error::InvalidR128Tag(v.to_string())));
         match parsed {
             Some(Ok(v)) => Ok(Some(v)),
             Some(Err(e)) => Err(e),
@@ -102,7 +96,9 @@ impl<'a> CommentHeader<'a> {
     }
 
     pub fn adjust_gains(&mut self, adjustment: FixedPointGain) -> Result<(), Error> {
-        if adjustment.is_zero() { return Ok(()); }
+        if adjustment.is_zero() {
+            return Ok(());
+        }
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
             if let Some(gain) = self.get_gain_from_tag(tag)? {
                 let gain = gain.checked_add(adjustment).ok_or(Error::GainOutOfBounds)?;
@@ -144,10 +140,11 @@ impl<'a> PartialEq for CommentHeader<'a> {
 
 #[cfg(test)]
 mod tests {
-    use super::*;
     use rand::distributions::{Standard, Uniform};
     use rand::rngs::SmallRng;
     use rand::{Rng, SeedableRng};
+
+    use super::*;
 
     const MAX_STRING_LENGTH: usize = 1024;
     const MAX_COMMENTS: usize = 128;

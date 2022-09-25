@@ -1,7 +1,8 @@
-use crate::{Decibels, Error};
 use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
+
+use crate::{Decibels, Error};
 
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct FixedPointGain {
@@ -11,15 +12,9 @@ pub struct FixedPointGain {
 impl FixedPointGain {
     pub fn as_fixed_point(self) -> i16 { self.value }
 
-    pub fn as_decibels(self) -> Decibels {
-        Decibels::from(self.value as f64 / 256.0)
-    }
+    pub fn as_decibels(self) -> Decibels { Decibels::from(self.value as f64 / 256.0) }
 
-    pub fn from_integer(value: i16) -> FixedPointGain {
-        FixedPointGain {
-            value,
-        }
-    }
+    pub fn from_integer(value: i16) -> FixedPointGain { FixedPointGain { value } }
 
     pub fn is_zero(self) -> bool { self.value == 0 }
 
@@ -27,7 +22,9 @@ impl FixedPointGain {
         self.value.checked_add(rhs.value).map(|value| FixedPointGain { value })
     }
 
-    pub fn checked_neg(self) -> Option<FixedPointGain> { self.value.checked_neg().map(|value| FixedPointGain { value }) }
+    pub fn checked_neg(self) -> Option<FixedPointGain> {
+        self.value.checked_neg().map(|value| FixedPointGain { value })
+    }
 }
 
 impl TryFrom<Decibels> for FixedPointGain {

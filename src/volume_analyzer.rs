@@ -1,9 +1,11 @@
-use crate::{CommentHeader, Decibels, Error, OpusHeader};
 use bs1770::{ChannelLoudnessMeter, Power, Windows100ms};
 use ogg::Packet;
 use opus::{Channels, Decoder};
 
-// Opus uses this internally so we decode to this regardless of the input file sampling rate
+use crate::{CommentHeader, Decibels, Error, OpusHeader};
+
+// Opus uses this internally so we decode to this regardless of the input file
+// sampling rate
 const OPUS_DECODE_SAMPLE_RATE: usize = 48000;
 
 // Specified in RFC6716
@@ -23,10 +25,7 @@ struct DecodeStateChannel {
 
 impl DecodeStateChannel {
     fn new(sample_rate: usize) -> DecodeStateChannel {
-        DecodeStateChannel {
-            loudness_meter: ChannelLoudnessMeter::new(sample_rate as u32),
-            sample_buffer: Vec::new(),
-        }
+        DecodeStateChannel { loudness_meter: ChannelLoudnessMeter::new(sample_rate as u32), sample_buffer: Vec::new() }
     }
 }
 
@@ -45,8 +44,7 @@ impl DecodeState {
             2 => Channels::Stereo,
             n => return Err(Error::InvalidChannelCount(n)),
         };
-        let decoder = Decoder::new(sample_rate as u32, channel_count_typed)
-            .map_err(Error::OpusError)?;
+        let decoder = Decoder::new(sample_rate as u32, channel_count_typed).map_err(Error::OpusError)?;
         let mut channel_states = Vec::with_capacity(channel_count);
         for _ in 0..channel_count {
             channel_states.push(DecodeStateChannel::new(sample_rate));
@@ -66,11 +64,8 @@ impl DecodeState {
     fn push_packet(&mut self, packet: &[u8]) -> Result<(), Error> {
         // Decode to interleaved PCM
         let decode_fec = false;
-        let num_decoded_samples = self.decoder.decode_float(
-            packet,
-            &mut self.sample_buffer,
-            decode_fec
-        ).map_err(Error::OpusError)?;
+        let num_decoded_samples =
+            self.decoder.decode_float(packet, &mut self.sample_buffer, decode_fec).map_err(Error::OpusError)?;
 
         for (c, channel_state) in &mut self.channel_states.iter_mut().enumerate() {
             channel_state.sample_buffer.resize(num_decoded_samples, 0.0f32);
@@ -135,8 +130,7 @@ impl VolumeAnalyzer {
     pub fn submit(&mut self, mut packet: Packet) -> Result<(), Error> {
         match self.state {
             State::AwaitingHeader => {
-                let header = OpusHeader::try_new(&mut packet.data)
-                        .ok_or(Error::MissingOpusStream)?;
+                let header = OpusHeader::try_new(&mut packet.data).ok_or(Error::MissingOpusStream)?;
                 let channel_count = header.num_output_channels()?;
                 let sample_rate = OPUS_DECODE_SAMPLE_RATE;
                 self.decode_state = Some(DecodeState::new(channel_count, sample_rate)?);
@@ -163,9 +157,9 @@ impl VolumeAnalyzer {
         let power = bs1770::gated_mean(windows.as_ref());
         let lufs = if power.0.is_nan() {
             // Near silence can result in a NaN result (https://github.com/ruuda/bs1770/issues/1).
-            // Returning a large negative value might result in the application of a massive gain and is therefore
-            // not a good idea. Instead we return zero, which indicates the audio is at peak
-            // volume.
+            // Returning a large negative value might result in the application of a massive
+            // gain and is therefore not a good idea. Instead we return zero,
+            // which indicates the audio is at peak volume.
             0.0
         } else {
             power.loudness_lkfs().into()
@@ -184,15 +178,9 @@ impl VolumeAnalyzer {
         self.state = State::AwaitingHeader;
     }
 
-    pub fn mean_lufs(&self) -> Decibels {
-        Self::gated_mean_to_lufs(self.windows.as_ref())
-    }
+    pub fn mean_lufs(&self) -> Decibels { Self::gated_mean_to_lufs(self.windows.as_ref()) }
 
-    pub fn track_lufs(&self) -> Vec<Decibels> {
-        self.track_loudness.clone()
-    }
+    pub fn track_lufs(&self) -> Vec<Decibels> { self.track_loudness.clone() }
 
-    pub fn last_track_lufs(&self) -> Option<Decibels> {
-        self.track_loudness.last().cloned()
-    }
+    pub fn last_track_lufs(&self) -> Option<Decibels> { self.track_loudness.last().cloned() }
 }

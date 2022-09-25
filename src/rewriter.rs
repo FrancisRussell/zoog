@@ -1,9 +1,11 @@
-use crate::{CommentHeader, Decibels, Error, FixedPointGain, OpusHeader, R128_LUFS, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
-use ogg::writing::{PacketWriteEndInfo, PacketWriter};
-use ogg::Packet;
 use std::collections::VecDeque;
 use std::convert::TryFrom;
 use std::io::Write;
+
+use ogg::writing::{PacketWriteEndInfo, PacketWriter};
+use ogg::Packet;
+
+use crate::{CommentHeader, Decibels, Error, FixedPointGain, OpusHeader, R128_LUFS, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 
 #[derive(Clone, Copy, Debug)]
 pub enum VolumeTarget {
@@ -26,15 +28,11 @@ pub struct RewriterConfig {
 }
 
 impl RewriterConfig {
-    pub fn new(output_gain: VolumeTarget, output_gain_mode: OutputGainMode, track_volume: Decibels,
-        album_volume: Option<Decibels>) -> RewriterConfig
-    {
-        RewriterConfig {
-            output_gain,
-            output_gain_mode,
-            track_volume,
-            album_volume,
-        }
+    pub fn new(
+        output_gain: VolumeTarget, output_gain_mode: OutputGainMode, track_volume: Decibels,
+        album_volume: Option<Decibels>,
+    ) -> RewriterConfig {
+        RewriterConfig { output_gain, output_gain_mode, track_volume, album_volume }
     }
 
     pub fn volume_for_output_gain_calculation(&self) -> Decibels {
@@ -113,8 +111,8 @@ impl<W: Write> Rewriter<W> {
                     let mut comment_header_data_orig = packet.data.clone();
 
                     // Parse Opus header
-                    let mut opus_header = OpusHeader::try_new(&mut opus_header_packet.data)
-                        .ok_or(Error::MissingOpusStream)?;
+                    let mut opus_header =
+                        OpusHeader::try_new(&mut opus_header_packet.data).ok_or(Error::MissingOpusStream)?;
                     // Parse comment header
                     let mut comment_header = match CommentHeader::try_parse(&mut packet.data) {
                         Ok(Some(header)) => header,
@@ -128,9 +126,8 @@ impl<W: Write> Rewriter<W> {
                             FixedPointGain::try_from(target_lufs - volume_for_output_gain)?
                         }
                     };
-                    let track_gain_r128 = FixedPointGain::try_from(
-                        R128_LUFS - self.config.track_volume - new_header_gain.as_decibels()
-                    )?;
+                    let track_gain_r128 =
+                        FixedPointGain::try_from(R128_LUFS - self.config.track_volume - new_header_gain.as_decibels())?;
                     let album_gain_r128 = if let Some(album_volume) = self.config.album_volume {
                         Some(FixedPointGain::try_from(R128_LUFS - album_volume - new_header_gain.as_decibels())?)
                     } else {
@@ -179,11 +176,9 @@ impl<W: Write> Rewriter<W> {
             let packet_serial = packet.stream_serial();
             let packet_granule = packet.absgp_page();
 
-            self.packet_writer.write_packet(packet.data.into_boxed_slice(),
-                packet_serial,
-                packet_info,
-                packet_granule,
-            ).map_err(Error::WriteError)?;
+            self.packet_writer
+                .write_packet(packet.data.into_boxed_slice(), packet_serial, packet_info, packet_granule)
+                .map_err(Error::WriteError)?;
         }
         Ok(RewriteResult::Ready)
     }

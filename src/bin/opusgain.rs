@@ -1,12 +1,13 @@
-use clap::{Parser, ValueEnum};
-use ogg::reading::PacketReader;
-use ogg::writing::PacketWriter;
 use std::collections::HashMap;
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Seek, Write};
 use std::path::{Path, PathBuf};
+
+use clap::{Parser, ValueEnum};
+use ogg::reading::PacketReader;
+use ogg::writing::PacketWriter;
 use zoog::constants::{R128_LUFS, REPLAY_GAIN_LUFS};
-use zoog::rewriter::{RewriteResult, Rewriter, RewriterConfig, VolumeTarget, OutputGainMode};
+use zoog::rewriter::{OutputGainMode, RewriteResult, Rewriter, RewriterConfig, VolumeTarget};
 use zoog::{Decibels, Error, VolumeAnalyzer};
 
 fn main() {
@@ -27,9 +28,8 @@ fn remove_file_verbose<P: AsRef<Path>>(path: P) {
 }
 
 fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), Error> {
-    std::fs::rename(from.as_ref(), to.as_ref()).map_err(|e| {
-        Error::FileMove(PathBuf::from(from.as_ref()), PathBuf::from(to.as_ref()), e)
-    })
+    std::fs::rename(from.as_ref(), to.as_ref())
+        .map_err(|e| Error::FileMove(PathBuf::from(from.as_ref()), PathBuf::from(to.as_ref()), e))
 }
 
 fn apply_volume_analysis<P: AsRef<Path>>(analyzer: &mut VolumeAnalyzer, path: P) -> Result<(), Error> {
@@ -44,11 +44,13 @@ fn apply_volume_analysis<P: AsRef<Path>>(analyzer: &mut VolumeAnalyzer, path: P)
             Err(e) => {
                 println!();
                 break Err(Error::OggDecode(e));
-            },
+            }
             Ok(None) => {
                 analyzer.file_complete();
-                println!("{:.2} LUFS (ignoring output gain)",
-                    analyzer.last_track_lufs().expect("Last track volume unexpectedly missing").as_f64());
+                println!(
+                    "{:.2} LUFS (ignoring output gain)",
+                    analyzer.last_track_lufs().expect("Last track volume unexpectedly missing").as_f64()
+                );
                 break Ok(());
             }
             Ok(Some(packet)) => analyzer.submit(packet)?,
@@ -63,16 +65,12 @@ struct AlbumVolume {
 }
 
 impl AlbumVolume {
-    pub fn get_album_mean(&self) -> Decibels {
-        self.mean
-    }
+    pub fn get_album_mean(&self) -> Decibels { self.mean }
 
-    pub fn get_track_mean(&self, path: &Path) -> Option<Decibels> {
-        self.tracks.get(path).cloned()
-    }
+    pub fn get_track_mean(&self, path: &Path) -> Option<Decibels> { self.tracks.get(path).cloned() }
 }
 
-fn compute_album_volume<I: IntoIterator<Item=P>, P: AsRef<Path>>(paths: I) -> Result<AlbumVolume, Error> {
+fn compute_album_volume<I: IntoIterator<Item = P>, P: AsRef<Path>>(paths: I) -> Result<AlbumVolume, Error> {
     let mut analyzer = VolumeAnalyzer::default();
     let mut tracks = HashMap::new();
     for input_path in paths.into_iter() {
@@ -82,14 +80,13 @@ fn compute_album_volume<I: IntoIterator<Item=P>, P: AsRef<Path>>(paths: I) -> Re
             analyzer.last_track_lufs().expect("Track volume unexpectedly missing"),
         );
     }
-    let album_volume = AlbumVolume {
-        tracks,
-        mean: analyzer.mean_lufs(),
-    };
+    let album_volume = AlbumVolume { tracks, mean: analyzer.mean_lufs() };
     Ok(album_volume)
 }
 
-fn rewrite_stream<R: Read + Seek, W: Write>(input: R, mut output: W, config: &RewriterConfig) -> Result<RewriteResult, Error> {
+fn rewrite_stream<R: Read + Seek, W: Write>(
+    input: R, mut output: W, config: &RewriterConfig,
+) -> Result<RewriteResult, Error> {
     let mut ogg_reader = PacketReader::new(input);
     let ogg_writer = PacketWriter::new(&mut output);
     let mut rewriter = Rewriter::new(config, ogg_writer, true);
@@ -135,13 +132,15 @@ struct Cli {
     album: bool,
 
     #[clap(arg_enum, value_parser, short, long, default_value_t = Preset::ReplayGain)]
-    /// Normalizes to loudness used by ReplayGain (rg), EBU R 128 (r128) or original (none)
+    /// Normalizes to loudness used by ReplayGain (rg), EBU R 128 (r128) or
+    /// original (none)
     preset: Preset,
 
     #[clap(arg_enum, value_parser, short, long, default_value_t = OutputGainSetting::Auto)]
-    /// When "auto" is specified, each track's output gain is chosen to be per-track or per-album
-    /// dependent on whether album mode is enabled. When "track" is specified, each file's output
-    /// gain will be track-specific, even in album mode.
+    /// When "auto" is specified, each track's output gain is chosen to be
+    /// per-track or per-album dependent on whether album mode is enabled.
+    /// When "track" is specified, each file's output gain will be
+    /// track-specific, even in album mode.
     output_gain_mode: OutputGainSetting,
 
     #[clap(value_parser, required(true))]
@@ -154,11 +153,13 @@ fn main_impl() -> Result<(), Error> {
     let album_mode = cli.album;
 
     let output_gain_mode = match cli.output_gain_mode {
-        OutputGainSetting::Auto => if album_mode {
-            OutputGainMode::Album
-        } else {
-            OutputGainMode::Track
-        },
+        OutputGainSetting::Auto => {
+            if album_mode {
+                OutputGainMode::Album
+            } else {
+                OutputGainMode::Track
+            }
+        }
         OutputGainSetting::Track => OutputGainMode::Track,
     };
     let volume_target = match cli.preset {
@@ -173,8 +174,11 @@ fn main_impl() -> Result<(), Error> {
     let input_files = cli.input_files;
     let album_volume = if album_mode { Some(compute_album_volume(&input_files)?) } else { None };
     for input_path in input_files {
-        println!("Processing file {} with target loudness of {}...", &input_path.to_string_lossy(),
-            volume_target.to_friendly_string());
+        println!(
+            "Processing file {} with target loudness of {}...",
+            &input_path.to_string_lossy(),
+            volume_target.to_friendly_string()
+        );
         let track_volume = match &album_volume {
             None => {
                 let mut analyzer = VolumeAnalyzer::default();
@@ -185,8 +189,12 @@ fn main_impl() -> Result<(), Error> {
                 album_volume.get_track_mean(&input_path).expect("Could not find previously computed track volume")
             }
         };
-        let rewriter_config = RewriterConfig::new(volume_target, output_gain_mode, track_volume,
-            album_volume.as_ref().map(|a| a.get_album_mean()));
+        let rewriter_config = RewriterConfig::new(
+            volume_target,
+            output_gain_mode,
+            track_volume,
+            album_volume.as_ref().map(|a| a.get_album_mean()),
+        );
 
         let input_dir = input_path.parent().expect("Unable to find parent folder of input file");
         let input_base = input_path.file_name().expect("Unable to find name of input file");

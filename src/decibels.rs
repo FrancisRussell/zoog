@@ -7,23 +7,15 @@ pub struct Decibels {
 }
 
 impl Decibels {
-    pub fn as_f64(&self) -> f64 {
-        self.inner
-    }
+    pub fn as_f64(&self) -> f64 { self.inner }
 }
 
 impl Default for Decibels {
-    fn default() -> Decibels {
-        Decibels::from(0.0)
-    }
+    fn default() -> Decibels { Decibels::from(0.0) }
 }
 
 impl const From<f64> for Decibels {
-    fn from(value: f64) -> Decibels {
-        Decibels {
-            inner: value,
-        }
-    }
+    fn from(value: f64) -> Decibels { Decibels { inner: value } }
 }
 
 impl Display for Decibels {
@@ -35,19 +27,11 @@ impl Display for Decibels {
 impl Sub for Decibels {
     type Output = Decibels;
 
-    fn sub(self, other: Decibels) -> Decibels {
-        Decibels {
-            inner: self.inner - other.inner,
-        }
-    }
+    fn sub(self, other: Decibels) -> Decibels { Decibels { inner: self.inner - other.inner } }
 }
 
 impl Add for Decibels {
     type Output = Decibels;
 
-    fn add(self, other: Decibels) -> Decibels {
-        Decibels {
-            inner: self.inner + other.inner,
-        }
-    }
+    fn add(self, other: Decibels) -> Decibels { Decibels { inner: self.inner + other.inner } }
 }
