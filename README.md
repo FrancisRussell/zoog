@@ -111,9 +111,12 @@ The following options are available:
   `R128_ALBUM_GAIN` tags, but their `R128_TRACK_GAIN` tags will be identical.
   Unless you know what you're doing, you probably don't want this option.
 
-* `-a`: Enables album mode. In this case, the internal gain will be set to an
-  identical value for all specified files with the files being considered as if
-  they were a single audio file. `R128_ALBUM_GAIN` tags will also be generated.
+* `-a`: Enables album mode. In this mode `R128_ALBUM_GAIN` tags will also be
+  generated. These tell players that support these tags what gain to apply so
+  that each track in the album maintains its relative loudness. By default the
+  output gain value for each file will be set to identical values in order to
+  apply the calculated album gain, but this behaviour can be overriden using
+  the `--output-gain-mode` option.
 
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
