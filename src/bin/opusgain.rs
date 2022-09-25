@@ -133,7 +133,7 @@ struct Cli {
 
     #[clap(arg_enum, value_parser, short, long, default_value_t = Preset::ReplayGain)]
     /// Normalizes to loudness used by ReplayGain (rg), EBU R 128 (r128) or
-    /// original (none)
+    /// the original source (original)
     preset: Preset,
 
     #[clap(arg_enum, value_parser, short, long, default_value_t = OutputGainSetting::Auto)]
