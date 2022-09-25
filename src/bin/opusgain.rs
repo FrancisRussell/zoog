@@ -114,7 +114,7 @@ enum Preset {
     ReplayGain,
     #[clap(name = "r128")]
     R128,
-    #[clap(name = "none")]
+    #[clap(name = "original")]
     ZeroGain,
 }
 

@@ -75,7 +75,7 @@ gain values are correct without making assumptions about their existing values.
 
 The following options are available:
 
-* `--preset=none`: In this mode, `opusgain` will set the output gain in the
+* `--preset=original`: In this mode, `opusgain` will set the output gain in the
   Opus binary header to 0dB. In players that do not support `R128` tags, this
   will cause the Opus file to play back at the volume of the originally encoded
   source. You may want this if you prefer volume normalization to only occur via
