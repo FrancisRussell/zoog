@@ -1,10 +1,11 @@
-use ogg::reading::OggReadError;
 use std::path::PathBuf;
+
+use ogg::reading::OggReadError;
 use tempfile::PersistError;
 use thiserror::Error;
 
 #[derive(Debug, Error)]
-pub enum ZoogError {
+pub enum Error {
     #[error("Unable to open file `{0}` due to `{1}`")]
     FileOpenError(PathBuf, std::io::Error),
     #[error("Unable to open temporary file due to `{0}`")]
@@ -29,4 +30,10 @@ pub enum ZoogError {
     FileMove(PathBuf, PathBuf, std::io::Error),
     #[error("Failed to persist temporary file due to `{0}`")]
     PersistError(#[from] PersistError),
+    #[error("Unsupported channel count: `{0}`")]
+    InvalidChannelCount(usize),
+    #[error("Opus error: `{0}`")]
+    OpusError(opus::Error),
+    #[error("IO error: `{0}`")]
+    GenericIoError(std::io::Error),
 }
