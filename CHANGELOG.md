@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* Fix incorrect help text which still called the "original" option "none".
+
 ## 0.2.0
 
 * `zoog` binary is deprecated and removed from the repository.
