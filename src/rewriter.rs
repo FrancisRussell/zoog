@@ -5,7 +5,8 @@ use std::io::Write;
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use ogg::Packet;
 
-use crate::{CommentHeader, Decibels, Error, FixedPointGain, OpusHeader, R128_LUFS, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use crate::opus::{CommentHeader, FixedPointGain, OpusHeader, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use crate::{Decibels, Error, R128_LUFS};
 
 #[derive(Clone, Copy, Debug)]
 pub enum VolumeTarget {

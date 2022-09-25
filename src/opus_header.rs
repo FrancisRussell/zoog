@@ -2,7 +2,8 @@ use std::io::Cursor;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use crate::{Error, FixedPointGain};
+use crate::opus::FixedPointGain;
+use crate::Error;
 
 const OPUS_MIN_HEADER_SIZE: usize = 19;
 const OPUS_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64];

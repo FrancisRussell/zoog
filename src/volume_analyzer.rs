@@ -2,7 +2,8 @@ use bs1770::{ChannelLoudnessMeter, Power, Windows100ms};
 use ogg::Packet;
 use opus::{Channels, Decoder};
 
-use crate::{CommentHeader, Decibels, Error, OpusHeader};
+use crate::opus::{CommentHeader, OpusHeader};
+use crate::{Decibels, Error};
 
 // Opus uses this internally so we decode to this regardless of the input file
 // sampling rate

@@ -6,9 +6,9 @@ use std::path::{Path, PathBuf};
 use clap::{Parser, ValueEnum};
 use ogg::reading::PacketReader;
 use ogg::writing::PacketWriter;
-use zoog::constants::{R128_LUFS, REPLAY_GAIN_LUFS};
 use zoog::rewriter::{OutputGainMode, RewriteResult, Rewriter, RewriterConfig, VolumeTarget};
-use zoog::{Decibels, Error, VolumeAnalyzer};
+use zoog::volume_analyzer::VolumeAnalyzer;
+use zoog::{Decibels, Error, R128_LUFS, REPLAY_GAIN_LUFS};
 
 fn main() {
     match main_impl() {
