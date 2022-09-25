@@ -98,6 +98,19 @@ The following options are available:
   files which contained ReplayGain information. You're unlikely to want this
   option as the main use of `opusgain` is modify files which were generated this way.
 
+* `--output-gain-mode=auto`: In this mode, `opusgain` will set the output gain
+  in the Opus binary header such that each track is album-normalized in album
+  mode, or track-normalized otherwise. In album mode, this results in all
+  tracks having the same output gain value as well as the same
+  `R128_ALBUM_GAIN` tag.
+
+* `--output-gain-mode=track`: In this mode, `opusgain` will set the output gain
+  in the Opus binary header such that each track is track-normalized, even if
+  album mode is enabled. In album mode, this results in
+  all tracks having the same different output gain values as well as different
+  `R128_ALBUM_GAIN` tags, but their `R128_TRACK_GAIN` tags will be identical.
+  Unless you know what you're doing, you probably don't want this option.
+
 * `-a`: Enables album mode. In this case, the internal gain will be set to an
   identical value for all specified files with the files being considered as if
   they were a single audio file. `R128_ALBUM_GAIN` tags will also be generated.
