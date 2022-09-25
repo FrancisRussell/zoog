@@ -1,9 +1,10 @@
-use crate::constants::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
-use crate::error::ZoogError;
-use crate::gain::Gain;
+use std::io::{Cursor, Read, Write};
+
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
-use std::io::{Cursor, Read, Write};
+
+use crate::opus::{FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use crate::Error;
 
 const COMMENT_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x54, 0x61, 0x67, 0x73];
 
@@ -17,29 +18,25 @@ pub struct CommentHeader<'a> {
 }
 
 impl<'a> CommentHeader<'a> {
-    fn read_length<R: Read>(mut reader: R) -> Result<u32, ZoogError> {
-        reader.read_u32::<LittleEndian>().map_err(|_| ZoogError::MalformedCommentHeader)
+    fn read_length<R: Read>(mut reader: R) -> Result<u32, Error> {
+        reader.read_u32::<LittleEndian>().map_err(|_| Error::MalformedCommentHeader)
     }
 
-    fn read_exact<R: Read>(mut reader: R, data: &mut [u8]) -> Result<(), ZoogError> {
-        reader.read_exact(data).map_err(|_| ZoogError::MalformedCommentHeader)
+    fn read_exact<R: Read>(mut reader: R, data: &mut [u8]) -> Result<(), Error> {
+        reader.read_exact(data).map_err(|_| Error::MalformedCommentHeader)
     }
 
     pub fn empty(data: &'a mut Vec<u8>) -> CommentHeader<'a> {
-        CommentHeader {
-            data,
-            vendor: String::new(),
-            user_comments: Vec::new(),
-        }
+        CommentHeader { data, vendor: String::new(), user_comments: Vec::new() }
     }
 
-    pub fn set_vendor(&mut self, vendor: &str) {
-        self.vendor = vendor.to_string();
-    }
+    pub fn set_vendor(&mut self, vendor: &str) { self.vendor = vendor.to_string(); }
 
-    pub fn try_parse(data: &'a mut Vec<u8>) -> Result<Option<CommentHeader<'a>>, ZoogError> {
+    pub fn try_parse(data: &'a mut Vec<u8>) -> Result<Option<CommentHeader<'a>>, Error> {
         let identical = data.iter().take(COMMENT_MAGIC.len()).eq(COMMENT_MAGIC.iter());
-        if !identical { return Ok(None); }
+        if !identical {
+            return Ok(None);
+        }
         let mut reader = Cursor::new(&data[COMMENT_MAGIC.len()..]);
         let vendor_len = Self::read_length(&mut reader)?;
         let mut vendor = vec![0u8; vendor_len as usize];
@@ -52,28 +49,24 @@ impl<'a> CommentHeader<'a> {
             let mut comment = vec![0u8; comment_len as usize];
             Self::read_exact(&mut reader, &mut comment)?;
             let comment = String::from_utf8(comment)?;
-            let offset = comment.find('=').ok_or(ZoogError::MalformedCommentHeader)?;
+            let offset = comment.find('=').ok_or(Error::MalformedCommentHeader)?;
             let (key, value) = comment.split_at(offset);
             user_comments.push((String::from(key), String::from(&value[1..])));
         }
-        let result = CommentHeader {
-            data,
-            vendor,
-            user_comments,
-        };
+        let result = CommentHeader { data, vendor, user_comments };
         Ok(Some(result))
     }
 
     pub fn get_first(&self, key: &str) -> Option<&str> {
         for (k, v) in self.user_comments.iter() {
-            if k == key { return Some(v); }
+            if k == key {
+                return Some(v);
+            }
         }
         None
     }
 
-    pub fn remove_all(&mut self, key: &str) {
-        self.user_comments = self.user_comments.iter().filter(|(k, _)| key != k).cloned().collect();
-    }
+    pub fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| key != k); }
 
     pub fn replace(&mut self, key: &str, value: &str) {
         self.remove_all(key);
@@ -84,9 +77,9 @@ impl<'a> CommentHeader<'a> {
         self.user_comments.push((String::from(key), String::from(value)));
     }
 
-    pub fn get_gain_from_tag(&self, tag: &str) -> Result<Option<Gain>, ZoogError> {
-        let parsed = self.get_first(tag)
-            .map(|v| v.parse::<Gain>().map_err(|_| ZoogError::InvalidR128Tag(v.to_string())));
+    pub fn get_gain_from_tag(&self, tag: &str) -> Result<Option<FixedPointGain>, Error> {
+        let parsed =
+            self.get_first(tag).map(|v| v.parse::<FixedPointGain>().map_err(|_| Error::InvalidR128Tag(v.to_string())));
         match parsed {
             Some(Ok(v)) => Ok(Some(v)),
             Some(Err(e)) => Err(e),
@@ -94,21 +87,23 @@ impl<'a> CommentHeader<'a> {
         }
     }
 
-    pub fn get_album_or_track_gain(&self) -> Result<Option<Gain>, ZoogError> {
+    pub fn get_album_or_track_gain(&self) -> Result<Option<FixedPointGain>, Error> {
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
-            if let Some(gain) = self.get_gain_from_tag(*tag)? {
+            if let Some(gain) = self.get_gain_from_tag(tag)? {
                 return Ok(Some(gain));
             }
         }
         Ok(None)
     }
 
-    pub fn adjust_gains(&mut self, adjustment: Gain) -> Result<(), ZoogError> {
-        if adjustment.is_zero() { return Ok(()); }
+    pub fn adjust_gains(&mut self, adjustment: FixedPointGain) -> Result<(), Error> {
+        if adjustment.is_zero() {
+            return Ok(());
+        }
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
-            if let Some(gain) = self.get_gain_from_tag(*tag)? {
-                let gain = gain.checked_add(adjustment).ok_or(ZoogError::GainOutOfBounds)?;
-                self.replace(*tag, &format!("{}", gain.as_fixed_point()));
+            if let Some(gain) = self.get_gain_from_tag(tag)? {
+                let gain = gain.checked_add(adjustment).ok_or(Error::GainOutOfBounds)?;
+                self.replace(tag, &format!("{}", gain.as_fixed_point()));
             }
         }
         Ok(())
@@ -138,13 +133,19 @@ impl<'a> Drop for CommentHeader<'a> {
     fn drop(&mut self) { self.commit(); }
 }
 
+impl<'a> PartialEq for CommentHeader<'a> {
+    fn eq(&self, other: &CommentHeader<'a>) -> bool {
+        self.vendor == other.vendor && self.user_comments == other.user_comments
+    }
+}
+
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use rand::Rng;
     use rand::distributions::{Standard, Uniform};
     use rand::rngs::SmallRng;
-    use rand::SeedableRng;
+    use rand::{Rng, SeedableRng};
+
+    use super::*;
 
     const MAX_STRING_LENGTH: usize = 1024;
     const MAX_COMMENTS: usize = 128;
@@ -167,7 +168,7 @@ mod tests {
         header.set_vendor(&random_string(engine, true));
         let num_comments_dist = Uniform::new_inclusive(0, MAX_COMMENTS);
         let num_comments = engine.sample(&num_comments_dist);
-        for _ in 0 .. num_comments {
+        for _ in 0..num_comments {
             let key = random_string(engine, false);
             let value = random_string(engine, true);
             header.append(key.as_str(), value.as_str());
@@ -188,7 +189,7 @@ mod tests {
     #[test]
     fn parse_and_commit_is_identity() {
         let mut rng = SmallRng::seed_from_u64(19489);
-        for _ in 0 .. NUM_IDENTITY_TESTS {
+        for _ in 0..NUM_IDENTITY_TESTS {
             let mut header_data = Vec::new();
             {
                 create_random_header(&mut rng, &mut header_data);
@@ -215,9 +216,8 @@ mod tests {
     fn truncated_header() {
         let mut header: Vec<u8> = COMMENT_MAGIC.iter().cloned().collect();
         match CommentHeader::try_parse(&mut header) {
-            Err(ZoogError::MalformedCommentHeader) => {}
-            _ => assert!(false, "Wrong error for malformed header")
+            Err(Error::MalformedCommentHeader) => {}
+            _ => assert!(false, "Wrong error for malformed header"),
         };
     }
 }
-

@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.2.0
+
+* `zoog` binary is deprecated and removed from the repository.
+* `opusgain` binary is added which can compute the loudness of Opus files
+  directly in order to adjust the output gain and generate tags.
+
 ## 0.1.4
 
 * Strip debug info from release binaries (requires Rust nightly).
