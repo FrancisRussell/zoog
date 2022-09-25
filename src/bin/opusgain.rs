@@ -234,8 +234,8 @@ fn main_impl() -> Result<(), Error> {
             OutputFile::Temp(temp)
         };
         let rewrite_result = {
-            let mut output_file = output_file.as_write();
-            let mut output_file = BufWriter::new(&mut output_file);
+            let output_file = output_file.as_write();
+            let mut output_file = BufWriter::new(output_file);
             rewrite_stream(&mut input_file, &mut output_file, &rewriter_config)
         };
         num_processed += 1;
