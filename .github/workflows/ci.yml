@@ -64,7 +64,6 @@ jobs:
 
   cargo-bloat:
     name: Cargo bloat
-    if: false
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@master
@@ -74,6 +73,6 @@ jobs:
           toolchain: nightly
           override: true
       - name: Run cargo bloat
-        uses: orf/cargo-bloat-action@v1
+        uses: Kobzol/cargo-bloat-action@ee38cc711cd045e30be53db2660dbcbb88f35e58
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
