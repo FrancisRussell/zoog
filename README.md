@@ -115,8 +115,11 @@ The following options are available:
   generated. These tell players that support these tags what gain to apply so
   that each track in the album maintains its relative loudness. By default the
   output gain value for each file will be set to identical values in order to
-  apply the calculated album gain, but this behaviour can be overriden using
+  apply the calculated album gain, but this behaviour can be overridden using
   the `--output-gain-mode` option.
+
+* `--display-only`: Displays the same output that `opusgain` would otherwise
+  produce, but does not make any changes to the supplied files.
 
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
