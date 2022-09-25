@@ -146,6 +146,25 @@ struct Cli {
     #[clap(value_parser, required(true))]
     /// The Opus files to process
     input_files: Vec<PathBuf>,
+
+    #[clap(short, long, action)]
+    /// Display output without performing any file modification.
+    display_only: bool,
+}
+
+#[derive(Debug)]
+enum OutputFile {
+    Temp(tempfile::NamedTempFile),
+    Sink(io::Sink),
+}
+
+impl OutputFile {
+    fn as_write(&mut self) -> &mut dyn Write {
+        match self {
+            OutputFile::Temp(ref mut temp) => temp,
+            OutputFile::Sink(ref mut sink) => sink,
+        }
+    }
 }
 
 fn main_impl() -> Result<(), Error> {
@@ -153,13 +172,10 @@ fn main_impl() -> Result<(), Error> {
     let album_mode = cli.album;
 
     let output_gain_mode = match cli.output_gain_mode {
-        OutputGainSetting::Auto => {
-            if album_mode {
-                OutputGainMode::Album
-            } else {
-                OutputGainMode::Track
-            }
-        }
+        OutputGainSetting::Auto => match album_mode {
+            true => OutputGainMode::Album,
+            false => OutputGainMode::Track,
+        },
         OutputGainSetting::Track => OutputGainMode::Track,
     };
     let volume_target = match cli.preset {
@@ -171,8 +187,14 @@ fn main_impl() -> Result<(), Error> {
     let mut num_processed: usize = 0;
     let mut num_already_normalized: usize = 0;
 
+    let display_only = cli.display_only;
+    if display_only {
+        println!("Display-only mode is enabled so no files will actually be modified.\n");
+    }
+
     let input_files = cli.input_files;
     let album_volume = if album_mode { Some(compute_album_volume(&input_files)?) } else { None };
+
     for input_path in input_files {
         println!(
             "Processing file {} with target loudness of {}...",
@@ -201,12 +223,18 @@ fn main_impl() -> Result<(), Error> {
         let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
         let mut input_file = BufReader::new(input_file);
 
-        let mut output_file = tempfile::Builder::new()
-            .prefix(input_base)
-            .suffix("zoog")
-            .tempfile_in(input_dir)
-            .map_err(Error::TempFileOpenError)?;
+        let mut output_file = if display_only {
+            OutputFile::Sink(io::sink())
+        } else {
+            let temp = tempfile::Builder::new()
+                .prefix(input_base)
+                .suffix("zoog")
+                .tempfile_in(input_dir)
+                .map_err(Error::TempFileOpenError)?;
+            OutputFile::Temp(temp)
+        };
         let rewrite_result = {
+            let mut output_file = output_file.as_write();
             let mut output_file = BufWriter::new(&mut output_file);
             rewrite_stream(&mut input_file, &mut output_file, &rewriter_config)
         };
@@ -217,16 +245,19 @@ fn main_impl() -> Result<(), Error> {
                 println!("Failure during processing of {:#?}.", input_path);
                 return Err(e);
             }
-            Ok(RewriteResult::Ready) => {
-                let mut backup_path = input_path.clone();
-                backup_path.set_extension("zoog-orig");
-                rename_file(&input_path, &backup_path)?;
-                output_file
-                    .persist_noclobber(&input_path)
-                    .map_err(Error::PersistError)
-                    .and_then(|f| f.sync_all().map_err(Error::WriteError))?;
-                remove_file_verbose(&backup_path);
-            }
+            Ok(RewriteResult::Ready) => match output_file {
+                OutputFile::Temp(output_file) => {
+                    let mut backup_path = input_path.clone();
+                    backup_path.set_extension("zoog-orig");
+                    rename_file(&input_path, &backup_path)?;
+                    output_file
+                        .persist_noclobber(&input_path)
+                        .map_err(Error::PersistError)
+                        .and_then(|f| f.sync_all().map_err(Error::WriteError))?;
+                    remove_file_verbose(&backup_path);
+                }
+                OutputFile::Sink(_) => {}
+            },
             Ok(RewriteResult::AlreadyNormalized) => {
                 println!("All gains are already correct so doing nothing.");
                 num_already_normalized += 1;
