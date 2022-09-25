@@ -107,7 +107,7 @@ The following options are available:
 * `--output-gain-mode=track`: In this mode, `opusgain` will set the output gain
   in the Opus binary header such that each track is track-normalized, even if
   album mode is enabled. In album mode, this results in
-  all tracks having the same different output gain values as well as different
+  all tracks being given different output gain values as well as different
   `R128_ALBUM_GAIN` tags, but their `R128_TRACK_GAIN` tags will be identical.
   Unless you know what you're doing, you probably don't want this option.
 
