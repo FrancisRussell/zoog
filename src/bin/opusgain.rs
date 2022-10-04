@@ -6,7 +6,8 @@ use std::path::{Path, PathBuf};
 use clap::{Parser, ValueEnum};
 use ogg::reading::PacketReader;
 use ogg::writing::PacketWriter;
-use zoog::rewriter::{OutputGainMode, RewriteResult, Rewriter, RewriterConfig, VolumeTarget};
+use zoog::opus::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use zoog::rewriter::{OpusGains, OutputGainMode, Rewriter, RewriterConfig, SubmitResult, VolumeTarget};
 use zoog::volume_analyzer::VolumeAnalyzer;
 use zoog::{Decibels, Error, R128_LUFS, REPLAY_GAIN_LUFS};
 
@@ -58,6 +59,16 @@ fn apply_volume_analysis<P: AsRef<Path>>(analyzer: &mut VolumeAnalyzer, path: P)
     }
 }
 
+fn print_gains(gains: &OpusGains) {
+    println!("\tOutput Gain: {}", gains.output);
+    if let Some(gain) = gains.track_r128 {
+        println!("\t{}: {}", TAG_TRACK_GAIN, gain);
+    }
+    if let Some(gain) = gains.album_r128 {
+        println!("\t{}: {}", TAG_ALBUM_GAIN, gain);
+    }
+}
+
 #[derive(Debug)]
 struct AlbumVolume {
     mean: Decibels,
@@ -86,22 +97,34 @@ fn compute_album_volume<I: IntoIterator<Item = P>, P: AsRef<Path>>(paths: I) -> 
 
 fn rewrite_stream<R: Read + Seek, W: Write>(
     input: R, mut output: W, config: &RewriterConfig,
-) -> Result<RewriteResult, Error> {
+) -> Result<SubmitResult, Error> {
     let mut ogg_reader = PacketReader::new(input);
     let ogg_writer = PacketWriter::new(&mut output);
-    let mut rewriter = Rewriter::new(config, ogg_writer, true);
+    let mut rewriter = Rewriter::new(config, ogg_writer);
+    let mut result = SubmitResult::Good;
     loop {
         match ogg_reader.read_packet() {
             Err(e) => break Err(Error::OggDecode(e)),
             Ok(None) => {
                 // Make sure to flush any buffered data
-                break output.flush().map(|_| RewriteResult::Ready).map_err(Error::WriteError);
+                break output.flush().map(|_| result).map_err(Error::WriteError);
             }
             Ok(Some(packet)) => {
                 let submit_result = rewriter.submit(packet);
                 match submit_result {
-                    Ok(RewriteResult::Ready) => {}
-                    _ => break submit_result,
+                    Ok(SubmitResult::Good) => {
+                        // We can continue submitting packets
+                    }
+                    Ok(r @ SubmitResult::ChangingGains { .. }) => {
+                        // We can continue submitting packets, but want to save the changed
+                        // gains to return as a result
+                        result = r;
+                    }
+                    Ok(SubmitResult::AlreadyNormalized(_)) | Err(_) => {
+                        // If we are already normalized or encounter an error, we want to
+                        // abort immediately
+                        break submit_result;
+                    }
                 }
             }
         }
@@ -242,24 +265,37 @@ fn main_impl() -> Result<(), Error> {
 
         match rewrite_result {
             Err(e) => {
-                println!("Failure during processing of {:#?}.", input_path);
+                eprintln!("Failure during processing of {:#?}.", input_path);
                 return Err(e);
             }
-            Ok(RewriteResult::Ready) => match output_file {
-                OutputFile::Temp(output_file) => {
-                    let mut backup_path = input_path.clone();
-                    backup_path.set_extension("zoog-orig");
-                    rename_file(&input_path, &backup_path)?;
-                    output_file
-                        .persist_noclobber(&input_path)
-                        .map_err(Error::PersistError)
-                        .and_then(|f| f.sync_all().map_err(Error::WriteError))?;
-                    remove_file_verbose(&backup_path);
+            Ok(SubmitResult::Good) => {
+                // Either we should already be normalized or get back a result which
+                // indicated we changed the gains in the input file. If we get neither
+                // then something weird happened.
+                eprintln!("File {:#?} appeared to be oddly truncated. Doing nothing", input_path);
+            }
+            Ok(SubmitResult::ChangingGains { from: old_gains, to: new_gains }) => {
+                match output_file {
+                    OutputFile::Temp(output_file) => {
+                        let mut backup_path = input_path.clone();
+                        backup_path.set_extension("zoog-orig");
+                        rename_file(&input_path, &backup_path)?;
+                        output_file
+                            .persist_noclobber(&input_path)
+                            .map_err(Error::PersistError)
+                            .and_then(|f| f.sync_all().map_err(Error::WriteError))?;
+                        remove_file_verbose(&backup_path);
+                    }
+                    OutputFile::Sink(_) => {}
                 }
-                OutputFile::Sink(_) => {}
-            },
-            Ok(RewriteResult::AlreadyNormalized) => {
-                println!("All gains are already correct so doing nothing.");
+                println!("Old gain values:");
+                print_gains(&old_gains);
+                println!("New gain values:");
+                print_gains(&new_gains);
+            }
+            Ok(SubmitResult::AlreadyNormalized(gains)) => {
+                println!("All gains are already correct so doing nothing. Existing gains were:");
+                print_gains(&gains);
                 num_already_normalized += 1;
             }
         }

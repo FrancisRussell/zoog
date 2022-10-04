@@ -5,6 +5,7 @@
 * Fix incorrect help text which still called the "original" option "none".
 * Remove `commit` function on `CommentHeader`.
 * Document API.
+* Remove code that printed to standard output and `verbose` flag from `Rewriter`.
 
 ## 0.2.0
 
