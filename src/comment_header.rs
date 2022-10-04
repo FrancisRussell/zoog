@@ -80,11 +80,30 @@ impl<'a> CommentHeader<'a> {
     /// Removes all mappings for the specified key.
     pub fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| key != k); }
 
-    /// Removes any existing mappings for the specified key and appends the
-    /// specified mapping.
+    /// If the key already exists, update the first mapping's value to the one
+    /// supplied and discard any later mappings. If the key does not exist,
+    /// append the mapping to the end of the list.
     pub fn replace(&mut self, key: &str, value: &str) {
-        self.remove_all(key);
-        self.append(key, value);
+        let mut found = false;
+        self.user_comments.retain_mut(|(k, ref mut v)| {
+            if k == key {
+                if found {
+                    // If we have already found the key, discard this mapping
+                    false
+                } else {
+                    *v = value.to_string();
+                    found = true;
+                    true
+                }
+            } else {
+                true
+            }
+        });
+
+        // If the key did not exist, we append
+        if !found {
+            self.append(key, value);
+        }
     }
 
     /// Appends the specified mapping.
@@ -240,5 +259,51 @@ mod tests {
             Err(Error::MalformedCommentHeader) => {}
             _ => assert!(false, "Wrong error for malformed header"),
         };
+    }
+
+    #[test]
+    fn replace_appends_on_missing() {
+        let key = "foo";
+        let value = "bar";
+
+        let mut data_1 = Vec::new();
+        let mut header_1 = CommentHeader::empty(&mut data_1);
+        header_1.append("v0", "k0");
+        header_1.append(key, value);
+        header_1.append("v1", "k1");
+
+        let mut data_2 = Vec::new();
+        let mut header_2 = CommentHeader::empty(&mut data_2);
+        header_2.append("v0", "k0");
+        header_2.replace(key, value);
+        header_2.append("v1", "k1");
+
+        assert_eq!(header_1, header_2);
+    }
+
+    #[test]
+    fn replace_replaces_on_duplicates() {
+        let mut data_1 = Vec::new();
+        let mut header_1 = CommentHeader::empty(&mut data_1);
+        header_1.append("v0", "k0");
+        header_1.append("v1", "k1");
+        header_1.append("v2", "k2");
+        header_1.append("v3", "k3");
+        header_1.append("v2", "k4");
+        header_1.append("v5", "k5");
+        header_1.append("v2", "k6");
+        header_1.append("v7", "k7");
+        header_1.replace("v2", "k8");
+
+        let mut data_2 = Vec::new();
+        let mut header_2 = CommentHeader::empty(&mut data_2);
+        header_2.append("v0", "k0");
+        header_2.append("v1", "k1");
+        header_2.append("v2", "k8");
+        header_2.append("v3", "k3");
+        header_2.append("v5", "k5");
+        header_2.append("v7", "k7");
+
+        assert_eq!(header_1, header_2);
     }
 }

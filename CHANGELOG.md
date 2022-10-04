@@ -5,6 +5,12 @@
 * Fix incorrect help text which still called the "original" option "none".
 * Remove `commit` function on `CommentHeader`.
 * Document API.
+* Remove code that printed to standard output and `verbose` flag from `Rewriter`.
+* Rename `RewriteResult` to `SubmitResult`.
+* Reduce likelihood of unnecessarily rewriting files due to tag reordering.
+* Add tests for `CommentHeader::replace()`.
+* Make `opusgain` print existing gains when leaving files unchanged.
+* Make `opusgain` print previous and new gains when altering files.
 
 ## 0.2.0
 
