@@ -3,6 +3,8 @@
 ## Unreleased
 
 * Fix incorrect help text which still called the "original" option "none".
+* Remove `commit` function on `CommentHeader`.
+* Document API.
 
 ## 0.2.0
 
