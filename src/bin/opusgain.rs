@@ -211,12 +211,12 @@ fn main_impl() -> Result<(), Error> {
                 album_volume.get_track_mean(&input_path).expect("Could not find previously computed track volume")
             }
         };
-        let rewriter_config = RewriterConfig::new(
-            volume_target,
+        let rewriter_config = RewriterConfig {
+            output_gain: volume_target,
             output_gain_mode,
             track_volume,
-            album_volume.as_ref().map(|a| a.get_album_mean()),
-        );
+            album_volume: album_volume.as_ref().map(|a| a.get_album_mean()),
+        };
 
         let input_dir = input_path.parent().expect("Unable to find parent folder of input file");
         let input_base = input_path.file_name().expect("Unable to find name of input file");

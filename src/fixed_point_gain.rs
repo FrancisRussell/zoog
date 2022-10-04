@@ -4,24 +4,32 @@ use std::str::FromStr;
 
 use crate::{Decibels, Error};
 
+/// Represents the fixed-point Decibel representation used
+/// within Opus comment headers
 #[derive(Default, Copy, Clone, Debug, Eq, PartialEq)]
 pub struct FixedPointGain {
     value: i16,
 }
 
 impl FixedPointGain {
+    /// The underlying signed 16-bit integer representation
     pub fn as_fixed_point(self) -> i16 { self.value }
 
+    /// This value as Decibels
     pub fn as_decibels(self) -> Decibels { Decibels::from(self.value as f64 / 256.0) }
 
-    pub fn from_integer(value: i16) -> FixedPointGain { FixedPointGain { value } }
+    /// Construct from a fixed-point integer encoding
+    pub fn from_fixed_point(value: i16) -> FixedPointGain { FixedPointGain { value } }
 
+    /// Does this value represent the identity gain?
     pub fn is_zero(self) -> bool { self.value == 0 }
 
+    /// Checked addition returning `None` on overflow or underflow.
     pub fn checked_add(self, rhs: FixedPointGain) -> Option<FixedPointGain> {
         self.value.checked_add(rhs.value).map(|value| FixedPointGain { value })
     }
 
+    /// Checked subtraction returning `None` on overflow or underflow.
     pub fn checked_neg(self) -> Option<FixedPointGain> {
         self.value.checked_neg().map(|value| FixedPointGain { value })
     }
@@ -44,6 +52,7 @@ impl TryFrom<Decibels> for FixedPointGain {
 impl FromStr for FixedPointGain {
     type Err = <i16 as FromStr>::Err;
 
+    /// Parses this value from the textual representation used in Opus comment headers.
     fn from_str(s: &str) -> Result<Self, Self::Err> { s.parse::<i16>().map(|value| FixedPointGain { value }) }
 }
 

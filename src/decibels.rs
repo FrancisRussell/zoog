@@ -1,12 +1,14 @@
 use std::fmt::{Display, Formatter};
 use std::ops::{Add, Sub};
 
+/// Represents a Decibel-valued sound level
 #[derive(Copy, Clone, Debug)]
 pub struct Decibels {
     inner: f64,
 }
 
 impl Decibels {
+    /// The Decibel value as an `f64`.
     pub fn as_f64(&self) -> f64 { self.inner }
 }
 
