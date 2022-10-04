@@ -272,7 +272,7 @@ fn main_impl() -> Result<(), Error> {
                 // Either we should already be normalized or get back a result which
                 // indicated we changed the gains in the input file. If we get neither
                 // then something weird happened.
-                eprintln!("File {:#?} appeared to be oddly truncated. Doing nothing", input_path);
+                eprintln!("File {:#?} appeared to be oddly truncated. Doing nothing.", input_path);
             }
             Ok(SubmitResult::ChangingGains { from: old_gains, to: new_gains }) => {
                 match output_file {
