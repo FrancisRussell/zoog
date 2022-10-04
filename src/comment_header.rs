@@ -80,11 +80,30 @@ impl<'a> CommentHeader<'a> {
     /// Removes all mappings for the specified key.
     pub fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| key != k); }
 
-    /// Removes any existing mappings for the specified key and appends the
-    /// specified mapping.
+    /// If the key already exists, update the first mapping's value to the one
+    /// supplied and discard any later mappings. If the key does not exist,
+    /// append the mapping to the end of the list.
     pub fn replace(&mut self, key: &str, value: &str) {
-        self.remove_all(key);
-        self.append(key, value);
+        let mut found = false;
+        self.user_comments.retain_mut(|(k, ref mut v)| {
+            if k == key {
+                if found {
+                    // If we have already found the key, discard this mapping
+                    false
+                } else {
+                    *v = value.to_string();
+                    found = true;
+                    true
+                }
+            } else {
+                true
+            }
+        });
+
+        // If the key did not exist, we append
+        if !found {
+            self.append(key, value);
+        }
     }
 
     /// Appends the specified mapping.

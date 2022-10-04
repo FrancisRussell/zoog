@@ -6,6 +6,7 @@
 * Remove `commit` function on `CommentHeader`.
 * Document API.
 * Remove code that printed to standard output and `verbose` flag from `Rewriter`.
+* Reduce likelihood of unnecessarily rewriting files due to tag reordering.
 
 ## 0.2.0
 

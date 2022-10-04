@@ -195,6 +195,9 @@ impl<W: Write> Rewriter<W> {
                         .expect("Unexpectedly failed to decode comment header")
                         .expect("Comment header unexpectedly missing");
 
+                    // We compare headers rather than the values of the `OpusGains` structs because
+                    // using the latter glosses over issues such as duplicate or invalid gain tags
+                    // which we will fix if present.
                     let changed = (opus_header != opus_header_orig) || (comment_header != comment_header_orig);
                     (existing_gains, new_gains, changed)
                 };
