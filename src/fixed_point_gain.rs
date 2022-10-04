@@ -52,7 +52,8 @@ impl TryFrom<Decibels> for FixedPointGain {
 impl FromStr for FixedPointGain {
     type Err = <i16 as FromStr>::Err;
 
-    /// Parses this value from the textual representation used in Opus comment headers.
+    /// Parses this value from the textual representation used in Opus comment
+    /// headers.
     fn from_str(s: &str) -> Result<Self, Self::Err> { s.parse::<i16>().map(|value| FixedPointGain { value }) }
 }
 

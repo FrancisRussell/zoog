@@ -10,9 +10,11 @@ pub mod global {
 }
 
 pub mod opus {
-    /// The name of the tag used to identify the track gain in Opus comment headers
+    /// The name of the tag used to identify the track gain in Opus comment
+    /// headers
     pub const TAG_TRACK_GAIN: &str = "R128_TRACK_GAIN";
 
-    /// The name of the tag used to identify the album gain in Opus comment headers
+    /// The name of the tag used to identify the album gain in Opus comment
+    /// headers
     pub const TAG_ALBUM_GAIN: &str = "R128_ALBUM_GAIN";
 }

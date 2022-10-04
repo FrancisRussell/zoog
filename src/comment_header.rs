@@ -27,8 +27,8 @@ impl<'a> CommentHeader<'a> {
         reader.read_exact(data).map_err(|_| Error::MalformedCommentHeader)
     }
 
-    /// Constructs an empty `CommentHeader`. The comment data will be placed in the supplied `Vec`.
-    /// Any existing content will be discarded.
+    /// Constructs an empty `CommentHeader`. The comment data will be placed in
+    /// the supplied `Vec`. Any existing content will be discarded.
     pub fn empty(data: &'a mut Vec<u8>) -> CommentHeader<'a> {
         CommentHeader { data, vendor: String::new(), user_comments: Vec::new() }
     }
@@ -36,10 +36,11 @@ impl<'a> CommentHeader<'a> {
     /// Sets the vendor field.
     pub fn set_vendor(&mut self, vendor: &str) { self.vendor = vendor.to_string(); }
 
-    /// Attempts to parse the supplied `Vec` as an Opus comment header. An error is returned if the
-    /// header is believed to be corrupt, otherwise an `Option` is returned
-    /// containing either the parsed header or `None` if the comment magic string was not found.
-    /// This enables distinguishing between a corrupted comment header and a packet which
+    /// Attempts to parse the supplied `Vec` as an Opus comment header. An error
+    /// is returned if the header is believed to be corrupt, otherwise an
+    /// `Option` is returned containing either the parsed header or `None`
+    /// if the comment magic string was not found. This enables
+    /// distinguishing between a corrupted comment header and a packet which
     /// does not appear to be a comment header.
     pub fn try_parse(data: &'a mut Vec<u8>) -> Result<Option<CommentHeader<'a>>, Error> {
         let identical = data.iter().take(COMMENT_MAGIC.len()).eq(COMMENT_MAGIC.iter());
@@ -79,7 +80,8 @@ impl<'a> CommentHeader<'a> {
     /// Removes all mappings for the specified key.
     pub fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| key != k); }
 
-    /// Removes any existing mappings for the specified key and appends the specified mapping.
+    /// Removes any existing mappings for the specified key and appends the
+    /// specified mapping.
     pub fn replace(&mut self, key: &str, value: &str) {
         self.remove_all(key);
         self.append(key, value);
@@ -90,8 +92,8 @@ impl<'a> CommentHeader<'a> {
         self.user_comments.push((String::from(key), String::from(value)));
     }
 
-    /// Attempts to parse the first mapping for the specified key as the fixed-point Decibel
-    /// representation used in Opus comment headers.
+    /// Attempts to parse the first mapping for the specified key as the
+    /// fixed-point Decibel representation used in Opus comment headers.
     pub fn get_gain_from_tag(&self, tag: &str) -> Result<Option<FixedPointGain>, Error> {
         let parsed =
             self.get_first(tag).map(|v| v.parse::<FixedPointGain>().map_err(|_| Error::InvalidR128Tag(v.to_string())));
@@ -112,8 +114,9 @@ impl<'a> CommentHeader<'a> {
         Ok(None)
     }
 
-    /// Applies the specified delta to either or both of the album and track gains if present. If
-    /// neither as present, this function will do nothing.
+    /// Applies the specified delta to either or both of the album and track
+    /// gains if present. If neither as present, this function will do
+    /// nothing.
     pub fn adjust_gains(&mut self, adjustment: FixedPointGain) -> Result<(), Error> {
         if adjustment.is_zero() {
             return Ok(());

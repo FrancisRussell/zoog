@@ -178,8 +178,9 @@ impl VolumeAnalyzer {
         Decibels::from(lufs)
     }
 
-    /// This should be called after all packets from an Ogg Opus file have been submitted. It is
-    /// then possible to start calculating the volume of a new file.
+    /// This should be called after all packets from an Ogg Opus file have been
+    /// submitted. It is then possible to start calculating the volume of a
+    /// new file.
     pub fn file_complete(&mut self) {
         if let Some(decode_state) = self.decode_state.take() {
             let windows = decode_state.get_windows();
@@ -191,12 +192,14 @@ impl VolumeAnalyzer {
         self.state = State::AwaitingHeader;
     }
 
-    /// Returns the mean LUFS of all completed files submitted to the volume analyzer so far
+    /// Returns the mean LUFS of all completed files submitted to the volume
+    /// analyzer so far
     pub fn mean_lufs(&self) -> Decibels { Self::gated_mean_to_lufs(self.windows.as_ref()) }
 
     /// Returns the LUFS of all tracks submitted ot the volume analyzer so far
     pub fn track_lufs(&self) -> Vec<Decibels> { self.track_loudness.clone() }
 
-    /// Returns the volume of the most recent track submitted to the volume analyzer
+    /// Returns the volume of the most recent track submitted to the volume
+    /// analyzer
     pub fn last_track_lufs(&self) -> Option<Decibels> { self.track_loudness.last().cloned() }
 }
