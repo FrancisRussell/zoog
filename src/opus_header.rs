@@ -39,8 +39,8 @@ impl<'a> OpusHeader<'a> {
         writer.write_i16::<LittleEndian>(gain.as_fixed_point()).expect("Error writing gain");
     }
 
-    /// Applies a delta to the header's output gain. This may return an error if the delta
-    /// causes the gain to overflow or underflow.
+    /// Applies a delta to the header's output gain. This may return an error if
+    /// the delta causes the gain to overflow or underflow.
     pub fn adjust_output_gain(&mut self, adjustment: FixedPointGain) -> Result<(), Error> {
         let gain = self.get_output_gain();
         let gain = gain.checked_add(adjustment).ok_or(Error::GainOutOfBounds)?;
