@@ -11,6 +11,7 @@
 * Add tests for `CommentHeader::replace()`.
 * Make `opusgain` print existing gains when leaving files unchanged.
 * Make `opusgain` print previous and new gains when altering files.
+* Make it clearer to Cargo what the licence is.
 
 ## 0.2.0
 
