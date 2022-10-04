@@ -1,4 +1,5 @@
 use bs1770::{ChannelLoudnessMeter, Power, Windows100ms};
+use derivative::Derivative;
 use ogg::Packet;
 use opus::{Channels, Decoder};
 
@@ -19,7 +20,10 @@ enum State {
     Analyzing,
 }
 
+#[derive(Derivative)]
+#[derivative(Debug)]
 struct DecodeStateChannel {
+    #[derivative(Debug = "ignore")]
     loudness_meter: ChannelLoudnessMeter,
     sample_buffer: Vec<f32>,
 }
@@ -30,6 +34,7 @@ impl DecodeStateChannel {
     }
 }
 
+#[derive(Debug)]
 struct DecodeState {
     channel_count: usize,
     _sample_rate: usize,
@@ -110,9 +115,12 @@ impl DecodeState {
 }
 
 /// Determines the volume in LUFS of one or more Ogg Opus files
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub struct VolumeAnalyzer {
     decode_state: Option<DecodeState>,
     state: State,
+    #[derivative(Debug = "ignore")]
     windows: Windows100ms<Vec<Power>>,
     track_loudness: Vec<Decibels>,
 }

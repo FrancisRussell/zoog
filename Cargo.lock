@@ -501,7 +501,7 @@ checksum = "c811ca4a8c853ef420abd8592ba53ddbbac90410fab6903b3e79972a631f7680"
 
 [[package]]
 name = "zoog"
-version = "0.3.0"
+version = "0.3.0-develop"
 dependencies = [
  "audiopus_sys",
  "bs1770",
