@@ -260,4 +260,50 @@ mod tests {
             _ => assert!(false, "Wrong error for malformed header"),
         };
     }
+
+    #[test]
+    fn replace_appends_on_missing() {
+        let key = "foo";
+        let value = "bar";
+
+        let mut data_1 = Vec::new();
+        let mut header_1 = CommentHeader::empty(&mut data_1);
+        header_1.append("v0", "k0");
+        header_1.append(key, value);
+        header_1.append("v1", "k1");
+
+        let mut data_2 = Vec::new();
+        let mut header_2 = CommentHeader::empty(&mut data_2);
+        header_2.append("v0", "k0");
+        header_2.replace(key, value);
+        header_2.append("v1", "k1");
+
+        assert_eq!(header_1, header_2);
+    }
+
+    #[test]
+    fn replace_replaces_on_duplicates() {
+        let mut data_1 = Vec::new();
+        let mut header_1 = CommentHeader::empty(&mut data_1);
+        header_1.append("v0", "k0");
+        header_1.append("v1", "k1");
+        header_1.append("v2", "k2");
+        header_1.append("v3", "k3");
+        header_1.append("v2", "k4");
+        header_1.append("v5", "k5");
+        header_1.append("v2", "k6");
+        header_1.append("v7", "k7");
+        header_1.replace("v2", "k8");
+
+        let mut data_2 = Vec::new();
+        let mut header_2 = CommentHeader::empty(&mut data_2);
+        header_2.append("v0", "k0");
+        header_2.append("v1", "k1");
+        header_2.append("v2", "k8");
+        header_2.append("v3", "k3");
+        header_2.append("v5", "k5");
+        header_2.append("v7", "k7");
+
+        assert_eq!(header_1, header_2);
+    }
 }

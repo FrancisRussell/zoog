@@ -7,6 +7,7 @@
 * Document API.
 * Remove code that printed to standard output and `verbose` flag from `Rewriter`.
 * Reduce likelihood of unnecessarily rewriting files due to tag reordering.
+* Add tests for `CommentHeader::replace()`.
 
 ## 0.2.0
 
