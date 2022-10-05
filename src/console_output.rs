@@ -170,15 +170,11 @@ where
     }
 
     fn flush_delayed_operations(&mut self) -> Result<(), io::Error> {
-        let out = self.inner.out();
-        let mut out = out.lock();
-        let err = self.inner.err();
-        let mut err = err.lock();
-        let mut out_writes = self.out.lock();
-        let mut err_writes = self.err.lock();
+        let (out, err) = (self.inner.out(), self.inner.err());
+        let (mut out, mut err) = (out.lock(), err.lock());
+        let (mut out_writes, mut err_writes) = (self.out.lock(), self.err.lock());
+        let (mut out_offset, mut err_offset) = (0, 0);
 
-        let mut out_offset = 0;
-        let mut err_offset = 0;
         loop {
             let next_is_stdout = match (out_writes.operations.back(), err_writes.operations.back()) {
                 (Some((out_id, _)), Some((err_id, _))) => out_id < err_id,
@@ -186,13 +182,13 @@ where
                 (None, Some(_)) => false,
                 (None, None) => break,
             };
-            let (writer, offset, data, op): (&mut dyn Write, _, _, _) = if next_is_stdout {
-                let (_id, op) = out_writes.operations.pop_back().expect("Unexpectedly failed to pop operation");
-                (&mut out, &mut out_offset, &out_writes.data, op)
+            let (writer, offset, writes): (&mut dyn Write, _, _) = if next_is_stdout {
+                (&mut out, &mut out_offset, &mut out_writes)
             } else {
-                let (_id, op) = err_writes.operations.pop_back().expect("Unexpectedly failed to pop operation");
-                (&mut err, &mut err_offset, &err_writes.data, op)
+                (&mut err, &mut err_offset, &mut err_writes)
             };
+            let (_id, op) = writes.operations.pop_back().expect("Unexpectedly failed to pop operation");
+            let data = &writes.data;
             match op {
                 StreamOperation::Write(length) => {
                     writer.write_all(&data[*offset..(*offset + length)])?;
@@ -203,8 +199,8 @@ where
                 }
             }
         }
-        *out_writes = StreamWrites::default();
-        *err_writes = StreamWrites::default();
+
+        (*out_writes, *err_writes) = (StreamWrites::default(), StreamWrites::default());
         Ok(())
     }
 }
