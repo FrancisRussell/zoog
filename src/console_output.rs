@@ -79,45 +79,49 @@ impl StreamWrites {
     }
 }
 
+#[derive(Debug, Default)]
+struct IdGenerator {
+    next: Mutex<usize>,
+}
+
+impl IdGenerator {
+    pub fn next(&self) -> usize {
+        let mut guard = self.next.lock();
+        let id = *guard;
+        *guard += 1;
+        id
+    }
+}
+
 #[derive(Debug)]
 pub struct DelayedConsoleOutput<W: ConsoleOutput> {
     inner: W,
-    next_id: Mutex<usize>,
+    id_generator: IdGenerator,
     out: Mutex<StreamWrites>,
     err: Mutex<StreamWrites>,
 }
 
 #[derive(Debug)]
 pub struct DelayedWriter<'a> {
-    next_id: &'a Mutex<usize>,
+    id_generator: &'a IdGenerator,
     writes: &'a Mutex<StreamWrites>,
 }
 
 #[derive(Debug)]
 pub struct LockedDelayedWriter<'a> {
-    next_id: &'a Mutex<usize>,
+    id_generator: &'a IdGenerator,
     writes: MutexGuard<'a, StreamWrites>,
 }
 
 impl<'a> Write for DelayedWriter<'a> {
     fn write(&mut self, data: &[u8]) -> Result<usize, io::Error> {
-        let id = {
-            let mut guard = self.next_id.lock();
-            let id = *guard;
-            *guard += 1;
-            id
-        };
+        let id = self.id_generator.next();
         let mut writes = self.writes.lock();
         writes.write(id, data)
     }
 
     fn flush(&mut self) -> Result<(), io::Error> {
-        let id = {
-            let mut guard = self.next_id.lock();
-            let id = *guard;
-            *guard += 1;
-            id
-        };
+        let id = self.id_generator.next();
         let mut writes = self.writes.lock();
         writes.flush(id)
     }
@@ -126,27 +130,19 @@ impl<'a> Write for DelayedWriter<'a> {
 impl<'a> LockableWriter for DelayedWriter<'a> {
     type Locked<'b> = LockedDelayedWriter<'b> where Self: 'b;
 
-    fn lock(&self) -> Self::Locked<'_> { LockedDelayedWriter { next_id: self.next_id, writes: self.writes.lock() } }
+    fn lock(&self) -> Self::Locked<'_> {
+        LockedDelayedWriter { id_generator: self.id_generator, writes: self.writes.lock() }
+    }
 }
 
 impl<'a> Write for LockedDelayedWriter<'a> {
     fn flush(&mut self) -> Result<(), io::Error> {
-        let id = {
-            let mut guard = self.next_id.lock();
-            let id = *guard;
-            *guard += 1;
-            id
-        };
+        let id = self.id_generator.next();
         self.writes.flush(id)
     }
 
     fn write(&mut self, data: &[u8]) -> Result<usize, io::Error> {
-        let id = {
-            let mut guard = self.next_id.lock();
-            let id = *guard;
-            *guard += 1;
-            id
-        };
+        let id = self.id_generator.next();
         self.writes.write(id, data)
     }
 }
@@ -155,9 +151,9 @@ impl<'a, W: ConsoleOutput> ConsoleOutput for &'a DelayedConsoleOutput<W> {
     type ErrStream<'b> = DelayedWriter<'b> where Self: 'b;
     type OutStream<'b> = DelayedWriter<'b> where Self: 'b;
 
-    fn out(&self) -> Self::OutStream<'_> { DelayedWriter { next_id: &self.next_id, writes: &self.out } }
+    fn out(&self) -> Self::OutStream<'_> { DelayedWriter { id_generator: &self.id_generator, writes: &self.out } }
 
-    fn err(&self) -> Self::OutStream<'_> { DelayedWriter { next_id: &self.next_id, writes: &self.err } }
+    fn err(&self) -> Self::OutStream<'_> { DelayedWriter { id_generator: &self.id_generator, writes: &self.err } }
 }
 
 impl<W> DelayedConsoleOutput<W>
@@ -165,7 +161,12 @@ where
     W: ConsoleOutput,
 {
     pub fn new(inner: W) -> DelayedConsoleOutput<W> {
-        DelayedConsoleOutput { inner, next_id: Mutex::new(0), out: Mutex::default(), err: Mutex::default() }
+        DelayedConsoleOutput {
+            inner,
+            id_generator: IdGenerator::default(),
+            out: Mutex::default(),
+            err: Mutex::default(),
+        }
     }
 
     fn flush_delayed_operations(&mut self) -> Result<(), io::Error> {
