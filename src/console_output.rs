@@ -1,5 +1,6 @@
 use std::collections::VecDeque;
 use std::io::{self, Stderr, Stdout, Write};
+use std::ops::DerefMut;
 
 use parking_lot::{Mutex, MutexGuard};
 
@@ -61,7 +62,7 @@ enum StreamOperation {
 }
 
 #[derive(Debug, Default)]
-struct StreamWrites {
+pub struct StreamWrites {
     data: Vec<u8>,
     operations: VecDeque<(usize, StreamOperation)>,
 }
@@ -101,19 +102,32 @@ pub struct DelayedConsoleOutput<W: ConsoleOutput> {
     err: Mutex<StreamWrites>,
 }
 
-#[derive(Debug)]
-pub struct DelayedWriter<'a> {
-    id_generator: &'a IdGenerator,
-    writes: &'a Mutex<StreamWrites>,
+pub trait Guarded<T> {
+    type Guard<'a>: DerefMut<Target = T>
+    where
+        Self: 'a;
+    fn lock(&mut self) -> Self::Guard<'_>;
+}
+
+impl<T> Guarded<T> for &Mutex<T> {
+    type Guard<'b> = MutexGuard<'b, T> where Self: 'b;
+
+    fn lock(&mut self) -> Self::Guard<'_> { Mutex::lock(self) }
+}
+
+impl<T> Guarded<T> for MutexGuard<'_, T> {
+    type Guard<'b> = &'b mut T where Self: 'b;
+
+    fn lock(&mut self) -> Self::Guard<'_> { &mut *self }
 }
 
 #[derive(Debug)]
-pub struct LockedDelayedWriter<'a> {
+pub struct DelayedWriter<'a, L: Guarded<StreamWrites>> {
     id_generator: &'a IdGenerator,
-    writes: MutexGuard<'a, StreamWrites>,
+    writes: L,
 }
 
-impl<'a> Write for DelayedWriter<'a> {
+impl<L: Guarded<StreamWrites>> Write for DelayedWriter<'_, L> {
     fn write(&mut self, data: &[u8]) -> Result<usize, io::Error> {
         let id = self.id_generator.next();
         let mut writes = self.writes.lock();
@@ -127,29 +141,15 @@ impl<'a> Write for DelayedWriter<'a> {
     }
 }
 
-impl<'a> LockableWriter for DelayedWriter<'a> {
-    type Locked<'b> = LockedDelayedWriter<'b> where Self: 'b;
+impl LockableWriter for DelayedWriter<'_, &Mutex<StreamWrites>> {
+    type Locked<'a> = DelayedWriter<'a, MutexGuard<'a, StreamWrites>> where Self: 'a;
 
-    fn lock(&self) -> Self::Locked<'_> {
-        LockedDelayedWriter { id_generator: self.id_generator, writes: self.writes.lock() }
-    }
+    fn lock(&self) -> Self::Locked<'_> { DelayedWriter { id_generator: self.id_generator, writes: self.writes.lock() } }
 }
 
-impl<'a> Write for LockedDelayedWriter<'a> {
-    fn flush(&mut self) -> Result<(), io::Error> {
-        let id = self.id_generator.next();
-        self.writes.flush(id)
-    }
-
-    fn write(&mut self, data: &[u8]) -> Result<usize, io::Error> {
-        let id = self.id_generator.next();
-        self.writes.write(id, data)
-    }
-}
-
-impl<'a, W: ConsoleOutput> ConsoleOutput for &'a DelayedConsoleOutput<W> {
-    type ErrStream<'b> = DelayedWriter<'b> where Self: 'b;
-    type OutStream<'b> = DelayedWriter<'b> where Self: 'b;
+impl<W: ConsoleOutput> ConsoleOutput for &DelayedConsoleOutput<W> {
+    type ErrStream<'a> = DelayedWriter<'a, &'a Mutex<StreamWrites>> where Self: 'a;
+    type OutStream<'a> = DelayedWriter<'a, &'a Mutex<StreamWrites>> where Self: 'a;
 
     fn out(&self) -> Self::OutStream<'_> { DelayedWriter { id_generator: &self.id_generator, writes: &self.out } }
 
