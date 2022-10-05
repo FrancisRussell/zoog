@@ -1,3 +1,6 @@
+#[path = "../console_output.rs"]
+mod console_output;
+
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter, Read, Seek, Write};
