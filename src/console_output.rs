@@ -176,7 +176,7 @@ where
         let (mut out_offset, mut err_offset) = (0, 0);
 
         loop {
-            let next_is_stdout = match (out_writes.operations.back(), err_writes.operations.back()) {
+            let next_is_stdout = match (out_writes.operations.front(), err_writes.operations.front()) {
                 (Some((out_id, _)), Some((err_id, _))) => out_id < err_id,
                 (Some(_), None) => true,
                 (None, Some(_)) => false,
@@ -187,7 +187,7 @@ where
             } else {
                 (&mut err, &mut err_offset, &mut err_writes)
             };
-            let (_id, op) = writes.operations.pop_back().expect("Unexpectedly failed to pop operation");
+            let (_id, op) = writes.operations.pop_front().expect("Unexpectedly failed to pop operation");
             let data = &writes.data;
             match op {
                 StreamOperation::Write(length) => {
