@@ -21,7 +21,7 @@ fn main() {
     match main_impl() {
         Ok(()) => {}
         Err(e) => {
-            eprintln!("Error was: {}", e);
+            eprintln!("Aborted due to error: {}", e);
             std::process::exit(1);
         }
     }
@@ -39,32 +39,44 @@ fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), Err
         .map_err(|e| Error::FileMove(PathBuf::from(from.as_ref()), PathBuf::from(to.as_ref()), e))
 }
 
-fn apply_volume_analysis<P, C>(analyzer: &mut VolumeAnalyzer, path: P, console_output: C) -> Result<(), Error>
+fn apply_volume_analysis<P, C>(
+    analyzer: &mut VolumeAnalyzer, path: P, console_output: C, report_error: bool,
+) -> Result<(), Error>
 where
     P: AsRef<Path>,
     C: ConsoleOutput,
 {
-    let input_path = path.as_ref();
-    let input_file = File::open(input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
-    let input_file = BufReader::new(input_file);
-    let mut ogg_reader = PacketReader::new(input_file);
-    loop {
-        match ogg_reader.read_packet() {
-            Err(e) => break Err(Error::OggDecode(e)),
-            Ok(None) => {
-                analyzer.file_complete();
-                writeln!(
-                    console_output.out(),
-                    "Computed loudness of {} as {:.2} LUFS (ignoring output gain)",
-                    input_path.to_string_lossy(),
-                    analyzer.last_track_lufs().expect("Last track volume unexpectedly missing").as_f64()
-                )
-                .map_err(Error::GenericIoError)?;
-                break Ok(());
+    let mut body = || {
+        let input_path = path.as_ref();
+        let input_file = File::open(input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
+        let input_file = BufReader::new(input_file);
+        let mut ogg_reader = PacketReader::new(input_file);
+        loop {
+            match ogg_reader.read_packet() {
+                Err(e) => break Err(Error::OggDecode(e)),
+                Ok(None) => {
+                    analyzer.file_complete();
+                    writeln!(
+                        console_output.out(),
+                        "Computed loudness of {} as {:.2} LUFS (ignoring output gain)",
+                        input_path.to_string_lossy(),
+                        analyzer.last_track_lufs().expect("Last track volume unexpectedly missing").as_f64()
+                    )
+                    .map_err(Error::GenericIoError)?;
+                    break Ok(());
+                }
+                Ok(Some(packet)) => analyzer.submit(packet)?,
             }
-            Ok(Some(packet)) => analyzer.submit(packet)?,
+        }
+    };
+    let result = body();
+    if report_error {
+        if let Err(ref e) = result {
+            writeln!(console_output.err(), "Failed to analyze volume of {:#?}: {}", path.as_ref(), e)
+                .map_err(Error::GenericIoError)?;
         }
     }
+    result
 }
 
 fn print_gains<C: ConsoleOutput>(gains: &OpusGains, console: C) -> Result<(), Error> {
@@ -109,7 +121,12 @@ where
 
     paths.into_par_iter().panic_fuse().try_for_each(|(idx, input_path)| -> Result<(), Error> {
         let mut analyzer = VolumeAnalyzer::default();
-        apply_volume_analysis(&mut analyzer, input_path.as_ref(), &DelayedConsoleOutput::new(console_output.clone()))?;
+        apply_volume_analysis(
+            &mut analyzer,
+            input_path.as_ref(),
+            &DelayedConsoleOutput::new(console_output.clone()),
+            true,
+        )?;
         tracks.lock().insert(
             input_path.as_ref().to_path_buf(),
             analyzer.last_track_lufs().expect("Track volume unexpectedly missing"),
@@ -257,97 +274,108 @@ fn main_impl() -> Result<(), Error> {
 
     input_files.into_par_iter().panic_fuse().try_for_each(|input_path| -> Result<(), Error> {
         let console = &DelayedConsoleOutput::new(&console_output);
-        writeln!(
-            console.out(),
-            "Processing file {} with target loudness of {}...",
-            &input_path.to_string_lossy(),
-            volume_target.to_friendly_string()
-        )
-        .map_err(Error::GenericIoError)?;
-        let track_volume = match &album_volume {
-            None => {
-                let mut analyzer = VolumeAnalyzer::default();
-                apply_volume_analysis(&mut analyzer, &input_path, console)?;
-                analyzer.last_track_lufs().expect("Last track volume unexpectedly missing")
-            }
-            Some(album_volume) => {
-                album_volume.get_track_mean(&input_path).expect("Could not find previously computed track volume")
-            }
-        };
-        let rewriter_config = RewriterConfig {
-            output_gain: volume_target,
-            output_gain_mode,
-            track_volume,
-            album_volume: album_volume.as_ref().map(|a| a.get_album_mean()),
-        };
-
-        let input_dir = input_path.parent().expect("Unable to find parent folder of input file");
-        let input_base = input_path.file_name().expect("Unable to find name of input file");
-        let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
-        let mut input_file = BufReader::new(input_file);
-
-        {
-            let rewrite_guard = rewrite_mutex.lock();
-            let mut output_file = if display_only {
-                OutputFile::Sink(io::sink())
-            } else {
-                let temp = tempfile::Builder::new()
-                    .prefix(input_base)
-                    .suffix("zoog")
-                    .tempfile_in(input_dir)
-                    .map_err(Error::TempFileOpenError)?;
-                OutputFile::Temp(temp)
-            };
-            let rewrite_result = {
-                let output_file = output_file.as_write();
-                let mut output_file = BufWriter::new(output_file);
-                rewrite_stream(&mut input_file, &mut output_file, &rewriter_config)
-            };
-            *num_processed.lock() += 1;
-
-            match rewrite_result {
-                Err(e) => {
-                    writeln!(console.err(), "Failure during processing of {:#?}.", input_path)
-                        .map_err(Error::GenericIoError)?;
-                    return Err(e);
+        let body = || {
+            writeln!(
+                console.out(),
+                "Processing file {} with target loudness of {}...",
+                &input_path.to_string_lossy(),
+                volume_target.to_friendly_string()
+            )
+            .map_err(Error::GenericIoError)?;
+            let track_volume = match &album_volume {
+                None => {
+                    let mut analyzer = VolumeAnalyzer::default();
+                    apply_volume_analysis(&mut analyzer, &input_path, console, false)?;
+                    analyzer.last_track_lufs().expect("Last track volume unexpectedly missing")
                 }
-                Ok(SubmitResult::Good) => {
-                    // Either we should already be normalized or get back a result which
-                    // indicated we changed the gains in the input file. If we get neither
-                    // then something weird happened.
-                    writeln!(console.err(), "File {:#?} appeared to be oddly truncated. Doing nothing.", input_path)
-                        .map_err(Error::GenericIoError)?;
+                Some(album_volume) => {
+                    album_volume.get_track_mean(&input_path).expect("Could not find previously computed track volume")
                 }
-                Ok(SubmitResult::ChangingGains { from: old_gains, to: new_gains }) => {
-                    match output_file {
-                        OutputFile::Temp(output_file) => {
-                            let mut backup_path = input_path.clone();
-                            backup_path.set_extension("zoog-orig");
-                            rename_file(&input_path, &backup_path)?;
-                            output_file
-                                .persist_noclobber(&input_path)
-                                .map_err(Error::PersistError)
-                                .and_then(|f| f.sync_all().map_err(Error::WriteError))?;
-                            remove_file_verbose(&backup_path);
-                        }
-                        OutputFile::Sink(_) => {}
+            };
+            let rewriter_config = RewriterConfig {
+                output_gain: volume_target,
+                output_gain_mode,
+                track_volume,
+                album_volume: album_volume.as_ref().map(|a| a.get_album_mean()),
+            };
+
+            let input_dir = input_path.parent().expect("Unable to find parent folder of input file");
+            let input_base = input_path.file_name().expect("Unable to find name of input file");
+            let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
+            let mut input_file = BufReader::new(input_file);
+
+            {
+                let rewrite_guard = rewrite_mutex.lock();
+                let mut output_file = if display_only {
+                    OutputFile::Sink(io::sink())
+                } else {
+                    let temp = tempfile::Builder::new()
+                        .prefix(input_base)
+                        .suffix("zoog")
+                        .tempfile_in(input_dir)
+                        .map_err(Error::TempFileOpenError)?;
+                    OutputFile::Temp(temp)
+                };
+                let rewrite_result = {
+                    let output_file = output_file.as_write();
+                    let mut output_file = BufWriter::new(output_file);
+                    rewrite_stream(&mut input_file, &mut output_file, &rewriter_config)
+                };
+                *num_processed.lock() += 1;
+
+                match rewrite_result {
+                    Err(e) => {
+                        writeln!(console.err(), "Failure during processing of {:#?}.", input_path)
+                            .map_err(Error::GenericIoError)?;
+                        return Err(e);
                     }
-                    writeln!(console.out(), "Old gain values:").map_err(Error::GenericIoError)?;
-                    print_gains(&old_gains, console)?;
-                    writeln!(console.out(), "New gain values:").map_err(Error::GenericIoError)?;
-                    print_gains(&new_gains, console)?;
-                }
-                Ok(SubmitResult::AlreadyNormalized(gains)) => {
-                    writeln!(console.out(), "All gains are already correct so doing nothing. Existing gains were:")
+                    Ok(SubmitResult::Good) => {
+                        // Either we should already be normalized or get back a result which
+                        // indicated we changed the gains in the input file. If we get neither
+                        // then something weird happened.
+                        writeln!(
+                            console.err(),
+                            "File {:#?} appeared to be oddly truncated. Doing nothing.",
+                            input_path
+                        )
                         .map_err(Error::GenericIoError)?;
-                    print_gains(&gains, console)?;
-                    *num_already_normalized.lock() += 1;
+                    }
+                    Ok(SubmitResult::ChangingGains { from: old_gains, to: new_gains }) => {
+                        match output_file {
+                            OutputFile::Temp(output_file) => {
+                                let mut backup_path = input_path.clone();
+                                backup_path.set_extension("zoog-orig");
+                                rename_file(&input_path, &backup_path)?;
+                                output_file
+                                    .persist_noclobber(&input_path)
+                                    .map_err(Error::PersistError)
+                                    .and_then(|f| f.sync_all().map_err(Error::WriteError))?;
+                                remove_file_verbose(&backup_path);
+                            }
+                            OutputFile::Sink(_) => {}
+                        }
+                        writeln!(console.out(), "Old gain values:").map_err(Error::GenericIoError)?;
+                        print_gains(&old_gains, console)?;
+                        writeln!(console.out(), "New gain values:").map_err(Error::GenericIoError)?;
+                        print_gains(&new_gains, console)?;
+                    }
+                    Ok(SubmitResult::AlreadyNormalized(gains)) => {
+                        writeln!(console.out(), "All gains are already correct so doing nothing. Existing gains were:")
+                            .map_err(Error::GenericIoError)?;
+                        print_gains(&gains, console)?;
+                        *num_already_normalized.lock() += 1;
+                    }
                 }
+                drop(rewrite_guard);
             }
-            drop(rewrite_guard);
+            Ok(())
+        };
+        let result = body();
+        if let Err(ref e) = result {
+            writeln!(console.err(), "Failed to rewrite {:#?}: {}", input_path, e).map_err(Error::GenericIoError)?;
         }
         writeln!(console.out()).map_err(Error::GenericIoError)?;
-        Ok(())
+        result
     })?;
 
     let num_processed = num_processed.into_inner();
