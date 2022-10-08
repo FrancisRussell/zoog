@@ -191,7 +191,7 @@ impl OutputFile {
 }
 
 fn main_impl() -> Result<(), Error> {
-    let cli = Cli::parse_from(wild::args());
+    let cli = Cli::parse_from(wild::args_os());
     let album_mode = cli.album;
 
     let output_gain_mode = match cli.output_gain_mode {
