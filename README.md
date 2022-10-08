@@ -124,6 +124,9 @@ The following options are available:
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
 
+`opusgain` supports Unix shell style wildcards under Windows, where wildcards
+must be handled by the application rather than expanded by the shell.
+
 ## Q & A
 
 ### How is loudness calculated?
