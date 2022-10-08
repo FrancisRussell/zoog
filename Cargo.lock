@@ -642,6 +642,7 @@ dependencies = [
  "byteorder",
  "clap",
  "derivative",
+ "num_cpus",
  "ogg",
  "opus",
  "parking_lot",

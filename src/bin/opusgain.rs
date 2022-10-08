@@ -12,6 +12,7 @@ use ogg::reading::PacketReader;
 use ogg::writing::PacketWriter;
 use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::ThreadPoolBuilder;
 use zoog::opus::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use zoog::rewriter::{OpusGains, OutputGainMode, Rewriter, RewriterConfig, SubmitResult, VolumeTarget};
 use zoog::volume_analyzer::VolumeAnalyzer;
@@ -221,6 +222,11 @@ struct Cli {
     #[clap(short, long, action)]
     /// Display output without performing any file modification.
     display_only: bool,
+
+    #[clap(value_parser, short='j', long, default_value_t = num_cpus::get())]
+    /// Number of threads to use for processing. Default is the number of cores
+    /// on the system.
+    num_threads: usize,
 }
 
 #[derive(Debug)]
@@ -241,6 +247,18 @@ impl OutputFile {
 fn main_impl() -> Result<(), Error> {
     let cli = Cli::parse_from(wild::args_os());
     let album_mode = cli.album;
+    let num_threads = if cli.num_threads == 0 {
+        eprintln!("The number of thread specified must be greater than 0.");
+        Err(Error::InvalidThreadCount)
+    } else {
+        let num_cores = num_cpus::get();
+        let rounded = std::cmp::min(cli.num_threads, num_cores);
+        if rounded != cli.num_threads {
+            eprintln!("Rounding down number of threads from {} to {}.", cli.num_threads, num_cores);
+        }
+        Ok(rounded)
+    }?;
+    ThreadPoolBuilder::new().num_threads(num_threads).build_global().expect("Failed to initialize thread pool");
 
     let output_gain_mode = match cli.output_gain_mode {
         OutputGainSetting::Auto => match album_mode {

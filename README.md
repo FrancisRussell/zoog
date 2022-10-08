@@ -121,6 +121,12 @@ The following options are available:
 * `--display-only`: Displays the same output that `opusgain` would otherwise
   produce, but does not make any changes to the supplied files.
 
+* '--num-threads=N`: Use `N` threads for processing. The default is to use the
+  number of cores detected on the system. Larger numbers will be rounded down
+  to this value. To avoid high disk space usage during processing, or a large
+  number of temporary files left around after an error, only one file will be
+  rewritten at a time regardless of the number of threads.
+
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
 

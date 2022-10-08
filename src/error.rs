@@ -66,4 +66,8 @@ pub enum Error {
     /// An IO error occurred (only for use when there is no other context)
     #[error("IO error: `{0}`")]
     GenericIoError(std::io::Error),
+
+    /// An invalid thread count was specified
+    #[error("An invalid number of threads was specified")]
+    InvalidThreadCount,
 }
