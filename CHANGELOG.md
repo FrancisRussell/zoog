@@ -14,6 +14,7 @@
 * Make it clearer to Cargo what the licence is.
 * Upgrade to `clap` version 4.
 * Use `wild` for wildcard support on Windows.
+* Enable parallel volume analysis of multiple files.
 
 ## 0.2.0
 
