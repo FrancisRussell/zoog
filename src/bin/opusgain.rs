@@ -154,19 +154,19 @@ struct Cli {
     /// Enable album mode
     album: bool,
 
-    #[clap(arg_enum, value_parser, short, long, default_value_t = Preset::ReplayGain)]
+    #[clap(value_enum, short, long, default_value_t = Preset::ReplayGain)]
     /// Normalizes to loudness used by ReplayGain (rg), EBU R 128 (r128) or
     /// the original source (original)
     preset: Preset,
 
-    #[clap(arg_enum, value_parser, short, long, default_value_t = OutputGainSetting::Auto)]
+    #[clap(value_enum, short, long, default_value_t = OutputGainSetting::Auto)]
     /// When "auto" is specified, each track's output gain is chosen to be
     /// per-track or per-album dependent on whether album mode is enabled.
     /// When "track" is specified, each file's output gain will be
     /// track-specific, even in album mode.
     output_gain_mode: OutputGainSetting,
 
-    #[clap(value_parser, required(true))]
+    #[clap(required(true))]
     /// The Opus files to process
     input_files: Vec<PathBuf>,
 
