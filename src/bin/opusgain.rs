@@ -223,7 +223,7 @@ struct Cli {
     /// Display output without performing any file modification.
     display_only: bool,
 
-    #[clap(value_parser, short='j', long, default_value_t = num_cpus::get())]
+    #[clap(short='j', long, default_value_t = num_cpus::get())]
     /// Number of threads to use for processing. Default is the number of cores
     /// on the system.
     num_threads: usize,
