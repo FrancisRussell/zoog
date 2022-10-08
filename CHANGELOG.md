@@ -12,6 +12,7 @@
 * Make `opusgain` print existing gains when leaving files unchanged.
 * Make `opusgain` print previous and new gains when altering files.
 * Make it clearer to Cargo what the licence is.
+* Upgrade to `clap` version 4.
 
 ## 0.2.0
 
