@@ -63,7 +63,7 @@ where
                         input_path.to_string_lossy(),
                         analyzer.last_track_lufs().expect("Last track volume unexpectedly missing").as_f64()
                     )
-                    .map_err(Error::GenericIoError)?;
+                    .map_err(Error::ConsoleIoError)?;
                     break Ok(());
                 }
                 Ok(Some(packet)) => analyzer.submit(packet)?,
@@ -74,7 +74,7 @@ where
     if report_error {
         if let Err(ref e) = result {
             writeln!(console_output.err(), "Failed to analyze volume of {:#?}: {}", path.as_ref(), e)
-                .map_err(Error::GenericIoError)?;
+                .map_err(Error::ConsoleIoError)?;
         }
     }
     result
@@ -91,7 +91,7 @@ fn print_gains<C: ConsoleOutput>(gains: &OpusGains, console: C) -> Result<(), Er
         }
         Ok(())
     };
-    do_io().map_err(Error::GenericIoError)
+    do_io().map_err(Error::ConsoleIoError)
 }
 
 #[derive(Debug)]
@@ -299,7 +299,7 @@ fn main_impl() -> Result<(), Error> {
                 &input_path.to_string_lossy(),
                 volume_target.to_friendly_string()
             )
-            .map_err(Error::GenericIoError)?;
+            .map_err(Error::ConsoleIoError)?;
             let track_volume = match &album_volume {
                 None => {
                     let mut analyzer = VolumeAnalyzer::default();
@@ -344,7 +344,7 @@ fn main_impl() -> Result<(), Error> {
                 match rewrite_result {
                     Err(e) => {
                         writeln!(console.err(), "Failure during processing of {:#?}.", input_path)
-                            .map_err(Error::GenericIoError)?;
+                            .map_err(Error::ConsoleIoError)?;
                         return Err(e);
                     }
                     Ok(SubmitResult::Good) => {
@@ -356,7 +356,7 @@ fn main_impl() -> Result<(), Error> {
                             "File {:#?} appeared to be oddly truncated. Doing nothing.",
                             input_path
                         )
-                        .map_err(Error::GenericIoError)?;
+                        .map_err(Error::ConsoleIoError)?;
                     }
                     Ok(SubmitResult::ChangingGains { from: old_gains, to: new_gains }) => {
                         match output_file {
@@ -372,14 +372,14 @@ fn main_impl() -> Result<(), Error> {
                             }
                             OutputFile::Sink(_) => {}
                         }
-                        writeln!(console.out(), "Old gain values:").map_err(Error::GenericIoError)?;
+                        writeln!(console.out(), "Old gain values:").map_err(Error::ConsoleIoError)?;
                         print_gains(&old_gains, console)?;
-                        writeln!(console.out(), "New gain values:").map_err(Error::GenericIoError)?;
+                        writeln!(console.out(), "New gain values:").map_err(Error::ConsoleIoError)?;
                         print_gains(&new_gains, console)?;
                     }
                     Ok(SubmitResult::AlreadyNormalized(gains)) => {
                         writeln!(console.out(), "All gains are already correct so doing nothing. Existing gains were:")
-                            .map_err(Error::GenericIoError)?;
+                            .map_err(Error::ConsoleIoError)?;
                         print_gains(&gains, console)?;
                         *num_already_normalized.lock() += 1;
                     }
@@ -390,9 +390,9 @@ fn main_impl() -> Result<(), Error> {
         };
         let result = body();
         if let Err(ref e) = result {
-            writeln!(console.err(), "Failed to rewrite {:#?}: {}", input_path, e).map_err(Error::GenericIoError)?;
+            writeln!(console.err(), "Failed to rewrite {:#?}: {}", input_path, e).map_err(Error::ConsoleIoError)?;
         }
-        writeln!(console.out()).map_err(Error::GenericIoError)?;
+        writeln!(console.out()).map_err(Error::ConsoleIoError)?;
         result
     })?;
 

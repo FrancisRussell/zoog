@@ -63,9 +63,9 @@ pub enum Error {
     #[error("Opus error: `{0}`")]
     OpusError(opus::Error),
 
-    /// An IO error occurred (only for use when there is no other context)
-    #[error("IO error: `{0}`")]
-    GenericIoError(std::io::Error),
+    /// An IO error occurred when interacting with the console
+    #[error("Console IO error: `{0}`")]
+    ConsoleIoError(std::io::Error),
 
     /// An invalid thread count was specified
     #[error("An invalid number of threads was specified")]
