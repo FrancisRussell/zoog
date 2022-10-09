@@ -28,16 +28,14 @@ fn main() {
     }
 }
 
-fn remove_file_verbose<P: AsRef<Path>>(path: P) {
+fn remove_file<P: AsRef<Path>>(path: P) -> Result<(), Error> {
     let path = path.as_ref();
-    if let Err(e) = std::fs::remove_file(path) {
-        eprintln!("Unable to delete {} due to error {}", path.display(), e);
-    }
+    std::fs::remove_file(path).map_err(|e| Error::FileDelete(path.to_path_buf(), e))
 }
 
 fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), Error> {
-    std::fs::rename(from.as_ref(), to.as_ref())
-        .map_err(|e| Error::FileMove(PathBuf::from(from.as_ref()), PathBuf::from(to.as_ref()), e))
+    let (from, to) = (from.as_ref(), to.as_ref());
+    std::fs::rename(from, to).map_err(|e| Error::FileMove(from.to_path_buf(), to.to_path_buf(), e))
 }
 
 fn apply_volume_analysis<P, C>(
@@ -339,6 +337,7 @@ fn main_impl() -> Result<(), Error> {
                     let mut output_file = BufWriter::new(output_file);
                     rewrite_stream(&mut input_file, &mut output_file, &rewriter_config)
                 };
+                drop(input_file); // Close to avoid potential issues with renaming
                 *num_processed.lock() += 1;
 
                 match rewrite_result {
@@ -364,11 +363,26 @@ fn main_impl() -> Result<(), Error> {
                                 let mut backup_path = input_path.clone();
                                 backup_path.set_extension("zoog-orig");
                                 rename_file(&input_path, &backup_path)?;
-                                output_file
+                                // Note that the `and_then` also causes the file to be closed
+                                let persist_result = output_file
                                     .persist_noclobber(&input_path)
                                     .map_err(Error::PersistError)
-                                    .and_then(|f| f.sync_all().map_err(Error::WriteError))?;
-                                remove_file_verbose(&backup_path);
+                                    .and_then(|f| f.sync_all().map_err(Error::WriteError));
+                                match persist_result {
+                                    Ok(_) => remove_file(backup_path),
+                                    Err(e) => {
+                                        // If a partially persisted file exists at the original's
+                                        // path, we want to remove it so the user doesn't mistake it for the original
+                                        let _ = remove_file(&input_path);
+                                        writeln!(
+                                            console.err(),
+                                            "Failed to persist rewritten file. The original can be found at {}",
+                                            backup_path.display()
+                                        )
+                                        .map_err(Error::ConsoleIoError)?;
+                                        Err(e)
+                                    }
+                                }?;
                             }
                             OutputFile::Sink(_) => {}
                         }

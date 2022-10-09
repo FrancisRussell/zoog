@@ -51,6 +51,10 @@ pub enum Error {
     #[error("Failed to rename `{0}` to `{1}` due to `{2}`")]
     FileMove(PathBuf, PathBuf, std::io::Error),
 
+    /// An error occurred during a file deletion
+    #[error("Failed to delete `{0}` due to `{1}`")]
+    FileDelete(PathBuf, std::io::Error),
+
     /// A temporary file could not be persisted
     #[error("Failed to persist temporary file due to `{0}`")]
     PersistError(#[from] PersistError),
