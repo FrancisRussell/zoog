@@ -137,6 +137,9 @@ The following options are available:
   number of temporary files left around after an error, only one file will be
   rewritten at a time regardless of the number of threads.
 
+* `-c, --clear`: Remove all `R128` tags from the specified files. The output
+  gain of each file is unchanged, regardless of the specified preset.
+
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
 
