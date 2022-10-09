@@ -18,6 +18,11 @@ what volume to play an Opus-encoded audio file at.
 
 It is intended to solve the "Opus plays too quietly" problem.
 
+Although `zoog` exposes a library, its API is unstable and this package is
+released on [crates.io](https://crates.io/) primarily to allow access to the
+`opusgain` tool.  The API is documented however, and the reading the source may
+prove useful to anyone else wishing to work with Ogg Opus files.
+
 ## Background
 
 Opus-encoded audio files contain an [‘output
