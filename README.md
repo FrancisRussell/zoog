@@ -77,45 +77,41 @@ The following options are available:
 
 * `-p PRESET, --preset=PRESET`
 
-  * `original`: In this mode, `opusgain` will set the output gain in the Opus
-    binary header to 0dB. In players that do not support `R128` tags, this will
-    cause the Opus file to play back at the volume of the originally encoded
-    source. You may want this if you prefer volume normalization to only occur
-    via tags.
+  * `original`: Set the output gain in the Opus binary header to 0dB. In
+    players that do not support `R128` tags, this will cause the Opus file to
+    play back at the volume of the originally encoded source. You may want this
+    if you prefer volume normalization to only occur via tags.
 
-  * `rg`: In this mode, `opusgain` will set the output gain in the Opus binary
-  header to the value that ensures playback will occur at -18 LUFS, which
-  should match the loudness of ReplayGain normalized files.  This is probably
-  the best option when you have a player that doesn't know about Opus `R128`
-  tags, but:
+  * `rg`: Set the output gain in the Opus binary header to the value that
+    ensures playback will occur at -18 LUFS, which should match the loudness of
+    ReplayGain normalized files.  This is probably the best option when you
+    have a player that doesn't know about Opus `R128` tags, but:
     * does support ReplayGain for the other file formats you use, and/or
     * the files you play have been adjusted in a player-agnostic way
       ([mp3gain](http://mp3gain.sourceforge.net/) and
       [aacgain](http://aacgain.altosdesign.com/) can do this) to the ReplayGain
       reference volume.
 
-  * `r128`: In this mode, `opusgain` will set the output gain in the Opus
-    binary header to the value that ensures playback will occur at -23 LUFS,
-    which should match the loudness of files produced by `opusenc` from FLAC
-    files which contained ReplayGain information. You're unlikely to want this
-    option as the main use of `opusgain` is modify files which were generated
-    this way.
+  * `r128`: Set the output gain in the Opus binary header to the value that
+    ensures playback will occur at -23 LUFS, which should match the loudness of
+    files produced by `opusenc` from FLAC files which contained ReplayGain
+    information.
 
 * `-o MODE, --output-gain-mode=MODE`
 
-  * `auto`: In this mode, `opusgain` will set the output gain in the Opus
-    binary header such that each track is album-normalized in album mode, or
-    track-normalized otherwise. In album mode, this results in all tracks
-    having the same output gain value as well as the same `R128_ALBUM_GAIN`
-    tag.
-  * `track`: In this mode, `opusgain` will set the output gain in the Opus
-    binary header such that each track is track-normalized, even if album mode
-    is enabled. In album mode, this results in all tracks being given different
-    output gain values as well as different `R128_ALBUM_GAIN` tags, but their
-    `R128_TRACK_GAIN` tags will be identical.  Unless you know what you're
-    doing, you probably don't want this option.
+  * `auto`: Set the output gain in the Opus binary header such that each track
+    is album-normalized in album mode, or track-normalized otherwise. In album
+    mode, this results in all tracks having the same output gain value as well
+    as the same `R128_ALBUM_GAIN` tag.
 
-* `-a, --album`: Enables album mode. In this mode `R128_ALBUM_GAIN` tags will also be
+  * `track`: Set the output gain in the Opus binary header such that each track
+    is track-normalized, even if album mode is enabled. In album mode, this
+    results in all tracks being given different output gain values as well as
+    different `R128_ALBUM_GAIN` tags, but their `R128_TRACK_GAIN` tags will be
+    identical.  Unless you know what you're doing, you probably don't want this
+    option.
+
+* `-a, --album`: Enables album mode. This causes `R128_ALBUM_GAIN` tags to also be
   generated. These tell players that support these tags what gain to apply so
   that each track in the album maintains its relative loudness. By default the
   output gain value for each file will be set to identical values in order to
