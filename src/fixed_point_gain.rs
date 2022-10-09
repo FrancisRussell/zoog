@@ -49,6 +49,10 @@ impl TryFrom<Decibels> for FixedPointGain {
     }
 }
 
+impl From<FixedPointGain> for Decibels {
+    fn from(gain: FixedPointGain) -> Decibels { gain.as_decibels() }
+}
+
 impl FromStr for FixedPointGain {
     type Err = <i16 as FromStr>::Err;
 

@@ -154,15 +154,9 @@ impl<W: Write> Rewriter<'_, W> {
                         Err(e) => return Err(e),
                     };
                     let existing_gains = OpusGains {
-                        output: opus_header.get_output_gain().as_decibels(),
-                        track_r128: comment_header
-                            .get_gain_from_tag(TAG_TRACK_GAIN)
-                            .unwrap_or(None)
-                            .map(|g| g.as_decibels()),
-                        album_r128: comment_header
-                            .get_gain_from_tag(TAG_ALBUM_GAIN)
-                            .unwrap_or(None)
-                            .map(|g| g.as_decibels()),
+                        output: opus_header.get_output_gain().into(),
+                        track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).unwrap_or(None).map(|g| g.into()),
+                        album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).unwrap_or(None).map(|g| g.into()),
                     };
                     let new_header_gain = match self.config.output_gain {
                         VolumeTarget::ZeroGain => FixedPointGain::default(),
@@ -176,19 +170,19 @@ impl<W: Write> Rewriter<'_, W> {
                         VolumeTarget::NoChange => opus_header.get_output_gain(),
                     };
                     let track_gain_r128 = if let Some(track_volume) = self.config.track_volume {
-                        Some(FixedPointGain::try_from(R128_LUFS - track_volume - new_header_gain.as_decibels())?)
+                        Some(FixedPointGain::try_from(R128_LUFS - track_volume - new_header_gain.into())?)
                     } else {
                         None
                     };
                     let album_gain_r128 = if let Some(album_volume) = self.config.album_volume {
-                        Some(FixedPointGain::try_from(R128_LUFS - album_volume - new_header_gain.as_decibels())?)
+                        Some(FixedPointGain::try_from(R128_LUFS - album_volume - new_header_gain.into())?)
                     } else {
                         None
                     };
                     let new_gains = OpusGains {
-                        output: new_header_gain.as_decibels(),
-                        track_r128: track_gain_r128.map(|g| g.as_decibels()),
-                        album_r128: album_gain_r128.map(|g| g.as_decibels()),
+                        output: new_header_gain.into(),
+                        track_r128: track_gain_r128.map(|g| g.into()),
+                        album_r128: album_gain_r128.map(|g| g.into()),
                     };
                     opus_header.set_output_gain(new_header_gain);
                     for (tag, gain) in [(TAG_TRACK_GAIN, track_gain_r128), (TAG_ALBUM_GAIN, album_gain_r128)] {
