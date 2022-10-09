@@ -186,6 +186,8 @@ enum Preset {
     R128,
     #[clap(name = "original")]
     ZeroGain,
+    #[clap(name = "no-change")]
+    NoChange,
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -202,8 +204,8 @@ struct Cli {
     album: bool,
 
     #[clap(value_enum, short, long, default_value_t = Preset::ReplayGain)]
-    /// Normalizes to loudness used by ReplayGain (rg), EBU R 128 (r128) or
-    /// the original source (original)
+    /// Adjusts the output gain so that the loudness is that specified by ReplayGain (rg), EBU R
+    /// 128 (r128), the original source (original) or leaves the output gain unchanged (no-change).
     preset: Preset,
 
     #[clap(value_enum, short, long, default_value_t = OutputGainSetting::Auto)]
@@ -269,6 +271,7 @@ fn main_impl() -> Result<(), Error> {
         Preset::ReplayGain => VolumeTarget::LUFS(REPLAY_GAIN_LUFS),
         Preset::R128 => VolumeTarget::LUFS(R128_LUFS),
         Preset::ZeroGain => VolumeTarget::ZeroGain,
+        Preset::NoChange => VolumeTarget::NoChange,
     };
 
     let num_processed = Mutex::new(0);

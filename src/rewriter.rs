@@ -16,6 +16,9 @@ pub enum VolumeTarget {
 
     /// A target volume for a track or album relative to full scale.
     LUFS(Decibels),
+
+    /// The gain should remain the same as it already is
+    NoChange,
 }
 
 /// Represents whether output gain relative to full scale should be targetted to
@@ -59,6 +62,7 @@ impl VolumeTarget {
         match *self {
             VolumeTarget::ZeroGain => String::from("original input"),
             VolumeTarget::LUFS(lufs) => format!("{:.2} LUFS", lufs.as_f64()),
+            VolumeTarget::NoChange => String::from("existing gain value"),
         }
     }
 }
@@ -166,6 +170,7 @@ impl<W: Write> Rewriter<'_, W> {
                         VolumeTarget::LUFS(target_lufs) => {
                             FixedPointGain::try_from(target_lufs - volume_for_output_gain)?
                         }
+                        VolumeTarget::NoChange => opus_header.get_output_gain(),
                     };
                     let track_gain_r128 =
                         FixedPointGain::try_from(R128_LUFS - self.config.track_volume - new_header_gain.as_decibels())?;
