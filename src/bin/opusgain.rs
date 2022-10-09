@@ -31,7 +31,7 @@ fn main() {
 fn remove_file_verbose<P: AsRef<Path>>(path: P) {
     let path = path.as_ref();
     if let Err(e) = std::fs::remove_file(path) {
-        eprintln!("Unable to delete {} due to error {}", path.to_string_lossy(), e);
+        eprintln!("Unable to delete {} due to error {}", path.display(), e);
     }
 }
 
@@ -60,7 +60,7 @@ where
                     writeln!(
                         console_output.out(),
                         "Computed loudness of {} as {:.2} LUFS (ignoring output gain)",
-                        input_path.to_string_lossy(),
+                        input_path.display(),
                         analyzer.last_track_lufs().expect("Last track volume unexpectedly missing").as_f64()
                     )
                     .map_err(Error::ConsoleIoError)?;
@@ -73,7 +73,7 @@ where
     let result = body();
     if report_error {
         if let Err(ref e) = result {
-            writeln!(console_output.err(), "Failed to analyze volume of {:#?}: {}", path.as_ref(), e)
+            writeln!(console_output.err(), "Failed to analyze volume of {}: {}", path.as_ref().display(), e)
                 .map_err(Error::ConsoleIoError)?;
         }
     }
@@ -296,7 +296,7 @@ fn main_impl() -> Result<(), Error> {
             writeln!(
                 console.out(),
                 "Processing file {} with target loudness of {}...",
-                &input_path.to_string_lossy(),
+                &input_path.display(),
                 volume_target.to_friendly_string()
             )
             .map_err(Error::ConsoleIoError)?;
@@ -343,7 +343,7 @@ fn main_impl() -> Result<(), Error> {
 
                 match rewrite_result {
                     Err(e) => {
-                        writeln!(console.err(), "Failure during processing of {:#?}.", input_path)
+                        writeln!(console.err(), "Failure during processing of {}.", input_path.display())
                             .map_err(Error::ConsoleIoError)?;
                         return Err(e);
                     }
@@ -353,8 +353,8 @@ fn main_impl() -> Result<(), Error> {
                         // then something weird happened.
                         writeln!(
                             console.err(),
-                            "File {:#?} appeared to be oddly truncated. Doing nothing.",
-                            input_path
+                            "File {} appeared to be oddly truncated. Doing nothing.",
+                            input_path.display(),
                         )
                         .map_err(Error::ConsoleIoError)?;
                     }
@@ -390,7 +390,8 @@ fn main_impl() -> Result<(), Error> {
         };
         let result = body();
         if let Err(ref e) = result {
-            writeln!(console.err(), "Failed to rewrite {:#?}: {}", input_path, e).map_err(Error::ConsoleIoError)?;
+            writeln!(console.err(), "Failed to rewrite {}: {}", input_path.display(), e)
+                .map_err(Error::ConsoleIoError)?;
         }
         writeln!(console.out()).map_err(Error::ConsoleIoError)?;
         result
