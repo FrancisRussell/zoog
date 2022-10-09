@@ -337,6 +337,7 @@ fn main_impl() -> Result<(), Error> {
                     let mut output_file = BufWriter::new(output_file);
                     rewrite_stream(&mut input_file, &mut output_file, &rewriter_config)
                 };
+                drop(input_file); // Close to avoid potential issues with renaming
                 *num_processed.lock() += 1;
 
                 match rewrite_result {
@@ -362,6 +363,7 @@ fn main_impl() -> Result<(), Error> {
                                 let mut backup_path = input_path.clone();
                                 backup_path.set_extension("zoog-orig");
                                 rename_file(&input_path, &backup_path)?;
+                                // Note that the `and_then` also causes the file to be closed
                                 let persist_result = output_file
                                     .persist_noclobber(&input_path)
                                     .map_err(Error::PersistError)
