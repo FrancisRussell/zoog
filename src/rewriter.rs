@@ -98,20 +98,20 @@ enum State {
 }
 
 /// Re-writes an Ogg Opus stream with new output gain and comment gain values
-pub struct Rewriter<W: Write> {
-    packet_writer: PacketWriter<W>,
+pub struct Rewriter<'a, W: Write> {
+    packet_writer: PacketWriter<'a, W>,
     header_packet: Option<Packet>,
     state: State,
     packet_queue: VecDeque<Packet>,
     config: RewriterConfig,
 }
 
-impl<W: Write> Rewriter<W> {
+impl<W: Write> Rewriter<'_, W> {
     /// Constructs a new rewriter
     /// - `config` - the configuration for volume rewriting.
     /// - `packet_writer` - the Ogg stream writer that the rewritten packets
     ///   will be sent to.
-    pub fn new(config: &RewriterConfig, packet_writer: PacketWriter<W>) -> Rewriter<W> {
+    pub fn new<'a>(config: &RewriterConfig, packet_writer: PacketWriter<'a, W>) -> Rewriter<'a, W> {
         Rewriter {
             packet_writer,
             header_packet: None,
@@ -228,7 +228,7 @@ impl<W: Write> Rewriter<W> {
             let packet_granule = packet.absgp_page();
 
             self.packet_writer
-                .write_packet(packet.data.into_boxed_slice(), packet_serial, packet_info, packet_granule)
+                .write_packet(packet.data, packet_serial, packet_info, packet_granule)
                 .map_err(Error::WriteError)?;
         }
         Ok(SubmitResult::Good)
