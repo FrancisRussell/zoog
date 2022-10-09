@@ -224,6 +224,15 @@ for a release build.
 
 Built binaries can be found in `target/debug` or `target/release`.
 
+## Installation via `cargo`
+
+At the command line, simply run
+```
+$ cargo install zoog
+```
+
+`opusgain` should now be available in the path.
+
 ## Releases
 
 Zoog binaries for Windows, MacOS and Linux can be found on the [releases
