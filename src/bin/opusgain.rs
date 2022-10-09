@@ -204,8 +204,9 @@ struct Cli {
     album: bool,
 
     #[clap(value_enum, short, long, default_value_t = Preset::ReplayGain)]
-    /// Adjusts the output gain so that the loudness is that specified by ReplayGain (rg), EBU R
-    /// 128 (r128), the original source (original) or leaves the output gain unchanged (no-change).
+    /// Adjusts the output gain so that the loudness is that specified by
+    /// ReplayGain (rg), EBU R 128 (r128), the original source (original) or
+    /// leaves the output gain unchanged (no-change).
     preset: Preset,
 
     #[clap(value_enum, short, long, default_value_t = OutputGainSetting::Auto)]
@@ -227,6 +228,11 @@ struct Cli {
     /// Number of threads to use for processing. Default is the number of cores
     /// on the system.
     num_threads: usize,
+
+    #[clap(short, long, action)]
+    /// Clear all R128 tags from the specified files. Output gain will remain
+    /// unchanged regardless of the specified preset.
+    clear: bool,
 }
 
 #[derive(Debug)]
@@ -274,10 +280,18 @@ fn main_impl() -> Result<(), Error> {
         Preset::NoChange => VolumeTarget::NoChange,
     };
 
+    let display_only = cli.display_only;
+    let clear = cli.clear;
+    let (album_mode, volume_target) = if clear {
+        // We do not compute album loudness or change output gain when clearing tags
+        (false, VolumeTarget::NoChange)
+    } else {
+        (album_mode, volume_target)
+    };
+
     let num_processed = Mutex::new(0);
     let num_already_normalized = Mutex::new(0);
 
-    let display_only = cli.display_only;
     if display_only {
         println!("Display-only mode is enabled so no files will actually be modified.\n");
     }
@@ -301,15 +315,19 @@ fn main_impl() -> Result<(), Error> {
                 volume_target.to_friendly_string()
             )
             .map_err(Error::ConsoleIoError)?;
-            let track_volume = match &album_volume {
-                None => {
-                    let mut analyzer = VolumeAnalyzer::default();
-                    apply_volume_analysis(&mut analyzer, &input_path, console, false)?;
-                    analyzer.last_track_lufs().expect("Last track volume unexpectedly missing")
-                }
-                Some(album_volume) => {
-                    album_volume.get_track_mean(&input_path).expect("Could not find previously computed track volume")
-                }
+            let track_volume = if clear {
+                None
+            } else {
+                Some(match &album_volume {
+                    None => {
+                        let mut analyzer = VolumeAnalyzer::default();
+                        apply_volume_analysis(&mut analyzer, &input_path, console, false)?;
+                        analyzer.last_track_lufs().expect("Last track volume unexpectedly missing")
+                    }
+                    Some(album_volume) => album_volume
+                        .get_track_mean(&input_path)
+                        .expect("Could not find previously computed track volume"),
+                })
             };
             let rewriter_config = RewriterConfig {
                 output_gain: volume_target,

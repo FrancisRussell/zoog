@@ -17,6 +17,7 @@
 * Enable parallel volume analysis of multiple files.
 * Ensure input file is closed before renaming.
 * Add option to generate tags without changing output gain.
+* Add option to clear `R128` tags from specified files.
 
 ## 0.2.0
 

@@ -38,19 +38,19 @@ pub struct RewriterConfig {
     /// Whether the rewritten output gain should target track or album volume
     pub output_gain_mode: OutputGainMode,
 
-    /// The pre-computed volume of the track to be rewritten
-    pub track_volume: Decibels,
+    /// The pre-computed volume of the track to be rewritten (if available)
+    pub track_volume: Option<Decibels>,
 
-    /// The precomputed volume of the album the track belongs to (if available)
+    /// The pre-computed volume of the album the track belongs to (if available)
     pub album_volume: Option<Decibels>,
 }
 
 impl RewriterConfig {
     /// Computes the source volume that will be used for the output gain
     /// calculation
-    pub fn volume_for_output_gain_calculation(&self) -> Decibels {
+    pub fn volume_for_output_gain_calculation(&self) -> Option<Decibels> {
         match self.output_gain_mode {
-            OutputGainMode::Album => self.album_volume.unwrap_or(self.track_volume),
+            OutputGainMode::Album => self.album_volume,
             OutputGainMode::Track => self.track_volume,
         }
     }
@@ -164,16 +164,22 @@ impl<W: Write> Rewriter<'_, W> {
                             .unwrap_or(None)
                             .map(|g| g.as_decibels()),
                     };
-                    let volume_for_output_gain = self.config.volume_for_output_gain_calculation();
                     let new_header_gain = match self.config.output_gain {
                         VolumeTarget::ZeroGain => FixedPointGain::default(),
                         VolumeTarget::LUFS(target_lufs) => {
+                            let volume_for_output_gain = self
+                                .config
+                                .volume_for_output_gain_calculation()
+                                .expect("Precomputed volume unexpectedly missing");
                             FixedPointGain::try_from(target_lufs - volume_for_output_gain)?
                         }
                         VolumeTarget::NoChange => opus_header.get_output_gain(),
                     };
-                    let track_gain_r128 =
-                        FixedPointGain::try_from(R128_LUFS - self.config.track_volume - new_header_gain.as_decibels())?;
+                    let track_gain_r128 = if let Some(track_volume) = self.config.track_volume {
+                        Some(FixedPointGain::try_from(R128_LUFS - track_volume - new_header_gain.as_decibels())?)
+                    } else {
+                        None
+                    };
                     let album_gain_r128 = if let Some(album_volume) = self.config.album_volume {
                         Some(FixedPointGain::try_from(R128_LUFS - album_volume - new_header_gain.as_decibels())?)
                     } else {
@@ -181,15 +187,16 @@ impl<W: Write> Rewriter<'_, W> {
                     };
                     let new_gains = OpusGains {
                         output: new_header_gain.as_decibels(),
-                        track_r128: Some(track_gain_r128.as_decibels()),
+                        track_r128: track_gain_r128.map(|g| g.as_decibels()),
                         album_r128: album_gain_r128.map(|g| g.as_decibels()),
                     };
                     opus_header.set_output_gain(new_header_gain);
-                    comment_header.replace(TAG_TRACK_GAIN, &format!("{}", track_gain_r128.as_fixed_point()));
-                    if let Some(album_gain_r128) = album_gain_r128 {
-                        comment_header.replace(TAG_ALBUM_GAIN, &format!("{}", album_gain_r128.as_fixed_point()));
-                    } else {
-                        comment_header.remove_all(TAG_ALBUM_GAIN);
+                    for (tag, gain) in [(TAG_TRACK_GAIN, track_gain_r128), (TAG_ALBUM_GAIN, album_gain_r128)] {
+                        if let Some(gain) = gain {
+                            comment_header.replace(tag, &format!("{}", gain.as_fixed_point()));
+                        } else {
+                            comment_header.remove_all(tag);
+                        }
                     }
 
                     // We have decoded both of these already, so these should never fail
