@@ -16,6 +16,7 @@
 * Use `wild` for wildcard support on Windows.
 * Enable parallel volume analysis of multiple files.
 * Ensure input file is closed before renaming.
+* Add option to generate tags without changing output gain.
 
 ## 0.2.0
 

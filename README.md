@@ -82,6 +82,9 @@ The following options are available:
 
 * `-p PRESET, --preset=PRESET`
 
+  It is recommended to specify this value explicitly, as the default
+  may change.
+
   * `original`: Set the output gain in the Opus binary header to 0dB. In
     players that do not support `R128` tags, this will cause the Opus file to
     play back at the volume of the originally encoded source. You may want this
@@ -101,6 +104,8 @@ The following options are available:
     ensures playback will occur at -23 LUFS, which should match the loudness of
     files produced by `opusenc` from FLAC files which contained ReplayGain
     information.
+
+  * `no-change`: Do not change the output gain in the Opus binary header.
 
 * `-o MODE, --output-gain-mode=MODE`
 
