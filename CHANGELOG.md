@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* No changes yet.
+
 ## 0.3.0
 
 * Fix incorrect help text which still called the "original" option "none".
