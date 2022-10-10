@@ -18,6 +18,11 @@ what volume to play an Opus-encoded audio file at.
 
 It is intended to solve the "Opus plays too quietly" problem.
 
+Although `zoog` exposes a library, its API is unstable and this package is
+released on [crates.io](https://crates.io/) primarily to allow access to the
+`opusgain` tool.  The API is documented however, and the reading the source may
+prove useful to anyone else wishing to work with Ogg Opus files.
+
 ## Background
 
 Opus-encoded audio files contain an [‘output
@@ -75,54 +80,71 @@ gain values are correct without making assumptions about their existing values.
 
 The following options are available:
 
-* `--preset=original`: In this mode, `opusgain` will set the output gain in the
-  Opus binary header to 0dB. In players that do not support `R128` tags, this
-  will cause the Opus file to play back at the volume of the originally encoded
-  source. You may want this if you prefer volume normalization to only occur via
-  tags.
+* `-p PRESET, --preset=PRESET`
 
-* `--preset=rg`: In this mode, `opusgain` will set the output gain in the Opus binary
-  header to the value that ensures playback will occur at -18 LUFS, which
-  should match the loudness of ReplayGain normalized files.  This is probably
-  the best option when you have a player that doesn't know about Opus `R128`
-  tags, but:
+  It is recommended to specify this value explicitly, as the default
+  may change.
+
+  * `original`: Set the output gain in the Opus binary header to 0dB. In
+    players that do not support `R128` tags, this will cause the Opus file to
+    play back at the volume of the originally encoded source. You may want this
+    if you prefer volume normalization to only occur via tags.
+
+  * `rg`: Set the output gain in the Opus binary header to the value that
+    ensures playback will occur at -18 LUFS, which should match the loudness of
+    ReplayGain normalized files.  This is probably the best option when you
+    have a player that doesn't know about Opus `R128` tags, but:
     * does support ReplayGain for the other file formats you use, and/or
     * the files you play have been adjusted in a player-agnostic way
       ([mp3gain](http://mp3gain.sourceforge.net/) and
       [aacgain](http://aacgain.altosdesign.com/) can do this) to the ReplayGain
       reference volume.
 
-* `--preset=r128`: In this mode, `opusgain` will set the output gain in the Opus
-  binary header to the value that ensures playback will occur at -23 LUFS,
-  which should match the loudness of files produced by `opusenc` from FLAC
-  files which contained ReplayGain information. You're unlikely to want this
-  option as the main use of `opusgain` is modify files which were generated this way.
+  * `r128`: Set the output gain in the Opus binary header to the value that
+    ensures playback will occur at -23 LUFS, which should match the loudness of
+    files produced by `opusenc` from FLAC files which contained ReplayGain
+    information.
 
-* `--output-gain-mode=auto`: In this mode, `opusgain` will set the output gain
-  in the Opus binary header such that each track is album-normalized in album
-  mode, or track-normalized otherwise. In album mode, this results in all
-  tracks having the same output gain value as well as the same
-  `R128_ALBUM_GAIN` tag.
+  * `no-change`: Do not change the output gain in the Opus binary header.
 
-* `--output-gain-mode=track`: In this mode, `opusgain` will set the output gain
-  in the Opus binary header such that each track is track-normalized, even if
-  album mode is enabled. In album mode, this results in
-  all tracks having the same different output gain values as well as different
-  `R128_ALBUM_GAIN` tags, but their `R128_TRACK_GAIN` tags will be identical.
-  Unless you know what you're doing, you probably don't want this option.
+* `-o MODE, --output-gain-mode=MODE`
 
-* `-a`: Enables album mode. In this mode `R128_ALBUM_GAIN` tags will also be
+  * `auto`: Set the output gain in the Opus binary header such that each track
+    is album-normalized in album mode, or track-normalized otherwise. In album
+    mode, this results in all tracks having the same output gain value as well
+    as the same `R128_ALBUM_GAIN` tag.
+
+  * `track`: Set the output gain in the Opus binary header such that each track
+    is track-normalized, even if album mode is enabled. In album mode, this
+    results in all tracks being given different output gain values as well as
+    different `R128_ALBUM_GAIN` tags, but their `R128_TRACK_GAIN` tags will be
+    identical.  Unless you know what you're doing, you probably don't want this
+    option.
+
+* `-a, --album`: Enables album mode. This causes `R128_ALBUM_GAIN` tags to also be
   generated. These tell players that support these tags what gain to apply so
   that each track in the album maintains its relative loudness. By default the
   output gain value for each file will be set to identical values in order to
   apply the calculated album gain, but this behaviour can be overridden using
   the `--output-gain-mode` option.
 
-* `--display-only`: Displays the same output that `opusgain` would otherwise
+* `-d, --display-only`: Displays the same output that `opusgain` would otherwise
   produce, but does not make any changes to the supplied files.
+
+* `-j N, --num-threads=N`: Use `N` threads for processing. The default is to use the
+  number of cores detected on the system. Larger numbers will be rounded down
+  to this value. To avoid high disk space usage during processing, or a large
+  number of temporary files left around after an error, only one file will be
+  rewritten at a time regardless of the number of threads.
+
+* `-c, --clear`: Remove all `R128` tags from the specified files. The output
+  gain of each file is unchanged, regardless of the specified preset.
 
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
+
+`opusgain` supports Unix shell style wildcards under Windows, where wildcards
+must be handled by the application rather than expanded by the shell.
 
 ## Q & A
 
@@ -210,6 +232,15 @@ or
 for a release build.
 
 Built binaries can be found in `target/debug` or `target/release`.
+
+## Installation via `cargo`
+
+At the command line, simply run
+```
+$ cargo install zoog
+```
+
+`opusgain` should now be available in the path.
 
 ## Releases
 

@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.3.0
+
+* Fix incorrect help text which still called the "original" option "none".
+* Remove `commit` function on `CommentHeader`.
+* Document API.
+* Remove code that printed to standard output and `verbose` flag from `Rewriter`.
+* Rename `RewriteResult` to `SubmitResult`.
+* Reduce likelihood of unnecessarily rewriting files due to tag reordering.
+* Add tests for `CommentHeader::replace()`.
+* Make `opusgain` print existing gains when leaving files unchanged.
+* Make `opusgain` print previous and new gains when altering files.
+* Make it clearer to Cargo what the licence is.
+* Upgrade to `clap` version 4.
+* Use `wild` for wildcard support on Windows.
+* Enable parallel volume analysis of multiple files.
+* Ensure input file is closed before renaming.
+* Add option to generate tags without changing output gain.
+* Add option to clear `R128` tags from specified files.
+
 ## 0.2.0
 
 * `zoog` binary is deprecated and removed from the repository.
