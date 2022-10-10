@@ -336,8 +336,8 @@ fn main_impl() -> Result<(), Error> {
                 album_volume: album_volume.as_ref().map(|a| a.get_album_mean()),
             };
 
-            let input_dir = input_path.parent().expect("Unable to find parent folder of input file");
-            let input_base = input_path.file_name().expect("Unable to find name of input file");
+            let input_dir = input_path.parent().ok_or_else(|| Error::NoParentError(input_path.to_path_buf()))?;
+            let input_base = input_path.file_name().ok_or_else(|| Error::NotAFilePath(input_path.to_path_buf()))?;
             let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
             let mut input_file = BufReader::new(input_file);
 

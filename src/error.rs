@@ -74,4 +74,12 @@ pub enum Error {
     /// An invalid thread count was specified
     #[error("An invalid number of threads was specified")]
     InvalidThreadCount,
+
+    /// A parent folder could not be found
+    #[error("The parent folder of `{0}` could not be found")]
+    NoParentError(PathBuf),
+
+    /// A path did not have a final named component
+    #[error("The path `{0}` did not have a final named component")]
+    NotAFilePath(PathBuf),
 }
