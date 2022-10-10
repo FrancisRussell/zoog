@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.3.0
 
 * Fix incorrect help text which still called the "original" option "none".
 * Remove `commit` function on `CommentHeader`.
