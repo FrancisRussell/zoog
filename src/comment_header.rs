@@ -1,4 +1,4 @@
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
@@ -152,18 +152,18 @@ impl<'a> CommentHeader<'a> {
     fn commit(&mut self) {
         let data = &mut self.data;
         data.clear();
-        data.write_all(COMMENT_MAGIC).unwrap();
+        data.extend(COMMENT_MAGIC);
         let vendor = self.vendor.as_bytes();
         data.write_u32::<LittleEndian>(vendor.len() as u32).unwrap();
-        data.write_all(vendor).unwrap();
+        data.extend(vendor);
         data.write_u32::<LittleEndian>(self.user_comments.len() as u32).unwrap();
-        let equals: &[u8] = &[0x3d];
+        let equals: u8 = 0x3d;
         for (k, v) in self.user_comments.iter().map(|(k, v)| (k.as_bytes(), v.as_bytes())) {
             let len = k.len() + v.len() + 1;
             data.write_u32::<LittleEndian>(len as u32).unwrap();
-            data.write_all(k).unwrap();
-            data.write_all(equals).unwrap();
-            data.write_all(v).unwrap();
+            data.extend(k);
+            data.push(equals);
+            data.extend(v);
         }
     }
 }
