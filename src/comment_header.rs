@@ -1,4 +1,4 @@
-use std::io::{Cursor, Read, Write};
+use std::io::{Cursor, Read};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
@@ -150,22 +150,21 @@ impl<'a> CommentHeader<'a> {
     }
 
     fn commit(&mut self) {
-        //TODO: Look more into why we can't use https://github.com/rust-lang/rust/pull/46830
-        let mut writer = Cursor::new(Vec::new());
-        writer.write_all(COMMENT_MAGIC).unwrap();
+        let data = &mut self.data;
+        data.clear();
+        data.extend(COMMENT_MAGIC);
         let vendor = self.vendor.as_bytes();
-        writer.write_u32::<LittleEndian>(vendor.len() as u32).unwrap();
-        writer.write_all(vendor).unwrap();
-        writer.write_u32::<LittleEndian>(self.user_comments.len() as u32).unwrap();
-        let equals: &[u8] = &[0x3d];
+        data.write_u32::<LittleEndian>(vendor.len() as u32).unwrap();
+        data.extend(vendor);
+        data.write_u32::<LittleEndian>(self.user_comments.len() as u32).unwrap();
+        let equals: u8 = 0x3d;
         for (k, v) in self.user_comments.iter().map(|(k, v)| (k.as_bytes(), v.as_bytes())) {
             let len = k.len() + v.len() + 1;
-            writer.write_u32::<LittleEndian>(len as u32).unwrap();
-            writer.write_all(k).unwrap();
-            writer.write_all(equals).unwrap();
-            writer.write_all(v).unwrap();
+            data.write_u32::<LittleEndian>(len as u32).unwrap();
+            data.extend(k);
+            data.push(equals);
+            data.extend(v);
         }
-        *self.data = writer.into_inner();
     }
 }
 
