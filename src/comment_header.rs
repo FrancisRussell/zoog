@@ -69,12 +69,7 @@ impl<'a> CommentHeader<'a> {
 
     /// Returns the first mapped value for the specified key.
     pub fn get_first(&self, key: &str) -> Option<&str> {
-        for (k, v) in self.user_comments.iter() {
-            if k == key {
-                return Some(v);
-            }
-        }
-        None
+        self.user_comments.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
     }
 
     /// Removes all mappings for the specified key.
