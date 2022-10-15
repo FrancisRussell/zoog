@@ -34,7 +34,7 @@ impl<'a> CommentHeader<'a> {
     }
 
     /// Sets the vendor field.
-    pub fn set_vendor(&mut self, vendor: &str) { self.vendor = vendor.to_string(); }
+    pub fn set_vendor(&mut self, vendor: &str) { self.vendor = vendor.into(); }
 
     /// Attempts to parse the supplied `Vec` as an Opus comment header. An error
     /// is returned if the header is believed to be corrupt, otherwise an
@@ -86,7 +86,7 @@ impl<'a> CommentHeader<'a> {
                     // If we have already found the key, discard this mapping
                     false
                 } else {
-                    *v = value.to_string();
+                    *v = value.into();
                     found = true;
                     true
                 }
@@ -102,15 +102,13 @@ impl<'a> CommentHeader<'a> {
     }
 
     /// Appends the specified mapping.
-    pub fn append(&mut self, key: &str, value: &str) {
-        self.user_comments.push((String::from(key), String::from(value)));
-    }
+    pub fn append(&mut self, key: &str, value: &str) { self.user_comments.push((key.into(), value.into())); }
 
     /// Attempts to parse the first mapping for the specified key as the
     /// fixed-point Decibel representation used in Opus comment headers.
     pub fn get_gain_from_tag(&self, tag: &str) -> Result<Option<FixedPointGain>, Error> {
         let parsed =
-            self.get_first(tag).map(|v| v.parse::<FixedPointGain>().map_err(|_| Error::InvalidR128Tag(v.to_string())));
+            self.get_first(tag).map(|v| v.parse::<FixedPointGain>().map_err(|_| Error::InvalidR128Tag(v.into())));
         match parsed {
             Some(Ok(v)) => Ok(Some(v)),
             Some(Err(e)) => Err(e),
