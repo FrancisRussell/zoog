@@ -41,8 +41,7 @@ impl<'a> CommentHeader<'a> {
     fn validate_field_name(field_name: &str) -> Result<(), Error> {
         for c in field_name.chars() {
             match c {
-                '=' => return Err(Error::InvalidOpusCommentFieldName(field_name.into())),
-                '\u{20}'..='\u{7D}' => {}
+                ' '..='<' | '>'..='}' => {}
                 _ => return Err(Error::InvalidOpusCommentFieldName(field_name.into())),
             }
         }
