@@ -5,6 +5,7 @@
 * Minor code cleanup.
 * Document `VolumeAnalyzer::mean_lufs_across_multiple()`.
 * Deliberately panic on some exceptional Opus comment cases.
+* Treat Opus comment keys case-insensitively and add tests (bugfix).
 
 ## 0.3.0
 
