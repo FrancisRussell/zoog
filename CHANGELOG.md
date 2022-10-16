@@ -4,6 +4,7 @@
 
 * Minor code cleanup.
 * Document `VolumeAnalyzer::mean_lufs_across_multiple()`.
+* Deliberately panic on some exceptional Opus comment cases.
 
 ## 0.3.0
 

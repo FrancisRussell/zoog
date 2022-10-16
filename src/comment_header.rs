@@ -1,7 +1,9 @@
+use std::convert::TryInto;
 use std::io::{Cursor, Read};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
+use thiserror::Error;
 
 use crate::opus::{FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::Error;
@@ -16,6 +18,12 @@ pub struct CommentHeader<'a> {
     data: &'a mut Vec<u8>,
     vendor: String,
     user_comments: Vec<(String, String)>,
+}
+
+#[derive(Debug, Error)]
+enum CommitError {
+    #[error("Value unrepresentable in Opus comment header")]
+    ValueTooLarge,
 }
 
 impl<'a> CommentHeader<'a> {
@@ -142,27 +150,35 @@ impl<'a> CommentHeader<'a> {
         Ok(())
     }
 
-    fn commit(&mut self) {
+    fn commit(&mut self) -> Result<(), CommitError> {
         let data = &mut self.data;
         data.clear();
         data.extend(COMMENT_MAGIC);
         let vendor = self.vendor.as_bytes();
-        data.write_u32::<LittleEndian>(vendor.len() as u32).unwrap();
+        let vendor_len = vendor.len().try_into().map_err(|_| CommitError::ValueTooLarge)?;
+        data.write_u32::<LittleEndian>(vendor_len).expect("Error writing vendor length");
         data.extend(vendor);
-        data.write_u32::<LittleEndian>(self.user_comments.len() as u32).unwrap();
+        let user_comments_len = self.user_comments.len().try_into().map_err(|_| CommitError::ValueTooLarge)?;
+        data.write_u32::<LittleEndian>(user_comments_len).expect("Error writing user comment count");
         let equals: u8 = 0x3d;
         for (k, v) in self.user_comments.iter().map(|(k, v)| (k.as_bytes(), v.as_bytes())) {
-            let len = k.len() + v.len() + 1;
-            data.write_u32::<LittleEndian>(len as u32).unwrap();
+            let comment_len = k.len() + v.len() + 1;
+            let comment_len = comment_len.try_into().map_err(|_| CommitError::ValueTooLarge)?;
+            data.write_u32::<LittleEndian>(comment_len).expect("Error writing user comment length");
             data.extend(k);
             data.push(equals);
             data.extend(v);
         }
+        Ok(())
     }
 }
 
 impl<'a> Drop for CommentHeader<'a> {
-    fn drop(&mut self) { self.commit(); }
+    fn drop(&mut self) {
+        if let Err(e) = self.commit() {
+            panic!("Failed to commit changes to CommentHeader: {}", e);
+        }
+    }
 }
 
 impl<'a> PartialEq for CommentHeader<'a> {
