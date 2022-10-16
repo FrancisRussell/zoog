@@ -36,6 +36,8 @@ impl<'a> CommentHeader<'a> {
         reader.read_exact(data).map_err(|_| Error::MalformedCommentHeader)
     }
 
+    fn keys_equal(k1: &str, k2: &str) -> bool { k1.eq_ignore_ascii_case(k2) }
+
     /// Constructs an empty `CommentHeader`. The comment data will be placed in
     /// the supplied `Vec`. Any existing content will be discarded.
     pub fn empty(data: &'a mut Vec<u8>) -> CommentHeader<'a> {
@@ -78,11 +80,11 @@ impl<'a> CommentHeader<'a> {
 
     /// Returns the first mapped value for the specified key.
     pub fn get_first(&self, key: &str) -> Option<&str> {
-        self.user_comments.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
+        self.user_comments.iter().find(|(k, _)| Self::keys_equal(k, key)).map(|(_, v)| v.as_str())
     }
 
     /// Removes all mappings for the specified key.
-    pub fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| key != k); }
+    pub fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| !Self::keys_equal(key, k)); }
 
     /// If the key already exists, update the first mapping's value to the one
     /// supplied and discard any later mappings. If the key does not exist,
@@ -90,7 +92,7 @@ impl<'a> CommentHeader<'a> {
     pub fn replace(&mut self, key: &str, value: &str) {
         let mut found = false;
         self.user_comments.retain_mut(|(k, ref mut v)| {
-            if k == key {
+            if Self::keys_equal(k, key) {
                 if found {
                     // If we have already found the key, discard this mapping
                     false
