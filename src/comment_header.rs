@@ -153,6 +153,11 @@ impl<'a> CommentHeader<'a> {
         Ok(())
     }
 
+    /// Returns the number of user comments in the header
+    pub fn len(&self) -> usize {
+        self.user_comments.len()
+    }
+
     fn commit(&mut self) -> Result<(), CommitError> {
         let data = &mut self.data;
         data.clear();
@@ -313,6 +318,52 @@ mod tests {
         header_2.append("v3", "k3");
         header_2.append("v5", "k5");
         header_2.append("v7", "k7");
+
+        assert_eq!(header_1, header_2);
+    }
+
+    #[test]
+    fn get_first_case_insensitive() {
+        let mut data_1 = Vec::new();
+        let mut header_1 = CommentHeader::empty(&mut data_1);
+        header_1.append("FooBar", "1");
+        header_1.append("FOOBAR", "2");
+        header_1.append("foobar", "3");
+
+        assert_eq!(header_1.get_first("FooBar"), Some("1"));
+        assert_eq!(header_1.get_first("FOOBAR"), Some("1"));
+        assert_eq!(header_1.get_first("foobar"), Some("1"));
+        assert_eq!(header_1.get_first("FoObAr"), Some("1"));
+    }
+
+    #[test]
+    fn replace_case_insensitive() {
+        let mut data_1 = Vec::new();
+        let mut header_1 = CommentHeader::empty(&mut data_1);
+        header_1.append("FooBar", "1");
+        header_1.append("FOOBAR", "2");
+        header_1.append("foobar", "3");
+        header_1.replace("FoObAr", "42");
+
+        assert_eq!(header_1.get_first("FOObar"), Some("42"));
+        assert_eq!(header_1.len(), 1);
+    }
+
+    #[test]
+    fn remove_all_case_insensitive() {
+        let mut data_1 = Vec::new();
+        let mut header_1 = CommentHeader::empty(&mut data_1);
+        header_1.append("FooBar", "1");
+        header_1.append("FOOBAR", "2");
+        header_1.append("v0", "k0");
+        header_1.append("foobar", "3");
+        header_1.append("v5", "k5");
+        header_1.remove_all("FOObar");
+
+        let mut data_2 = Vec::new();
+        let mut header_2 = CommentHeader::empty(&mut data_2);
+        header_2.append("v0", "k0");
+        header_2.append("v5", "k5");
 
         assert_eq!(header_1, header_2);
     }
