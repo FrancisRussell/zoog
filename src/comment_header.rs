@@ -8,7 +8,8 @@ use thiserror::Error;
 use crate::opus::{FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::Error;
 
-const COMMENT_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x54, 0x61, 0x67, 0x73];
+const COMMENT_MAGIC: &[u8] = b"OpusTags";
+const FIELD_NAME_TERMINATOR: u8 = b'=';
 
 /// Allows querying and modification of an Opus comment header
 #[derive(Derivative)]
@@ -67,7 +68,7 @@ impl<'a> CommentHeader<'a> {
             let mut comment = vec![0u8; comment_len as usize];
             Self::read_exact(&mut reader, &mut comment)?;
             let comment = String::from_utf8(comment)?;
-            let offset = comment.find('=').ok_or(Error::MalformedCommentHeader)?;
+            let offset = comment.find(char::from(FIELD_NAME_TERMINATOR)).ok_or(Error::MalformedCommentHeader)?;
             let (key, value) = comment.split_at(offset);
             user_comments.push((String::from(key), String::from(&value[1..])));
         }
@@ -160,13 +161,12 @@ impl<'a> CommentHeader<'a> {
         data.extend(vendor);
         let user_comments_len = self.user_comments.len().try_into().map_err(|_| CommitError::ValueTooLarge)?;
         data.write_u32::<LittleEndian>(user_comments_len).expect("Error writing user comment count");
-        let equals: u8 = 0x3d;
         for (k, v) in self.user_comments.iter().map(|(k, v)| (k.as_bytes(), v.as_bytes())) {
             let comment_len = k.len() + v.len() + 1;
             let comment_len = comment_len.try_into().map_err(|_| CommitError::ValueTooLarge)?;
             data.write_u32::<LittleEndian>(comment_len).expect("Error writing user comment length");
             data.extend(k);
-            data.push(equals);
+            data.push(FIELD_NAME_TERMINATOR);
             data.extend(v);
         }
         Ok(())
