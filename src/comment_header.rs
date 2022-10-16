@@ -8,7 +8,7 @@ use thiserror::Error;
 use crate::opus::{FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::Error;
 
-const COMMENT_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x54, 0x61, 0x67, 0x73];
+const COMMENT_MAGIC: &[u8] = b"OpusTags";
 const FIELD_NAME_TERMINATOR: u8 = b'=';
 
 /// Allows querying and modification of an Opus comment header
