@@ -223,27 +223,35 @@ mod tests {
     const MAX_COMMENTS: usize = 128;
     const NUM_IDENTITY_TESTS: usize = 256;
 
-    fn random_string<R: Rng>(engine: &mut R, allow_empty: bool) -> String {
-        let min_len = if allow_empty { 0 } else { 1 };
+    fn random_string<R: Rng>(engine: &mut R, is_key: bool) -> String {
+        let min_len = if is_key { 1 } else { 0 };
         let len_distr = Uniform::new_inclusive(min_len, MAX_STRING_LENGTH);
         let len = engine.sample(len_distr);
         let mut result = String::new();
         result.reserve(len);
-        for c in engine.sample_iter(&Standard).take(len) {
-            result.push(c);
+        if is_key {
+            let valid_chars: Vec<char> = (' '..='<').chain('>'..='}').collect();
+            let char_index_dist = Uniform::new(0, valid_chars.len());
+            for _ in 0..len {
+                result.push(valid_chars[engine.sample(char_index_dist)]);
+            }
+        } else {
+            for c in engine.sample_iter(&Standard).take(len) {
+                result.push(c);
+            }
         }
         result
     }
 
     fn create_random_header<'a, 'b, R: Rng>(engine: &'b mut R, data: &'a mut Vec<u8>) -> CommentHeader<'a> {
         let mut header = CommentHeader::empty(data);
-        header.set_vendor(&random_string(engine, true));
+        header.set_vendor(&random_string(engine, false));
         let num_comments_dist = Uniform::new_inclusive(0, MAX_COMMENTS);
         let num_comments = engine.sample(&num_comments_dist);
         for _ in 0..num_comments {
-            let key = random_string(engine, false);
-            let value = random_string(engine, true);
-            header.append(key.as_str(), value.as_str());
+            let key = random_string(engine, true);
+            let value = random_string(engine, false);
+            header.append(key.as_str(), value.as_str()).expect("Unable to add comment");
         }
         header
     }
@@ -294,94 +302,99 @@ mod tests {
     }
 
     #[test]
-    fn replace_appends_on_missing() {
+    fn replace_appends_on_missing() -> Result<(), Error> {
         let key = "foo";
         let value = "bar";
 
         let mut data_1 = Vec::new();
         let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("v0", "k0");
-        header_1.append(key, value);
-        header_1.append("v1", "k1");
+        header_1.append("v0", "k0")?;
+        header_1.append(key, value)?;
+        header_1.append("v1", "k1")?;
 
         let mut data_2 = Vec::new();
         let mut header_2 = CommentHeader::empty(&mut data_2);
-        header_2.append("v0", "k0");
-        header_2.replace(key, value);
-        header_2.append("v1", "k1");
+        header_2.append("v0", "k0")?;
+        header_2.replace(key, value)?;
+        header_2.append("v1", "k1")?;
 
         assert_eq!(header_1, header_2);
+        Ok(())
     }
 
     #[test]
-    fn replace_replaces_on_duplicates() {
+    fn replace_replaces_on_duplicates() -> Result<(), Error> {
         let mut data_1 = Vec::new();
         let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("v0", "k0");
-        header_1.append("v1", "k1");
-        header_1.append("v2", "k2");
-        header_1.append("v3", "k3");
-        header_1.append("v2", "k4");
-        header_1.append("v5", "k5");
-        header_1.append("v2", "k6");
-        header_1.append("v7", "k7");
-        header_1.replace("v2", "k8");
+        header_1.append("v0", "k0")?;
+        header_1.append("v1", "k1")?;
+        header_1.append("v2", "k2")?;
+        header_1.append("v3", "k3")?;
+        header_1.append("v2", "k4")?;
+        header_1.append("v5", "k5")?;
+        header_1.append("v2", "k6")?;
+        header_1.append("v7", "k7")?;
+        header_1.replace("v2", "k8")?;
 
         let mut data_2 = Vec::new();
         let mut header_2 = CommentHeader::empty(&mut data_2);
-        header_2.append("v0", "k0");
-        header_2.append("v1", "k1");
-        header_2.append("v2", "k8");
-        header_2.append("v3", "k3");
-        header_2.append("v5", "k5");
-        header_2.append("v7", "k7");
+        header_2.append("v0", "k0")?;
+        header_2.append("v1", "k1")?;
+        header_2.append("v2", "k8")?;
+        header_2.append("v3", "k3")?;
+        header_2.append("v5", "k5")?;
+        header_2.append("v7", "k7")?;
 
         assert_eq!(header_1, header_2);
+        Ok(())
     }
 
     #[test]
-    fn get_first_case_insensitive() {
+    fn get_first_case_insensitive() -> Result<(), Error> {
         let mut data_1 = Vec::new();
         let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("FooBar", "1");
-        header_1.append("FOOBAR", "2");
-        header_1.append("foobar", "3");
+        header_1.append("FooBar", "1")?;
+        header_1.append("FOOBAR", "2")?;
+        header_1.append("foobar", "3")?;
 
         assert_eq!(header_1.get_first("FooBar"), Some("1"));
         assert_eq!(header_1.get_first("FOOBAR"), Some("1"));
         assert_eq!(header_1.get_first("foobar"), Some("1"));
         assert_eq!(header_1.get_first("FoObAr"), Some("1"));
+        Ok(())
     }
 
     #[test]
-    fn replace_case_insensitive() {
+    fn replace_case_insensitive() -> Result<(), Error> {
         let mut data_1 = Vec::new();
         let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("FooBar", "1");
-        header_1.append("FOOBAR", "2");
-        header_1.append("foobar", "3");
-        header_1.replace("FoObAr", "42");
+        header_1.append("FooBar", "1")?;
+        header_1.append("FOOBAR", "2")?;
+        header_1.append("foobar", "3")?;
+        header_1.replace("FoObAr", "42")?;
 
         assert_eq!(header_1.get_first("FOObar"), Some("42"));
         assert_eq!(header_1.len(), 1);
+        Ok(())
     }
 
     #[test]
-    fn remove_all_case_insensitive() {
+    fn remove_all_case_insensitive() -> Result<(), Error> {
         let mut data_1 = Vec::new();
         let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("FooBar", "1");
-        header_1.append("FOOBAR", "2");
-        header_1.append("v0", "k0");
-        header_1.append("foobar", "3");
-        header_1.append("v5", "k5");
+        header_1.append("FooBar", "1")?;
+        header_1.append("FOOBAR", "2")?;
+        header_1.append("v0", "k0")?;
+        header_1.append("foobar", "3")?;
+        header_1.append("v5", "k5")?;
         header_1.remove_all("FOObar");
 
         let mut data_2 = Vec::new();
         let mut header_2 = CommentHeader::empty(&mut data_2);
-        header_2.append("v0", "k0");
-        header_2.append("v5", "k5");
+        header_2.append("v0", "k0")?;
+        header_2.append("v5", "k5")?;
 
         assert_eq!(header_1, header_2);
+        Ok(())
     }
 }
