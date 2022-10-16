@@ -38,6 +38,17 @@ impl<'a> CommentHeader<'a> {
 
     fn keys_equal(k1: &str, k2: &str) -> bool { k1.eq_ignore_ascii_case(k2) }
 
+    fn validate_field_name(field_name: &str) -> Result<(), Error> {
+        for c in field_name.chars() {
+            match c {
+                '=' => return Err(Error::InvalidOpusCommentFieldName(field_name.into())),
+                '\u{20}'..='\u{7D}' => {}
+                _ => return Err(Error::InvalidOpusCommentFieldName(field_name.into())),
+            }
+        }
+        Ok(())
+    }
+
     /// Constructs an empty `CommentHeader`. The comment data will be placed in
     /// the supplied `Vec`. Any existing content will be discarded.
     pub fn empty(data: &'a mut Vec<u8>) -> CommentHeader<'a> {
@@ -72,6 +83,7 @@ impl<'a> CommentHeader<'a> {
             let comment = String::from_utf8(comment)?;
             let offset = comment.find(char::from(FIELD_NAME_TERMINATOR)).ok_or(Error::MalformedCommentHeader)?;
             let (key, value) = comment.split_at(offset);
+            Self::validate_field_name(key)?;
             user_comments.push((String::from(key), String::from(&value[1..])));
         }
         let result = CommentHeader { data, vendor, user_comments };
@@ -89,7 +101,7 @@ impl<'a> CommentHeader<'a> {
     /// If the key already exists, update the first mapping's value to the one
     /// supplied and discard any later mappings. If the key does not exist,
     /// append the mapping to the end of the list.
-    pub fn replace(&mut self, key: &str, value: &str) {
+    pub fn replace(&mut self, key: &str, value: &str) -> Result<(), Error> {
         let mut found = false;
         self.user_comments.retain_mut(|(k, ref mut v)| {
             if Self::keys_equal(k, key) {
@@ -108,12 +120,17 @@ impl<'a> CommentHeader<'a> {
 
         // If the key did not exist, we append
         if !found {
-            self.append(key, value);
+            self.append(key, value)?;
         }
+        Ok(())
     }
 
     /// Appends the specified mapping.
-    pub fn append(&mut self, key: &str, value: &str) { self.user_comments.push((key.into(), value.into())); }
+    pub fn append(&mut self, key: &str, value: &str) -> Result<(), Error> {
+        Self::validate_field_name(key)?;
+        self.user_comments.push((key.into(), value.into()));
+        Ok(())
+    }
 
     /// Attempts to parse the first mapping for the specified key as the
     /// fixed-point Decibel representation used in Opus comment headers.
@@ -147,16 +164,17 @@ impl<'a> CommentHeader<'a> {
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
             if let Some(gain) = self.get_gain_from_tag(tag)? {
                 let gain = gain.checked_add(adjustment).ok_or(Error::GainOutOfBounds)?;
-                self.replace(tag, &format!("{}", gain.as_fixed_point()));
+                self.replace(tag, &format!("{}", gain.as_fixed_point()))?;
             }
         }
         Ok(())
     }
 
     /// Returns the number of user comments in the header
-    pub fn len(&self) -> usize {
-        self.user_comments.len()
-    }
+    pub fn len(&self) -> usize { self.user_comments.len() }
+
+    /// Does the header contain any user comments?
+    pub fn is_empty(&self) -> bool { self.user_comments.is_empty() }
 
     fn commit(&mut self) -> Result<(), CommitError> {
         let data = &mut self.data;
