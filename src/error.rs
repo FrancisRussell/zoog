@@ -82,4 +82,8 @@ pub enum Error {
     /// A path did not have a final named component
     #[error("The path `{0}` did not have a final named component")]
     NotAFilePath(PathBuf),
+
+    /// Invalid Opus comment field name
+    #[error("Invalid Opus comment field name: `{0}`")]
+    InvalidOpusCommentFieldName(String),
 }

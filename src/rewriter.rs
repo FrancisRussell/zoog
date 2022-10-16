@@ -186,7 +186,7 @@ impl<W: Write> Rewriter<'_, W> {
                     opus_header.set_output_gain(new_header_gain);
                     for (tag, gain) in [(TAG_TRACK_GAIN, track_gain_r128), (TAG_ALBUM_GAIN, album_gain_r128)] {
                         if let Some(gain) = gain {
-                            comment_header.replace(tag, &format!("{}", gain.as_fixed_point()));
+                            comment_header.replace(tag, &format!("{}", gain.as_fixed_point()))?;
                         } else {
                             comment_header.remove_all(tag);
                         }

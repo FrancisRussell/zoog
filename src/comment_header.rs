@@ -36,6 +36,18 @@ impl<'a> CommentHeader<'a> {
         reader.read_exact(data).map_err(|_| Error::MalformedCommentHeader)
     }
 
+    fn keys_equal(k1: &str, k2: &str) -> bool { k1.eq_ignore_ascii_case(k2) }
+
+    fn validate_field_name(field_name: &str) -> Result<(), Error> {
+        for c in field_name.chars() {
+            match c {
+                ' '..='<' | '>'..='}' => {}
+                _ => return Err(Error::InvalidOpusCommentFieldName(field_name.into())),
+            }
+        }
+        Ok(())
+    }
+
     /// Constructs an empty `CommentHeader`. The comment data will be placed in
     /// the supplied `Vec`. Any existing content will be discarded.
     pub fn empty(data: &'a mut Vec<u8>) -> CommentHeader<'a> {
@@ -70,6 +82,7 @@ impl<'a> CommentHeader<'a> {
             let comment = String::from_utf8(comment)?;
             let offset = comment.find(char::from(FIELD_NAME_TERMINATOR)).ok_or(Error::MalformedCommentHeader)?;
             let (key, value) = comment.split_at(offset);
+            Self::validate_field_name(key)?;
             user_comments.push((String::from(key), String::from(&value[1..])));
         }
         let result = CommentHeader { data, vendor, user_comments };
@@ -78,19 +91,19 @@ impl<'a> CommentHeader<'a> {
 
     /// Returns the first mapped value for the specified key.
     pub fn get_first(&self, key: &str) -> Option<&str> {
-        self.user_comments.iter().find(|(k, _)| k == key).map(|(_, v)| v.as_str())
+        self.user_comments.iter().find(|(k, _)| Self::keys_equal(k, key)).map(|(_, v)| v.as_str())
     }
 
     /// Removes all mappings for the specified key.
-    pub fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| key != k); }
+    pub fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| !Self::keys_equal(key, k)); }
 
     /// If the key already exists, update the first mapping's value to the one
     /// supplied and discard any later mappings. If the key does not exist,
     /// append the mapping to the end of the list.
-    pub fn replace(&mut self, key: &str, value: &str) {
+    pub fn replace(&mut self, key: &str, value: &str) -> Result<(), Error> {
         let mut found = false;
         self.user_comments.retain_mut(|(k, ref mut v)| {
-            if k == key {
+            if Self::keys_equal(k, key) {
                 if found {
                     // If we have already found the key, discard this mapping
                     false
@@ -106,12 +119,17 @@ impl<'a> CommentHeader<'a> {
 
         // If the key did not exist, we append
         if !found {
-            self.append(key, value);
+            self.append(key, value)?;
         }
+        Ok(())
     }
 
     /// Appends the specified mapping.
-    pub fn append(&mut self, key: &str, value: &str) { self.user_comments.push((key.into(), value.into())); }
+    pub fn append(&mut self, key: &str, value: &str) -> Result<(), Error> {
+        Self::validate_field_name(key)?;
+        self.user_comments.push((key.into(), value.into()));
+        Ok(())
+    }
 
     /// Attempts to parse the first mapping for the specified key as the
     /// fixed-point Decibel representation used in Opus comment headers.
@@ -145,11 +163,17 @@ impl<'a> CommentHeader<'a> {
         for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
             if let Some(gain) = self.get_gain_from_tag(tag)? {
                 let gain = gain.checked_add(adjustment).ok_or(Error::GainOutOfBounds)?;
-                self.replace(tag, &format!("{}", gain.as_fixed_point()));
+                self.replace(tag, &format!("{}", gain.as_fixed_point()))?;
             }
         }
         Ok(())
     }
+
+    /// Returns the number of user comments in the header
+    pub fn len(&self) -> usize { self.user_comments.len() }
+
+    /// Does the header contain any user comments?
+    pub fn is_empty(&self) -> bool { self.user_comments.is_empty() }
 
     fn commit(&mut self) -> Result<(), CommitError> {
         let data = &mut self.data;
@@ -199,27 +223,35 @@ mod tests {
     const MAX_COMMENTS: usize = 128;
     const NUM_IDENTITY_TESTS: usize = 256;
 
-    fn random_string<R: Rng>(engine: &mut R, allow_empty: bool) -> String {
-        let min_len = if allow_empty { 0 } else { 1 };
+    fn random_string<R: Rng>(engine: &mut R, is_key: bool) -> String {
+        let min_len = if is_key { 1 } else { 0 };
         let len_distr = Uniform::new_inclusive(min_len, MAX_STRING_LENGTH);
         let len = engine.sample(len_distr);
         let mut result = String::new();
         result.reserve(len);
-        for c in engine.sample_iter(&Standard).take(len) {
-            result.push(c);
+        if is_key {
+            let valid_chars: Vec<char> = (' '..='<').chain('>'..='}').collect();
+            let char_index_dist = Uniform::new(0, valid_chars.len());
+            for _ in 0..len {
+                result.push(valid_chars[engine.sample(char_index_dist)]);
+            }
+        } else {
+            for c in engine.sample_iter(&Standard).take(len) {
+                result.push(c);
+            }
         }
         result
     }
 
     fn create_random_header<'a, 'b, R: Rng>(engine: &'b mut R, data: &'a mut Vec<u8>) -> CommentHeader<'a> {
         let mut header = CommentHeader::empty(data);
-        header.set_vendor(&random_string(engine, true));
+        header.set_vendor(&random_string(engine, false));
         let num_comments_dist = Uniform::new_inclusive(0, MAX_COMMENTS);
         let num_comments = engine.sample(&num_comments_dist);
         for _ in 0..num_comments {
-            let key = random_string(engine, false);
-            let value = random_string(engine, true);
-            header.append(key.as_str(), value.as_str());
+            let key = random_string(engine, true);
+            let value = random_string(engine, false);
+            header.append(key.as_str(), value.as_str()).expect("Unable to add comment");
         }
         header
     }
@@ -270,48 +302,99 @@ mod tests {
     }
 
     #[test]
-    fn replace_appends_on_missing() {
+    fn replace_appends_on_missing() -> Result<(), Error> {
         let key = "foo";
         let value = "bar";
 
         let mut data_1 = Vec::new();
         let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("v0", "k0");
-        header_1.append(key, value);
-        header_1.append("v1", "k1");
+        header_1.append("v0", "k0")?;
+        header_1.append(key, value)?;
+        header_1.append("v1", "k1")?;
 
         let mut data_2 = Vec::new();
         let mut header_2 = CommentHeader::empty(&mut data_2);
-        header_2.append("v0", "k0");
-        header_2.replace(key, value);
-        header_2.append("v1", "k1");
+        header_2.append("v0", "k0")?;
+        header_2.replace(key, value)?;
+        header_2.append("v1", "k1")?;
 
         assert_eq!(header_1, header_2);
+        Ok(())
     }
 
     #[test]
-    fn replace_replaces_on_duplicates() {
+    fn replace_replaces_on_duplicates() -> Result<(), Error> {
         let mut data_1 = Vec::new();
         let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("v0", "k0");
-        header_1.append("v1", "k1");
-        header_1.append("v2", "k2");
-        header_1.append("v3", "k3");
-        header_1.append("v2", "k4");
-        header_1.append("v5", "k5");
-        header_1.append("v2", "k6");
-        header_1.append("v7", "k7");
-        header_1.replace("v2", "k8");
+        header_1.append("v0", "k0")?;
+        header_1.append("v1", "k1")?;
+        header_1.append("v2", "k2")?;
+        header_1.append("v3", "k3")?;
+        header_1.append("v2", "k4")?;
+        header_1.append("v5", "k5")?;
+        header_1.append("v2", "k6")?;
+        header_1.append("v7", "k7")?;
+        header_1.replace("v2", "k8")?;
 
         let mut data_2 = Vec::new();
         let mut header_2 = CommentHeader::empty(&mut data_2);
-        header_2.append("v0", "k0");
-        header_2.append("v1", "k1");
-        header_2.append("v2", "k8");
-        header_2.append("v3", "k3");
-        header_2.append("v5", "k5");
-        header_2.append("v7", "k7");
+        header_2.append("v0", "k0")?;
+        header_2.append("v1", "k1")?;
+        header_2.append("v2", "k8")?;
+        header_2.append("v3", "k3")?;
+        header_2.append("v5", "k5")?;
+        header_2.append("v7", "k7")?;
 
         assert_eq!(header_1, header_2);
+        Ok(())
+    }
+
+    #[test]
+    fn get_first_case_insensitive() -> Result<(), Error> {
+        let mut data_1 = Vec::new();
+        let mut header_1 = CommentHeader::empty(&mut data_1);
+        header_1.append("FooBar", "1")?;
+        header_1.append("FOOBAR", "2")?;
+        header_1.append("foobar", "3")?;
+
+        assert_eq!(header_1.get_first("FooBar"), Some("1"));
+        assert_eq!(header_1.get_first("FOOBAR"), Some("1"));
+        assert_eq!(header_1.get_first("foobar"), Some("1"));
+        assert_eq!(header_1.get_first("FoObAr"), Some("1"));
+        Ok(())
+    }
+
+    #[test]
+    fn replace_case_insensitive() -> Result<(), Error> {
+        let mut data_1 = Vec::new();
+        let mut header_1 = CommentHeader::empty(&mut data_1);
+        header_1.append("FooBar", "1")?;
+        header_1.append("FOOBAR", "2")?;
+        header_1.append("foobar", "3")?;
+        header_1.replace("FoObAr", "42")?;
+
+        assert_eq!(header_1.get_first("FOObar"), Some("42"));
+        assert_eq!(header_1.len(), 1);
+        Ok(())
+    }
+
+    #[test]
+    fn remove_all_case_insensitive() -> Result<(), Error> {
+        let mut data_1 = Vec::new();
+        let mut header_1 = CommentHeader::empty(&mut data_1);
+        header_1.append("FooBar", "1")?;
+        header_1.append("FOOBAR", "2")?;
+        header_1.append("v0", "k0")?;
+        header_1.append("foobar", "3")?;
+        header_1.append("v5", "k5")?;
+        header_1.remove_all("FOObar");
+
+        let mut data_2 = Vec::new();
+        let mut header_2 = CommentHeader::empty(&mut data_2);
+        header_2.append("v0", "k0")?;
+        header_2.append("v5", "k5")?;
+
+        assert_eq!(header_1, header_2);
+        Ok(())
     }
 }
