@@ -169,16 +169,15 @@ impl<W: Write> Rewriter<'_, W> {
                         }
                         VolumeTarget::NoChange => opus_header.get_output_gain(),
                     };
-                    let track_gain_r128 = if let Some(track_volume) = self.config.track_volume {
-                        Some(FixedPointGain::try_from(R128_LUFS - track_volume - new_header_gain.into())?)
-                    } else {
-                        None
+                    let compute_gain = |volume| -> Result<Option<FixedPointGain>, Error> {
+                        if let Some(volume) = volume {
+                            FixedPointGain::try_from(R128_LUFS - volume - new_header_gain.into()).map(Some)
+                        } else {
+                            Ok(None)
+                        }
                     };
-                    let album_gain_r128 = if let Some(album_volume) = self.config.album_volume {
-                        Some(FixedPointGain::try_from(R128_LUFS - album_volume - new_header_gain.into())?)
-                    } else {
-                        None
-                    };
+                    let track_gain_r128 = compute_gain(self.config.track_volume)?;
+                    let album_gain_r128 = compute_gain(self.config.album_volume)?;
                     let new_gains = OpusGains {
                         output: new_header_gain.into(),
                         track_r128: track_gain_r128.map(|g| g.into()),

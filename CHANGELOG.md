@@ -2,7 +2,8 @@
 
 ## Unreleased
 
-* No changes yet.
+* Minor code cleanup.
+* Document `VolumeAnalyzer::mean_lufs_across_multiple()`.
 
 ## 0.3.0
 
