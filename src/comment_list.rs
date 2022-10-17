@@ -1,6 +1,10 @@
 use crate::Error;
 
 pub trait CommentList {
+    type Iter<'a>: Iterator<Item = (&'a str, &'a str)>
+    where
+        Self: 'a;
+
     /// Returns the number of user comments in the header
     fn len(&self) -> usize;
 
@@ -20,4 +24,7 @@ pub trait CommentList {
 
     /// Appends the specified mapping.
     fn append(&mut self, key: &str, value: &str) -> Result<(), Error>;
+
+    /// Iterate over the entries of the comment list
+    fn iter<'a>(&'a self) -> Self::Iter<'a>;
 }

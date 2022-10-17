@@ -4,6 +4,7 @@ mod comment_header;
 mod comment_list;
 mod constants;
 mod decibels;
+mod discrete_comment_list;
 mod error;
 mod fixed_point_gain;
 mod opus_header;
@@ -27,6 +28,7 @@ pub mod opus {
     pub use crate::comment_header::*;
     pub use crate::comment_list::*;
     pub use crate::constants::opus::*;
+    pub use crate::discrete_comment_list::*;
     pub use crate::fixed_point_gain::*;
     pub use crate::opus_header::*;
 }

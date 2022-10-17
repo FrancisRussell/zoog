@@ -7,6 +7,8 @@
 * Deliberately panic on some exceptional Opus comment cases.
 * Treat Opus comment keys case-insensitively and add tests (bugfix).
 * Improve Opus comment field name validation.
+* Define a trait for comment lists.
+* Define a type for holding comment lists.
 
 ## 0.3.0
 
