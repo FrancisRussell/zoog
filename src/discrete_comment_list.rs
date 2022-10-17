@@ -84,7 +84,7 @@ impl CommentList for DiscreteCommentList {
         Ok(())
     }
 
-    fn iter<'a>(&'a self) -> Iter<'a> { Iter { inner: (&self.comments).iter() } }
+    fn iter(&self) -> Iter<'_> { Iter { inner: self.comments.iter() } }
 }
 
 #[cfg(test)]

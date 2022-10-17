@@ -29,5 +29,5 @@ pub trait CommentList {
     fn append(&mut self, key: &str, value: &str) -> Result<(), Error>;
 
     /// Iterate over the entries of the comment list
-    fn iter<'a>(&'a self) -> Self::Iter<'a>;
+    fn iter(&self) -> Self::Iter<'_>;
 }

@@ -36,18 +36,6 @@ impl<'a> CommentHeader<'a> {
         reader.read_exact(data).map_err(|_| Error::MalformedCommentHeader)
     }
 
-    fn keys_equal(k1: &str, k2: &str) -> bool { k1.eq_ignore_ascii_case(k2) }
-
-    fn validate_field_name(field_name: &str) -> Result<(), Error> {
-        for c in field_name.chars() {
-            match c {
-                ' '..='<' | '>'..='}' => {}
-                _ => return Err(Error::InvalidOpusCommentFieldName(field_name.into())),
-            }
-        }
-        Ok(())
-    }
-
     /// Constructs an empty `CommentHeader`. The comment data will be placed in
     /// the supplied `Vec`. Any existing content will be discarded.
     pub fn empty(data: &'a mut Vec<u8>) -> CommentHeader<'a> {
@@ -82,7 +70,6 @@ impl<'a> CommentHeader<'a> {
             let comment = String::from_utf8(comment)?;
             let offset = comment.find(char::from(FIELD_NAME_TERMINATOR)).ok_or(Error::MalformedCommentHeader)?;
             let (key, value) = comment.split_at(offset);
-            Self::validate_field_name(key)?;
             user_comments.append(key, &value[1..])?;
         }
         let result = CommentHeader { data, vendor, user_comments };
@@ -166,7 +153,7 @@ impl<'a> CommentList for CommentHeader<'a> {
 
     fn append(&mut self, key: &str, value: &str) -> Result<(), Error> { self.user_comments.append(key, value) }
 
-    fn iter<'b>(&'b self) -> Self::Iter<'b> { self.user_comments.iter() }
+    fn iter(&self) -> Self::Iter<'_> { self.user_comments.iter() }
 }
 
 impl<'a> Drop for CommentHeader<'a> {
