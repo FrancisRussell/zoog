@@ -148,10 +148,13 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
     }
 }
 
-/// Convenience function for performing a rewrite. Rewrites the headers of an Ogg Opus stream
-/// using the supplied `HeaderRewrite`.
+/// Convenience function for performing a rewrite. Rewrites the headers of an
+/// Ogg Opus stream using the supplied `HeaderRewrite`. If `abort_on_unchanged`
+/// is set, the function will terminate immediately if it is detected that no
+/// headers were modified, otherwise it will continue to rewrite the stream
+/// until the input stream is exhausted or an error occurs.
 pub fn rewrite_stream<HR: HeaderRewrite, R: Read + Seek, W: Write>(
-    rewrite: HR, input: R, mut output: W,
+    rewrite: HR, input: R, mut output: W, abort_on_unchanged: bool,
 ) -> Result<SubmitResult<HR::Summary>, HR::Error>
 where
     HR::Error: From<Error>,
@@ -178,11 +181,14 @@ where
                         // gains to return as a result
                         result = r;
                     }
-                    Ok(SubmitResult::HeadersUnchanged(_)) | Err(_) => {
-                        // If we are already normalized or encounter an error, we want to
-                        // abort immediately
-                        break submit_result;
+                    Ok(r @ SubmitResult::HeadersUnchanged(_)) => {
+                        if abort_on_unchanged {
+                            break Ok(r);
+                        } else {
+                            result = r;
+                        }
                     }
+                    Err(_) => break submit_result,
                 }
             }
         }

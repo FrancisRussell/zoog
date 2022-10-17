@@ -323,7 +323,8 @@ fn main_impl() -> Result<(), Error> {
                     let output_file = output_file.as_write();
                     let mut output_file = BufWriter::new(output_file);
                     let rewrite = VolumeHeaderRewrite::new(rewriter_config);
-                    rewrite_stream(rewrite, &mut input_file, &mut output_file)
+                    let abort_on_unchanged = true;
+                    rewrite_stream(rewrite, &mut input_file, &mut output_file, abort_on_unchanged)
                 };
                 drop(input_file); // Close to avoid potential issues with renaming
                 *num_processed.lock() += 1;
