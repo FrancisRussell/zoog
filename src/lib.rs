@@ -8,6 +8,7 @@ mod fixed_point_gain;
 mod opus_header;
 
 /// Functionality for rewriting Ogg Opus streams with new headers
+pub mod header_rewriter;
 pub mod rewriter;
 
 /// Functionality for determining BS.1770 loudness of Ogg Opus streams
