@@ -5,7 +5,7 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
 use thiserror::Error;
 
-use crate::opus::{FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use crate::opus::{CommentList, FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::Error;
 
 const COMMENT_MAGIC: &[u8] = b"OpusTags";
@@ -89,48 +89,6 @@ impl<'a> CommentHeader<'a> {
         Ok(Some(result))
     }
 
-    /// Returns the first mapped value for the specified key.
-    pub fn get_first(&self, key: &str) -> Option<&str> {
-        self.user_comments.iter().find(|(k, _)| Self::keys_equal(k, key)).map(|(_, v)| v.as_str())
-    }
-
-    /// Removes all mappings for the specified key.
-    pub fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| !Self::keys_equal(key, k)); }
-
-    /// If the key already exists, update the first mapping's value to the one
-    /// supplied and discard any later mappings. If the key does not exist,
-    /// append the mapping to the end of the list.
-    pub fn replace(&mut self, key: &str, value: &str) -> Result<(), Error> {
-        let mut found = false;
-        self.user_comments.retain_mut(|(k, ref mut v)| {
-            if Self::keys_equal(k, key) {
-                if found {
-                    // If we have already found the key, discard this mapping
-                    false
-                } else {
-                    *v = value.into();
-                    found = true;
-                    true
-                }
-            } else {
-                true
-            }
-        });
-
-        // If the key did not exist, we append
-        if !found {
-            self.append(key, value)?;
-        }
-        Ok(())
-    }
-
-    /// Appends the specified mapping.
-    pub fn append(&mut self, key: &str, value: &str) -> Result<(), Error> {
-        Self::validate_field_name(key)?;
-        self.user_comments.push((key.into(), value.into()));
-        Ok(())
-    }
-
     /// Attempts to parse the first mapping for the specified key as the
     /// fixed-point Decibel representation used in Opus comment headers.
     pub fn get_gain_from_tag(&self, tag: &str) -> Result<Option<FixedPointGain>, Error> {
@@ -169,12 +127,6 @@ impl<'a> CommentHeader<'a> {
         Ok(())
     }
 
-    /// Returns the number of user comments in the header
-    pub fn len(&self) -> usize { self.user_comments.len() }
-
-    /// Does the header contain any user comments?
-    pub fn is_empty(&self) -> bool { self.user_comments.is_empty() }
-
     fn commit(&mut self) -> Result<(), CommitError> {
         let data = &mut self.data;
         data.clear();
@@ -193,6 +145,48 @@ impl<'a> CommentHeader<'a> {
             data.push(FIELD_NAME_TERMINATOR);
             data.extend(v);
         }
+        Ok(())
+    }
+}
+
+impl<'a> CommentList for CommentHeader<'a> {
+    fn len(&self) -> usize { self.user_comments.len() }
+
+    fn is_empty(&self) -> bool { self.user_comments.is_empty() }
+
+    fn get_first(&self, key: &str) -> Option<&str> {
+        self.user_comments.iter().find(|(k, _)| Self::keys_equal(k, key)).map(|(_, v)| v.as_str())
+    }
+
+    fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| !Self::keys_equal(key, k)); }
+
+    fn replace(&mut self, key: &str, value: &str) -> Result<(), Error> {
+        let mut found = false;
+        self.user_comments.retain_mut(|(k, ref mut v)| {
+            if Self::keys_equal(k, key) {
+                if found {
+                    // If we have already found the key, discard this mapping
+                    false
+                } else {
+                    *v = value.into();
+                    found = true;
+                    true
+                }
+            } else {
+                true
+            }
+        });
+
+        // If the key did not exist, we append
+        if !found {
+            self.append(key, value)?;
+        }
+        Ok(())
+    }
+
+    fn append(&mut self, key: &str, value: &str) -> Result<(), Error> {
+        Self::validate_field_name(key)?;
+        self.user_comments.push((key.into(), value.into()));
         Ok(())
     }
 }
