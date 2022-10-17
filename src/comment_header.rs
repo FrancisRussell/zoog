@@ -156,6 +156,8 @@ impl<'a> CommentList for CommentHeader<'a> {
 
     fn is_empty(&self) -> bool { self.user_comments.is_empty() }
 
+    fn clear(&mut self) { self.user_comments.clear() }
+
     fn get_first(&self, key: &str) -> Option<&str> { self.user_comments.get_first(key) }
 
     fn remove_all(&mut self, key: &str) { self.user_comments.remove_all(key) }

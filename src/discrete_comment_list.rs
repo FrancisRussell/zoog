@@ -46,6 +46,8 @@ impl CommentList for DiscreteCommentList {
 
     fn is_empty(&self) -> bool { self.comments.is_empty() }
 
+    fn clear(&mut self) { self.comments.clear() }
+
     fn get_first(&self, key: &str) -> Option<&str> {
         self.comments.iter().find(|(k, _)| Self::keys_equal(k, key)).map(|(_, v)| v.as_str())
     }

@@ -11,6 +11,9 @@ pub trait CommentList {
     /// Does the header contain any user comments?
     fn is_empty(&self) -> bool;
 
+    /// Removes all items
+    fn clear(&mut self);
+
     /// Returns the first mapped value for the specified key.
     fn get_first(&self, key: &str) -> Option<&str>;
 
