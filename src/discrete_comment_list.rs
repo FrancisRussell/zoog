@@ -1,10 +1,12 @@
+use std::sync::Arc;
+
 use crate::opus::CommentList;
 use crate::Error;
 
 /// Stand-alone representation of an Ogg Opus comment list
 #[derive(Clone, Debug, Default, PartialEq)]
 pub struct DiscreteCommentList {
-    comments: Vec<(String, String)>,
+    comments: Vec<(Arc<String>, Arc<String>)>,
 }
 
 impl DiscreteCommentList {
@@ -28,7 +30,7 @@ impl DiscreteCommentList {
 
 /// Iterator for `DiscreteCommentList`
 pub struct Iter<'a> {
-    inner: std::slice::Iter<'a, (String, String)>,
+    inner: std::slice::Iter<'a, (Arc<String>, Arc<String>)>,
 }
 
 impl<'a> Iterator for Iter<'a> {
@@ -58,7 +60,7 @@ impl CommentList for DiscreteCommentList {
                     // If we have already found the key, discard this mapping
                     false
                 } else {
-                    *v = value.into();
+                    *v = Arc::new(value.into());
                     found = true;
                     true
                 }
@@ -76,7 +78,7 @@ impl CommentList for DiscreteCommentList {
 
     fn append(&mut self, key: &str, value: &str) -> Result<(), Error> {
         Self::validate_field_name(key)?;
-        self.comments.push((key.into(), value.into()));
+        self.comments.push((Arc::new(key.into()), Arc::new(value.into())));
         Ok(())
     }
 
