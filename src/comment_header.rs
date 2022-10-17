@@ -6,7 +6,7 @@ use derivative::Derivative;
 use thiserror::Error;
 
 use crate::constants::opus::FIELD_NAME_TERMINATOR;
-use crate::opus::{CommentList, DiscreteCommentList, FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use crate::opus::{parse_comment, CommentList, DiscreteCommentList, FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::Error;
 
 const COMMENT_MAGIC: &[u8] = b"OpusTags";
@@ -68,9 +68,8 @@ impl<'a> CommentHeader<'a> {
             let mut comment = vec![0u8; comment_len as usize];
             Self::read_exact(&mut reader, &mut comment)?;
             let comment = String::from_utf8(comment)?;
-            let offset = comment.find(char::from(FIELD_NAME_TERMINATOR)).ok_or(Error::MalformedCommentHeader)?;
-            let (key, value) = comment.split_at(offset);
-            user_comments.append(key, &value[1..])?;
+            let (key, value) = parse_comment(&comment)?;
+            user_comments.append(&key, &value)?;
         }
         let result = CommentHeader { data, vendor, user_comments };
         Ok(Some(result))

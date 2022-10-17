@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::opus::CommentList;
+use crate::opus::{validate_comment_field_name, CommentList};
 use crate::Error;
 
 /// Stand-alone representation of an Ogg Opus comment list
@@ -11,16 +11,6 @@ pub struct DiscreteCommentList {
 
 impl DiscreteCommentList {
     fn keys_equal(k1: &str, k2: &str) -> bool { k1.eq_ignore_ascii_case(k2) }
-
-    fn validate_field_name(field_name: &str) -> Result<(), Error> {
-        for c in field_name.chars() {
-            match c {
-                ' '..='<' | '>'..='}' => {}
-                _ => return Err(Error::InvalidOpusCommentFieldName(field_name.into())),
-            }
-        }
-        Ok(())
-    }
 
     /// Allocates a list with the specified capacity
     pub fn with_capacity(cap: usize) -> DiscreteCommentList {
@@ -79,7 +69,7 @@ impl CommentList for DiscreteCommentList {
     }
 
     fn append(&mut self, key: &str, value: &str) -> Result<(), Error> {
-        Self::validate_field_name(key)?;
+        validate_comment_field_name(key)?;
         self.comments.push((Arc::new(key.into()), Arc::new(value.into())));
         Ok(())
     }

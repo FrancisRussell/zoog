@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use zoog::comment_rewriter::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
 use zoog::header_rewriter::{rewrite_stream, SubmitResult};
-use zoog::opus::CommentList;
+use zoog::opus::{parse_comment, CommentList};
 use zoog::Error;
 
 fn main() {
@@ -30,14 +30,15 @@ struct Cli {
     append: bool,
 
     #[clap(short, long, action)]
-    /// Replace commentsin the  Ogg Opus file
+    /// Replace comments in the Ogg Opus file
     write: bool,
+
+    #[clap(short='t', long="tag", id="TAG", value_parser=parse_comment)]
+    /// Specify a tag
+    tags: Vec<(String, String)>,
 
     /// Input file
     input_file: PathBuf,
-
-    /// Output file
-    output_file: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -74,22 +75,30 @@ fn main_impl() -> Result<(), Error> {
         }
     };
 
-    println!("Operating in mode: {:?}", operation_mode);
-
-    let mut output_file = match operation_mode {
-        OperationMode::List => OutputFile::Sink(io::sink()),
-        OperationMode::Append | OperationMode::Replace => todo!("Append and replace not yet implemented"),
-    };
+    println!("Operating in mode: {:?} (tags={:?})", operation_mode, cli.tags);
     let action = match operation_mode {
         OperationMode::List => CommentRewriterAction::NoChange,
         OperationMode::Append | OperationMode::Replace => todo!("Append and replace not yet implemented"),
     };
 
     let rewriter_config = CommentRewriterConfig { action };
-
     let input_path = cli.input_file;
+    let input_dir = input_path.parent().ok_or_else(|| Error::NoParentError(input_path.to_path_buf()))?;
+    let input_base = input_path.file_name().ok_or_else(|| Error::NotAFilePath(input_path.to_path_buf()))?;
     let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
     let mut input_file = BufReader::new(input_file);
+
+    let mut output_file = match operation_mode {
+        OperationMode::List => OutputFile::Sink(io::sink()),
+        OperationMode::Append | OperationMode::Replace => {
+            let temp = tempfile::Builder::new()
+                .prefix(input_base)
+                .suffix("zoog")
+                .tempfile_in(input_dir)
+                .map_err(Error::TempFileOpenError)?;
+            OutputFile::Temp(temp)
+        }
+    };
 
     let rewrite_result = {
         let output_file = output_file.as_write();

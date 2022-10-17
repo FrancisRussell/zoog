@@ -35,6 +35,10 @@ pub enum Error {
     #[error("Malformed comment header")]
     MalformedCommentHeader,
 
+    /// Missing Opus comment separator
+    #[error("Missing separator in Opus comment")]
+    MissingOpusCommentSeparator,
+
     /// An invalid UTF-8 sequence was encountered
     #[error("UTF-8 encoding error")]
     UTF8Error(#[from] std::string::FromUtf8Error),
