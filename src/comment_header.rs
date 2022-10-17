@@ -114,6 +114,9 @@ impl<'a> CommentHeader<'a> {
         Ok(())
     }
 
+    /// Returns the comments in the header as a `DiscreteCommentList`.
+    pub fn to_discrete_comment_list(&self) -> DiscreteCommentList { self.user_comments.clone() }
+
     fn commit(&mut self) -> Result<(), CommitError> {
         let data = &mut self.data;
         data.clear();
