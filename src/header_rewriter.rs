@@ -57,7 +57,7 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
     /// - `config` - the configuration for volume rewriting.
     /// - `packet_writer` - the Ogg stream writer that the rewritten packets
     ///   will be sent to.
-    pub fn new<'a>(config: HR::Config, packet_writer: PacketWriter<'a, W>) -> HeaderRewriter<'a, HR, W> {
+    pub fn new(config: HR::Config, packet_writer: PacketWriter<W>) -> HeaderRewriter<HR, W> {
         HeaderRewriter {
             packet_writer,
             header_packet: None,

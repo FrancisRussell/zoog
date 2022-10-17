@@ -1,10 +1,6 @@
-use std::collections::VecDeque;
 use std::convert::TryFrom;
-use std::io::Write;
 
-use ogg::writing::{PacketWriteEndInfo, PacketWriter};
-use ogg::Packet;
-
+use crate::header_rewriter::{self, HeaderRewrite, HeaderRewriter};
 use crate::opus::{CommentHeader, FixedPointGain, OpusHeader, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::{Decibels, Error, R128_LUFS};
 
@@ -80,162 +76,62 @@ pub struct OpusGains {
     pub album_r128: Option<Decibels>,
 }
 
-/// Represents the non-erroneous result of a packet submit operation
-#[derive(Clone, Copy, Debug)]
-pub enum SubmitResult {
-    /// Packet was accepted
-    Good,
-
-    /// The stream is already normalized so there is no need to rewrite it. The
-    /// existing gains are returned.
-    AlreadyNormalized(OpusGains),
-
-    /// The gains of the stream will be changed from `from` to `to`.
-    ChangingGains { from: OpusGains, to: OpusGains },
-}
-
-#[derive(Clone, Copy, Debug)]
-enum State {
-    AwaitingHeader,
-    AwaitingComments,
-    Forwarding,
-}
-
-/// Re-writes an Ogg Opus stream with new output gain and comment gain values
-pub struct VolumeRewriter<'a, W: Write> {
-    packet_writer: PacketWriter<'a, W>,
-    header_packet: Option<Packet>,
-    state: State,
-    packet_queue: VecDeque<Packet>,
+/// Parameterization struct for `HeaderRewriter` to rewrite ouput gain and R128
+/// tags.
+#[derive(Debug)]
+pub struct VolumeHeaderRewrite {
     config: VolumeRewriterConfig,
 }
 
-impl<W: Write> VolumeRewriter<'_, W> {
-    /// Constructs a new rewriter
-    /// - `config` - the configuration for volume rewriting.
-    /// - `packet_writer` - the Ogg stream writer that the rewritten packets
-    ///   will be sent to.
-    pub fn new<'a>(config: &VolumeRewriterConfig, packet_writer: PacketWriter<'a, W>) -> VolumeRewriter<'a, W> {
-        VolumeRewriter {
-            packet_writer,
-            header_packet: None,
-            state: State::AwaitingHeader,
-            packet_queue: VecDeque::new(),
-            config: *config,
-        }
+impl HeaderRewrite for VolumeHeaderRewrite {
+    type Config = VolumeRewriterConfig;
+    type Error = Error;
+    type Summary = OpusGains;
+
+    fn new(config: VolumeRewriterConfig) -> VolumeHeaderRewrite { VolumeHeaderRewrite { config } }
+
+    fn summarize(&self, opus_header: &OpusHeader, comment_header: &CommentHeader) -> Result<OpusGains, Error> {
+        let gains = OpusGains {
+            output: opus_header.get_output_gain().into(),
+            track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).unwrap_or(None).map(|g| g.into()),
+            album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).unwrap_or(None).map(|g| g.into()),
+        };
+        Ok(gains)
     }
 
-    /// Submits a new packet to the rewriter. If `Ready` is returned, another
-    /// packet from the same stream should continue to be submitted. If
-    /// `AlreadyNormalized` is returned, the supplied stream did not need
-    /// any alterations. In this case, the partial output should be discarded
-    /// and no further packets submitted.
-    pub fn submit(&mut self, mut packet: Packet) -> Result<SubmitResult, Error> {
-        match self.state {
-            State::AwaitingHeader => {
-                self.header_packet = Some(packet);
-                self.state = State::AwaitingComments;
+    fn rewrite(&self, opus_header: &mut OpusHeader, comment_header: &mut CommentHeader) -> Result<(), Error> {
+        let new_header_gain = match self.config.output_gain {
+            VolumeTarget::ZeroGain => FixedPointGain::default(),
+            VolumeTarget::LUFS(target_lufs) => {
+                let volume_for_output_gain =
+                    self.config.volume_for_output_gain_calculation().expect("Precomputed volume unexpectedly missing");
+                FixedPointGain::try_from(target_lufs - volume_for_output_gain)?
             }
-            State::AwaitingComments => {
-                // Parse Opus header
-                let mut opus_header_packet = self.header_packet.take().expect("Missing header packet");
-                let (existing_gains, new_gains, changed) = {
-                    // Create copies of Opus and comment header to check if they have changed
-                    let mut opus_header_packet_data_orig = opus_header_packet.data.clone();
-                    let mut comment_header_data_orig = packet.data.clone();
-
-                    // Parse Opus header
-                    let mut opus_header =
-                        OpusHeader::try_parse(&mut opus_header_packet.data)?.ok_or(Error::MissingOpusStream)?;
-                    // Parse comment header
-                    let mut comment_header = match CommentHeader::try_parse(&mut packet.data) {
-                        Ok(Some(header)) => header,
-                        Ok(None) => return Err(Error::MissingCommentHeader),
-                        Err(e) => return Err(e),
-                    };
-                    let existing_gains = OpusGains {
-                        output: opus_header.get_output_gain().into(),
-                        track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).unwrap_or(None).map(|g| g.into()),
-                        album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).unwrap_or(None).map(|g| g.into()),
-                    };
-                    let new_header_gain = match self.config.output_gain {
-                        VolumeTarget::ZeroGain => FixedPointGain::default(),
-                        VolumeTarget::LUFS(target_lufs) => {
-                            let volume_for_output_gain = self
-                                .config
-                                .volume_for_output_gain_calculation()
-                                .expect("Precomputed volume unexpectedly missing");
-                            FixedPointGain::try_from(target_lufs - volume_for_output_gain)?
-                        }
-                        VolumeTarget::NoChange => opus_header.get_output_gain(),
-                    };
-                    let compute_gain = |volume| -> Result<Option<FixedPointGain>, Error> {
-                        if let Some(volume) = volume {
-                            FixedPointGain::try_from(R128_LUFS - volume - new_header_gain.into()).map(Some)
-                        } else {
-                            Ok(None)
-                        }
-                    };
-                    let track_gain_r128 = compute_gain(self.config.track_volume)?;
-                    let album_gain_r128 = compute_gain(self.config.album_volume)?;
-                    let new_gains = OpusGains {
-                        output: new_header_gain.into(),
-                        track_r128: track_gain_r128.map(|g| g.into()),
-                        album_r128: album_gain_r128.map(|g| g.into()),
-                    };
-                    opus_header.set_output_gain(new_header_gain);
-                    for (tag, gain) in [(TAG_TRACK_GAIN, track_gain_r128), (TAG_ALBUM_GAIN, album_gain_r128)] {
-                        if let Some(gain) = gain {
-                            comment_header.replace(tag, &format!("{}", gain.as_fixed_point()))?;
-                        } else {
-                            comment_header.remove_all(tag);
-                        }
-                    }
-
-                    // We have decoded both of these already, so these should never fail
-                    let opus_header_orig = OpusHeader::try_parse(&mut opus_header_packet_data_orig)
-                        .expect("Opus header unexpectedly invalid")
-                        .expect("Unexpectedly failed to find Opus header");
-                    let comment_header_orig = CommentHeader::try_parse(&mut comment_header_data_orig)
-                        .expect("Unexpectedly failed to decode comment header")
-                        .expect("Comment header unexpectedly missing");
-
-                    // We compare headers rather than the values of the `OpusGains` structs because
-                    // using the latter glosses over issues such as duplicate or invalid gain tags
-                    // which we will fix if present.
-                    let changed = (opus_header != opus_header_orig) || (comment_header != comment_header_orig);
-                    (existing_gains, new_gains, changed)
-                };
-                self.packet_queue.push_back(opus_header_packet);
-                self.packet_queue.push_back(packet);
-                self.state = State::Forwarding;
-
-                return Ok(if changed {
-                    SubmitResult::ChangingGains { from: existing_gains, to: new_gains }
-                } else {
-                    SubmitResult::AlreadyNormalized(existing_gains)
-                });
-            }
-            State::Forwarding => {
-                self.packet_queue.push_back(packet);
-            }
-        }
-
-        while let Some(packet) = self.packet_queue.pop_front() {
-            let packet_info = if packet.last_in_stream() {
-                PacketWriteEndInfo::EndStream
-            } else if packet.last_in_page() {
-                PacketWriteEndInfo::EndPage
+            VolumeTarget::NoChange => opus_header.get_output_gain(),
+        };
+        opus_header.set_output_gain(new_header_gain);
+        let compute_gain = |volume| -> Result<Option<FixedPointGain>, Error> {
+            if let Some(volume) = volume {
+                FixedPointGain::try_from(R128_LUFS - volume - new_header_gain.into()).map(Some)
             } else {
-                PacketWriteEndInfo::NormalPacket
-            };
-            let packet_serial = packet.stream_serial();
-            let packet_granule = packet.absgp_page();
-
-            self.packet_writer
-                .write_packet(packet.data, packet_serial, packet_info, packet_granule)
-                .map_err(Error::WriteError)?;
+                Ok(None)
+            }
+        };
+        let track_gain_r128 = compute_gain(self.config.track_volume)?;
+        let album_gain_r128 = compute_gain(self.config.album_volume)?;
+        for (tag, gain) in [(TAG_TRACK_GAIN, track_gain_r128), (TAG_ALBUM_GAIN, album_gain_r128)] {
+            if let Some(gain) = gain {
+                comment_header.replace(tag, &format!("{}", gain.as_fixed_point()))?;
+            } else {
+                comment_header.remove_all(tag);
+            }
         }
-        Ok(SubmitResult::Good)
+        Ok(())
     }
 }
+
+/// Re-writes an Ogg Opus stream with new output gain and comment gain values
+pub type VolumeRewriter<'a, W> = HeaderRewriter<'a, VolumeHeaderRewrite, W>;
+
+/// The result type of submitting a packet
+pub type SubmitResult = header_rewriter::SubmitResult<OpusGains>;

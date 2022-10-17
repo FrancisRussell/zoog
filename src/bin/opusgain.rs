@@ -149,7 +149,7 @@ fn rewrite_stream<R: Read + Seek, W: Write>(
 ) -> Result<SubmitResult, Error> {
     let mut ogg_reader = PacketReader::new(input);
     let ogg_writer = PacketWriter::new(&mut output);
-    let mut rewriter = VolumeRewriter::new(config, ogg_writer);
+    let mut rewriter = VolumeRewriter::new(*config, ogg_writer);
     let mut result = SubmitResult::Good;
     loop {
         match ogg_reader.read_packet() {
@@ -164,12 +164,12 @@ fn rewrite_stream<R: Read + Seek, W: Write>(
                     Ok(SubmitResult::Good) => {
                         // We can continue submitting packets
                     }
-                    Ok(r @ SubmitResult::ChangingGains { .. }) => {
+                    Ok(r @ SubmitResult::HeadersChanged { .. }) => {
                         // We can continue submitting packets, but want to save the changed
                         // gains to return as a result
                         result = r;
                     }
-                    Ok(SubmitResult::AlreadyNormalized(_)) | Err(_) => {
+                    Ok(SubmitResult::HeadersUnchanged(_)) | Err(_) => {
                         // If we are already normalized or encounter an error, we want to
                         // abort immediately
                         break submit_result;
@@ -380,7 +380,7 @@ fn main_impl() -> Result<(), Error> {
                         )
                         .map_err(Error::ConsoleIoError)?;
                     }
-                    Ok(SubmitResult::ChangingGains { from: old_gains, to: new_gains }) => {
+                    Ok(SubmitResult::HeadersChanged { from: old_gains, to: new_gains }) => {
                         match output_file {
                             OutputFile::Temp(output_file) => {
                                 let mut backup_path = input_path.clone();
@@ -414,7 +414,7 @@ fn main_impl() -> Result<(), Error> {
                         writeln!(console.out(), "New gain values:").map_err(Error::ConsoleIoError)?;
                         print_gains(&new_gains, console)?;
                     }
-                    Ok(SubmitResult::AlreadyNormalized(gains)) => {
+                    Ok(SubmitResult::HeadersUnchanged(gains)) => {
                         writeln!(console.out(), "All gains are already correct so doing nothing. Existing gains were:")
                             .map_err(Error::ConsoleIoError)?;
                         print_gains(&gains, console)?;
