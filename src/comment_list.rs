@@ -1,3 +1,6 @@
+use std::io::{self, Write};
+
+use crate::constants::opus::FIELD_NAME_TERMINATOR;
 use crate::Error;
 
 pub trait CommentList {
@@ -30,4 +33,12 @@ pub trait CommentList {
 
     /// Iterate over the entries of the comment list
     fn iter(&self) -> Self::Iter<'_>;
+
+    /// Write each comment in the user-friendly textual representation
+    fn write_as_text<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
+        for (k, v) in self.iter() {
+            writeln!(writer, "{}{}{}", k, FIELD_NAME_TERMINATOR as char, v)?;
+        }
+        Ok(())
+    }
 }
