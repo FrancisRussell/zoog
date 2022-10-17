@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use crate::header_rewriter::{self, HeaderRewrite, HeaderRewriter};
+use crate::header_rewriter::{self, HeaderRewrite};
 use crate::opus::{CommentHeader, CommentList, FixedPointGain, OpusHeader, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::{Decibels, Error, R128_LUFS};
 
@@ -130,9 +130,6 @@ impl HeaderRewrite for VolumeHeaderRewrite {
         Ok(())
     }
 }
-
-/// Re-writes an Ogg Opus stream with new output gain and comment gain values
-pub type VolumeRewriter<'a, W> = HeaderRewriter<'a, VolumeHeaderRewrite, W>;
 
 /// The result type of submitting a packet
 pub type SubmitResult = header_rewriter::SubmitResult<OpusGains>;
