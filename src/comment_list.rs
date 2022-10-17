@@ -12,7 +12,7 @@ pub trait CommentList {
     fn len(&self) -> usize;
 
     /// Does the header contain any user comments?
-    fn is_empty(&self) -> bool;
+    fn is_empty(&self) -> bool { self.len() == 0 }
 
     /// Removes all items
     fn clear(&mut self);
@@ -38,6 +38,21 @@ pub trait CommentList {
     fn write_as_text<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
         for (k, v) in self.iter() {
             writeln!(writer, "{}{}{}", k, FIELD_NAME_TERMINATOR as char, v)?;
+        }
+        Ok(())
+    }
+
+    /// Extend with mappings from supplied iterator
+    fn extend<K, V, I>(&mut self, comments: I) -> Result<(), Error>
+    where
+        K: AsRef<str>,
+        V: AsRef<str>,
+        I: IntoIterator<Item = (K, V)>,
+    {
+        let comments = comments.into_iter();
+        for (key, value) in comments {
+            let (key, value) = (key.as_ref(), value.as_ref());
+            self.append(key, value)?;
         }
         Ok(())
     }

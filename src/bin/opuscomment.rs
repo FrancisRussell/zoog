@@ -5,7 +5,7 @@ use std::path::PathBuf;
 use clap::Parser;
 use zoog::comment_rewriter::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
 use zoog::header_rewriter::{rewrite_stream, SubmitResult};
-use zoog::opus::{parse_comment, CommentList};
+use zoog::opus::{parse_comment, CommentList, DiscreteCommentList};
 use zoog::Error;
 
 fn main() {
@@ -33,9 +33,9 @@ struct Cli {
     /// Replace comments in the Ogg Opus file
     write: bool,
 
-    #[clap(short='t', long="tag", id="TAG", value_parser=parse_comment)]
+    #[clap(short = 't', long = "tag", id = "TAG")]
     /// Specify a tag
-    tags: Vec<(String, String)>,
+    tags: Vec<String>,
 
     /// Input file
     input_file: PathBuf,
@@ -63,6 +63,17 @@ impl OutputFile {
     }
 }
 
+fn comments_to_list<S: AsRef<str>, I: IntoIterator<Item = S>>(comments: I) -> Result<DiscreteCommentList, Error> {
+    let comments = comments.into_iter();
+    let mut result = DiscreteCommentList::with_capacity(comments.size_hint().0);
+    for comment in comments {
+        let comment = comment.as_ref();
+        let (key, value) = parse_comment(comment)?;
+        result.append(&key, &value)?;
+    }
+    Ok(result)
+}
+
 fn main_impl() -> Result<(), Error> {
     let cli = Cli::parse_from(wild::args_os());
     let operation_mode = match (cli.list, cli.append, cli.write) {
@@ -75,10 +86,13 @@ fn main_impl() -> Result<(), Error> {
         }
     };
 
-    println!("Operating in mode: {:?} (tags={:?})", operation_mode, cli.tags);
+    let tags = comments_to_list(cli.tags)?;
+    println!("Operating in mode: {:?} (tags={:?})", operation_mode, tags);
+
     let action = match operation_mode {
         OperationMode::List => CommentRewriterAction::NoChange,
-        OperationMode::Append | OperationMode::Replace => todo!("Append and replace not yet implemented"),
+        OperationMode::Append => todo!("Append not yet implemented"),
+        OperationMode::Replace => CommentRewriterAction::Replace(tags),
     };
 
     let rewriter_config = CommentRewriterConfig { action };

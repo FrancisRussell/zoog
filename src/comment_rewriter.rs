@@ -1,5 +1,6 @@
 use std::collections::{HashMap, HashSet};
 
+use crate::comment_list::CommentList;
 use crate::header_rewriter::{self, HeaderRewrite};
 use crate::opus::{CommentHeader, DiscreteCommentList, OpusHeader};
 use crate::Error;
@@ -40,9 +41,13 @@ impl HeaderRewrite for CommentHeaderRewrite {
         Ok(comment_header.to_discrete_comment_list())
     }
 
-    fn rewrite(&self, _opus_header: &mut OpusHeader, _comment_header: &mut CommentHeader) -> Result<(), Error> {
+    fn rewrite(&self, _opus_header: &mut OpusHeader, comment_header: &mut CommentHeader) -> Result<(), Error> {
         match &self.config.action {
             CommentRewriterAction::NoChange => {}
+            CommentRewriterAction::Replace(tags) => {
+                comment_header.clear();
+                comment_header.extend(tags.iter())?;
+            }
             a => todo!("CommentHeaderRewrite action unimplemented: {:?}", a),
         }
         Ok(())
