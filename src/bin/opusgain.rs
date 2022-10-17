@@ -14,8 +14,10 @@ use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use zoog::opus::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
-use zoog::rewriter::{OpusGains, OutputGainMode, Rewriter, RewriterConfig, SubmitResult, VolumeTarget};
 use zoog::volume_analyzer::VolumeAnalyzer;
+use zoog::volume_rewriter::{
+    OpusGains, OutputGainMode, SubmitResult, VolumeRewriter, VolumeRewriterConfig, VolumeTarget,
+};
 use zoog::{Decibels, Error, R128_LUFS, REPLAY_GAIN_LUFS};
 
 fn main() {
@@ -143,11 +145,11 @@ where
 }
 
 fn rewrite_stream<R: Read + Seek, W: Write>(
-    input: R, mut output: W, config: &RewriterConfig,
+    input: R, mut output: W, config: &VolumeRewriterConfig,
 ) -> Result<SubmitResult, Error> {
     let mut ogg_reader = PacketReader::new(input);
     let ogg_writer = PacketWriter::new(&mut output);
-    let mut rewriter = Rewriter::new(config, ogg_writer);
+    let mut rewriter = VolumeRewriter::new(config, ogg_writer);
     let mut result = SubmitResult::Good;
     loop {
         match ogg_reader.read_packet() {
@@ -329,7 +331,7 @@ fn main_impl() -> Result<(), Error> {
                         .expect("Could not find previously computed track volume"),
                 })
             };
-            let rewriter_config = RewriterConfig {
+            let rewriter_config = VolumeRewriterConfig {
                 output_gain: volume_target,
                 output_gain_mode,
                 track_volume,

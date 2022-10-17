@@ -29,9 +29,9 @@ pub enum OutputGainMode {
     Track,
 }
 
-/// Configuration type for `Rewriter`
+/// Configuration type for `VolumeRewriter`
 #[derive(Clone, Copy, Debug)]
-pub struct RewriterConfig {
+pub struct VolumeRewriterConfig {
     /// The target output gain
     pub output_gain: VolumeTarget,
 
@@ -45,7 +45,7 @@ pub struct RewriterConfig {
     pub album_volume: Option<Decibels>,
 }
 
-impl RewriterConfig {
+impl VolumeRewriterConfig {
     /// Computes the source volume that will be used for the output gain
     /// calculation
     pub fn volume_for_output_gain_calculation(&self) -> Option<Decibels> {
@@ -102,21 +102,21 @@ enum State {
 }
 
 /// Re-writes an Ogg Opus stream with new output gain and comment gain values
-pub struct Rewriter<'a, W: Write> {
+pub struct VolumeRewriter<'a, W: Write> {
     packet_writer: PacketWriter<'a, W>,
     header_packet: Option<Packet>,
     state: State,
     packet_queue: VecDeque<Packet>,
-    config: RewriterConfig,
+    config: VolumeRewriterConfig,
 }
 
-impl<W: Write> Rewriter<'_, W> {
+impl<W: Write> VolumeRewriter<'_, W> {
     /// Constructs a new rewriter
     /// - `config` - the configuration for volume rewriting.
     /// - `packet_writer` - the Ogg stream writer that the rewritten packets
     ///   will be sent to.
-    pub fn new<'a>(config: &RewriterConfig, packet_writer: PacketWriter<'a, W>) -> Rewriter<'a, W> {
-        Rewriter {
+    pub fn new<'a>(config: &VolumeRewriterConfig, packet_writer: PacketWriter<'a, W>) -> VolumeRewriter<'a, W> {
+        VolumeRewriter {
             packet_writer,
             header_packet: None,
             state: State::AwaitingHeader,

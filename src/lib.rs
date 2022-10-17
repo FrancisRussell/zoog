@@ -9,7 +9,7 @@ mod opus_header;
 
 /// Functionality for rewriting Ogg Opus streams with new headers
 pub mod header_rewriter;
-pub mod rewriter;
+pub mod volume_rewriter;
 
 /// Functionality for determining BS.1770 loudness of Ogg Opus streams
 pub mod volume_analyzer;
