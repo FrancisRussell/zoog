@@ -5,11 +5,11 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
 use thiserror::Error;
 
+use crate::constants::opus::FIELD_NAME_TERMINATOR;
 use crate::opus::{CommentList, DiscreteCommentList, FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::Error;
 
 const COMMENT_MAGIC: &[u8] = b"OpusTags";
-const FIELD_NAME_TERMINATOR: u8 = b'=';
 
 /// Allows querying and modification of an Opus comment header
 #[derive(Derivative)]
