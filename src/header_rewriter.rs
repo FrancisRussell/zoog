@@ -1,9 +1,9 @@
 use std::collections::VecDeque;
-use std::io::Write;
+use std::io::{Read, Seek, Write};
 
 use derivative::Derivative;
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
-use ogg::Packet;
+use ogg::{Packet, PacketReader};
 
 use crate::opus::{CommentHeader, OpusHeader};
 use crate::Error;
@@ -29,10 +29,8 @@ enum State {
 }
 
 pub trait HeaderRewrite {
-    type Config;
     type Summary;
     type Error;
-    fn new(config: Self::Config) -> Self;
     fn summarize(&self, opus_header: &OpusHeader, comment_header: &CommentHeader)
         -> Result<Self::Summary, Self::Error>;
     fn rewrite(&self, opus_header: &mut OpusHeader, comment_header: &mut CommentHeader) -> Result<(), Self::Error>;
@@ -57,13 +55,13 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
     /// - `config` - the configuration for volume rewriting.
     /// - `packet_writer` - the Ogg stream writer that the rewritten packets
     ///   will be sent to.
-    pub fn new(config: HR::Config, packet_writer: PacketWriter<W>) -> HeaderRewriter<HR, W> {
+    pub fn new(rewrite: HR, packet_writer: PacketWriter<W>) -> HeaderRewriter<HR, W> {
         HeaderRewriter {
             packet_writer,
             header_packet: None,
             state: State::AwaitingHeader,
             packet_queue: VecDeque::new(),
-            header_rewrite: HR::new(config),
+            header_rewrite: rewrite,
         }
     }
 
@@ -147,5 +145,46 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
                 .map_err(Error::WriteError)?;
         }
         Ok(SubmitResult::Good)
+    }
+}
+
+/// Convenience function for performing a rewrite. Rewrites the headers of an Ogg Opus stream
+/// using the supplied `HeaderRewrite`.
+pub fn rewrite_stream<HR: HeaderRewrite, R: Read + Seek, W: Write>(
+    rewrite: HR, input: R, mut output: W,
+) -> Result<SubmitResult<HR::Summary>, HR::Error>
+where
+    HR::Error: From<Error>,
+{
+    let mut ogg_reader = PacketReader::new(input);
+    let ogg_writer = PacketWriter::new(&mut output);
+    let mut rewriter = HeaderRewriter::new(rewrite, ogg_writer);
+    let mut result = SubmitResult::Good;
+    loop {
+        match ogg_reader.read_packet() {
+            Err(e) => break Err(Error::OggDecode(e).into()),
+            Ok(None) => {
+                // Make sure to flush any buffered data
+                break output.flush().map(|_| result).map_err(|e| Error::WriteError(e).into());
+            }
+            Ok(Some(packet)) => {
+                let submit_result = rewriter.submit(packet);
+                match submit_result {
+                    Ok(SubmitResult::Good) => {
+                        // We can continue submitting packets
+                    }
+                    Ok(r @ SubmitResult::HeadersChanged { .. }) => {
+                        // We can continue submitting packets, but want to save the changed
+                        // gains to return as a result
+                        result = r;
+                    }
+                    Ok(SubmitResult::HeadersUnchanged(_)) | Err(_) => {
+                        // If we are already normalized or encounter an error, we want to
+                        // abort immediately
+                        break submit_result;
+                    }
+                }
+            }
+        }
     }
 }

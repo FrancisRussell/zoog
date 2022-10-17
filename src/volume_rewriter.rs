@@ -83,12 +83,13 @@ pub struct VolumeHeaderRewrite {
     config: VolumeRewriterConfig,
 }
 
+impl VolumeHeaderRewrite {
+    pub fn new(config: VolumeRewriterConfig) -> VolumeHeaderRewrite { VolumeHeaderRewrite { config } }
+}
+
 impl HeaderRewrite for VolumeHeaderRewrite {
-    type Config = VolumeRewriterConfig;
     type Error = Error;
     type Summary = OpusGains;
-
-    fn new(config: VolumeRewriterConfig) -> VolumeHeaderRewrite { VolumeHeaderRewrite { config } }
 
     fn summarize(&self, opus_header: &OpusHeader, comment_header: &CommentHeader) -> Result<OpusGains, Error> {
         let gains = OpusGains {

@@ -3,20 +3,20 @@ mod console_output;
 
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
-use std::io::{self, BufReader, BufWriter, Read, Seek, Write};
+use std::io::{self, BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, ValueEnum};
 use console_output::{ConsoleOutput, DelayedConsoleOutput, Standard};
 use ogg::reading::PacketReader;
-use ogg::writing::PacketWriter;
 use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
+use zoog::header_rewriter::rewrite_stream;
 use zoog::opus::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use zoog::volume_analyzer::VolumeAnalyzer;
 use zoog::volume_rewriter::{
-    OpusGains, OutputGainMode, SubmitResult, VolumeRewriter, VolumeRewriterConfig, VolumeTarget,
+    OpusGains, OutputGainMode, SubmitResult, VolumeHeaderRewrite, VolumeRewriterConfig, VolumeTarget,
 };
 use zoog::{Decibels, Error, R128_LUFS, REPLAY_GAIN_LUFS};
 
@@ -142,42 +142,6 @@ where
     let mean = VolumeAnalyzer::mean_lufs_across_multiple(analyzers.iter());
     let album_volume = AlbumVolume { tracks, mean };
     Ok(album_volume)
-}
-
-fn rewrite_stream<R: Read + Seek, W: Write>(
-    input: R, mut output: W, config: &VolumeRewriterConfig,
-) -> Result<SubmitResult, Error> {
-    let mut ogg_reader = PacketReader::new(input);
-    let ogg_writer = PacketWriter::new(&mut output);
-    let mut rewriter = VolumeRewriter::new(*config, ogg_writer);
-    let mut result = SubmitResult::Good;
-    loop {
-        match ogg_reader.read_packet() {
-            Err(e) => break Err(Error::OggDecode(e)),
-            Ok(None) => {
-                // Make sure to flush any buffered data
-                break output.flush().map(|_| result).map_err(Error::WriteError);
-            }
-            Ok(Some(packet)) => {
-                let submit_result = rewriter.submit(packet);
-                match submit_result {
-                    Ok(SubmitResult::Good) => {
-                        // We can continue submitting packets
-                    }
-                    Ok(r @ SubmitResult::HeadersChanged { .. }) => {
-                        // We can continue submitting packets, but want to save the changed
-                        // gains to return as a result
-                        result = r;
-                    }
-                    Ok(SubmitResult::HeadersUnchanged(_)) | Err(_) => {
-                        // If we are already normalized or encounter an error, we want to
-                        // abort immediately
-                        break submit_result;
-                    }
-                }
-            }
-        }
-    }
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
@@ -358,7 +322,8 @@ fn main_impl() -> Result<(), Error> {
                 let rewrite_result = {
                     let output_file = output_file.as_write();
                     let mut output_file = BufWriter::new(output_file);
-                    rewrite_stream(&mut input_file, &mut output_file, &rewriter_config)
+                    let rewrite = VolumeHeaderRewrite::new(rewriter_config);
+                    rewrite_stream(rewrite, &mut input_file, &mut output_file)
                 };
                 drop(input_file); // Close to avoid potential issues with renaming
                 *num_processed.lock() += 1;
