@@ -1,8 +1,12 @@
+#[path = "../output_file.rs"]
+mod output_file;
+
 use std::fs::File;
-use std::io::{self, BufReader, BufWriter, Write};
+use std::io::{self, BufReader, BufWriter};
 use std::path::PathBuf;
 
 use clap::Parser;
+use output_file::OutputFile;
 use zoog::comment_rewriter::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
 use zoog::header_rewriter::{rewrite_stream, SubmitResult};
 use zoog::opus::{parse_comment, CommentList, DiscreteCommentList};
@@ -48,21 +52,6 @@ enum OperationMode {
     Replace,
 }
 
-#[derive(Debug)]
-enum OutputFile {
-    Temp(tempfile::NamedTempFile),
-    Sink(io::Sink),
-}
-
-impl OutputFile {
-    fn as_write(&mut self) -> &mut dyn Write {
-        match self {
-            OutputFile::Temp(ref mut temp) => temp,
-            OutputFile::Sink(ref mut sink) => sink,
-        }
-    }
-}
-
 fn comments_to_list<S: AsRef<str>, I: IntoIterator<Item = S>>(comments: I) -> Result<DiscreteCommentList, Error> {
     let comments = comments.into_iter();
     let mut result = DiscreteCommentList::with_capacity(comments.size_hint().0);
@@ -97,21 +86,12 @@ fn main_impl() -> Result<(), Error> {
 
     let rewriter_config = CommentRewriterConfig { action };
     let input_path = cli.input_file;
-    let input_dir = input_path.parent().ok_or_else(|| Error::NoParentError(input_path.to_path_buf()))?;
-    let input_base = input_path.file_name().ok_or_else(|| Error::NotAFilePath(input_path.to_path_buf()))?;
     let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
     let mut input_file = BufReader::new(input_file);
 
     let mut output_file = match operation_mode {
-        OperationMode::List => OutputFile::Sink(io::sink()),
-        OperationMode::Append | OperationMode::Replace => {
-            let temp = tempfile::Builder::new()
-                .prefix(input_base)
-                .suffix("zoog")
-                .tempfile_in(input_dir)
-                .map_err(|e| Error::TempFileOpenError(input_dir.to_path_buf(), e))?;
-            OutputFile::Temp(temp)
-        }
+        OperationMode::List => OutputFile::new_sink(),
+        OperationMode::Append | OperationMode::Replace => OutputFile::new_target(&input_path)?,
     };
 
     let rewrite_result = {
@@ -121,6 +101,8 @@ fn main_impl() -> Result<(), Error> {
         let abort_on_unchanged = true;
         rewrite_stream(rewrite, &mut input_file, &mut output_file, abort_on_unchanged)
     };
+    drop(input_file);
+
     match rewrite_result {
         Err(e) => {
             eprintln!("Failure during processing of {}.", input_path.display());
@@ -130,14 +112,14 @@ fn main_impl() -> Result<(), Error> {
             // We finished processing the file but never got the headers
             eprintln!("File {} appeared to be oddly truncated. Doing nothing.", input_path.display());
         }
-        Ok(SubmitResult::HeadersUnchanged(comments)) => match operation_mode {
-            OperationMode::List => comments.write_as_text(io::stdout()).map_err(Error::ConsoleIoError)?,
-            _ => todo!("Headers unchanged for non-list operation"),
-        },
-        Ok(SubmitResult::HeadersChanged { .. }) => match operation_mode {
-            OperationMode::List => panic!("List unexpectedly changed headers"),
-            _ => todo!("Headers changed for non-list operation"),
-        },
+        Ok(SubmitResult::HeadersUnchanged(comments)) | Ok(SubmitResult::HeadersChanged { to: comments, .. }) => {
+            match operation_mode {
+                OperationMode::List => comments.write_as_text(io::stdout()).map_err(Error::ConsoleIoError)?,
+                _ => {
+                    output_file.commit()?;
+                }
+            }
+        }
     };
     Ok(())
 }
