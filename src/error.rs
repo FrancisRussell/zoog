@@ -12,8 +12,8 @@ pub enum Error {
     FileOpenError(PathBuf, std::io::Error),
 
     /// A temporary file could not be opened due to an IO error
-    #[error("Unable to open temporary file due to `{0}`")]
-    TempFileOpenError(std::io::Error),
+    #[error("Unable to open temporary file in `{0}` due to `{1}`")]
+    TempFileOpenError(PathBuf, std::io::Error),
 
     /// An Ogg stream failed to decode correctly
     #[error("Ogg decoding error: `{0}`")]
@@ -50,10 +50,6 @@ pub enum Error {
     /// A gain value was out of bounds for being representable
     #[error("A computed gain value was not representable")]
     GainOutOfBounds,
-
-    /// An error occurred during a file rename
-    #[error("Failed to rename `{0}` to `{1}` due to `{2}`")]
-    FileMove(PathBuf, PathBuf, std::io::Error),
 
     /// An error occurred during a file deletion
     #[error("Failed to delete `{0}` due to `{1}`")]

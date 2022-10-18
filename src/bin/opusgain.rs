@@ -1,14 +1,18 @@
 #[path = "../console_output.rs"]
 mod console_output;
 
+#[path = "../output_file.rs"]
+mod output_file;
+
 use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
-use std::io::{self, BufReader, BufWriter, Write};
+use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
 
 use clap::{Parser, ValueEnum};
 use console_output::{ConsoleOutput, DelayedConsoleOutput, Standard};
 use ogg::reading::PacketReader;
+use output_file::OutputFile;
 use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
@@ -28,16 +32,6 @@ fn main() {
             std::process::exit(1);
         }
     }
-}
-
-fn remove_file<P: AsRef<Path>>(path: P) -> Result<(), Error> {
-    let path = path.as_ref();
-    std::fs::remove_file(path).map_err(|e| Error::FileDelete(path.to_path_buf(), e))
-}
-
-fn rename_file<P: AsRef<Path>, Q: AsRef<Path>>(from: P, to: Q) -> Result<(), Error> {
-    let (from, to) = (from.as_ref(), to.as_ref());
-    std::fs::rename(from, to).map_err(|e| Error::FileMove(from.to_path_buf(), to.to_path_buf(), e))
 }
 
 fn apply_volume_analysis<P, C>(
@@ -201,21 +195,6 @@ struct Cli {
     clear: bool,
 }
 
-#[derive(Debug)]
-enum OutputFile {
-    Temp(tempfile::NamedTempFile),
-    Sink(io::Sink),
-}
-
-impl OutputFile {
-    fn as_write(&mut self) -> &mut dyn Write {
-        match self {
-            OutputFile::Temp(ref mut temp) => temp,
-            OutputFile::Sink(ref mut sink) => sink,
-        }
-    }
-}
-
 fn main_impl() -> Result<(), Error> {
     let cli = Cli::parse_from(wild::args_os());
     let album_mode = cli.album;
@@ -302,23 +281,13 @@ fn main_impl() -> Result<(), Error> {
                 album_volume: album_volume.as_ref().map(|a| a.get_album_mean()),
             };
 
-            let input_dir = input_path.parent().ok_or_else(|| Error::NoParentError(input_path.to_path_buf()))?;
-            let input_base = input_path.file_name().ok_or_else(|| Error::NotAFilePath(input_path.to_path_buf()))?;
             let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
             let mut input_file = BufReader::new(input_file);
 
             {
                 let rewrite_guard = rewrite_mutex.lock();
-                let mut output_file = if display_only {
-                    OutputFile::Sink(io::sink())
-                } else {
-                    let temp = tempfile::Builder::new()
-                        .prefix(input_base)
-                        .suffix("zoog")
-                        .tempfile_in(input_dir)
-                        .map_err(Error::TempFileOpenError)?;
-                    OutputFile::Temp(temp)
-                };
+                let mut output_file =
+                    if display_only { OutputFile::new_sink() } else { OutputFile::new_target(&input_path)? };
                 let rewrite_result = {
                     let output_file = output_file.as_write();
                     let mut output_file = BufWriter::new(output_file);
@@ -347,34 +316,7 @@ fn main_impl() -> Result<(), Error> {
                         .map_err(Error::ConsoleIoError)?;
                     }
                     Ok(SubmitResult::HeadersChanged { from: old_gains, to: new_gains }) => {
-                        match output_file {
-                            OutputFile::Temp(output_file) => {
-                                let mut backup_path = input_path.clone();
-                                backup_path.set_extension("zoog-orig");
-                                rename_file(&input_path, &backup_path)?;
-                                // Note that the `and_then` also causes the file to be closed
-                                let persist_result = output_file
-                                    .persist_noclobber(&input_path)
-                                    .map_err(Error::PersistError)
-                                    .and_then(|f| f.sync_all().map_err(Error::WriteError));
-                                match persist_result {
-                                    Ok(_) => remove_file(backup_path),
-                                    Err(e) => {
-                                        // If a partially persisted file exists at the original's
-                                        // path, we want to remove it so the user doesn't mistake it for the original
-                                        let _ = remove_file(&input_path);
-                                        writeln!(
-                                            console.err(),
-                                            "Failed to persist rewritten file. The original can be found at {}",
-                                            backup_path.display()
-                                        )
-                                        .map_err(Error::ConsoleIoError)?;
-                                        Err(e)
-                                    }
-                                }?;
-                            }
-                            OutputFile::Sink(_) => {}
-                        }
+                        output_file.commit()?;
                         writeln!(console.out(), "Old gain values:").map_err(Error::ConsoleIoError)?;
                         print_gains(&old_gains, console)?;
                         writeln!(console.out(), "New gain values:").map_err(Error::ConsoleIoError)?;

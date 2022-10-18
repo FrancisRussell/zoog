@@ -109,7 +109,7 @@ fn main_impl() -> Result<(), Error> {
                 .prefix(input_base)
                 .suffix("zoog")
                 .tempfile_in(input_dir)
-                .map_err(Error::TempFileOpenError)?;
+                .map_err(|e| Error::TempFileOpenError(input_dir.to_path_buf(), e))?;
             OutputFile::Temp(temp)
         }
     };
@@ -131,12 +131,13 @@ fn main_impl() -> Result<(), Error> {
             eprintln!("File {} appeared to be oddly truncated. Doing nothing.", input_path.display());
         }
         Ok(SubmitResult::HeadersUnchanged(comments)) => match operation_mode {
-            OperationMode::List => {
-                comments.write_as_text(io::stdout()).map_err(Error::ConsoleIoError)?;
-            }
+            OperationMode::List => comments.write_as_text(io::stdout()).map_err(Error::ConsoleIoError)?,
             _ => todo!("Headers unchanged for non-list operation"),
         },
-        Ok(SubmitResult::HeadersChanged { .. }) => todo!("Headers changed"),
+        Ok(SubmitResult::HeadersChanged { .. }) => match operation_mode {
+            OperationMode::List => panic!("List unexpectedly changed headers"),
+            _ => todo!("Headers changed for non-list operation"),
+        },
     };
     Ok(())
 }
