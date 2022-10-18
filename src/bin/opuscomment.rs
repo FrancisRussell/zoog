@@ -33,7 +33,7 @@ struct Cli {
     /// Append comments in the Ogg Opus file
     append: bool,
 
-    #[clap(short, long, action)]
+    #[clap(short, long, action, conflicts_with = "append")]
     /// Replace comments in the Ogg Opus file
     write: bool,
 
@@ -47,7 +47,7 @@ struct Cli {
 
 #[derive(Clone, Copy, Debug)]
 enum OperationMode {
-    List,
+    Inspect,
     Append,
     Replace,
 }
@@ -65,21 +65,19 @@ fn comments_to_list<S: AsRef<str>, I: IntoIterator<Item = S>>(comments: I) -> Re
 
 fn main_impl() -> Result<(), Error> {
     let cli = Cli::parse_from(wild::args_os());
-    let operation_mode = match (cli.list, cli.append, cli.write) {
-        (_, false, false) => OperationMode::List,
-        (false, true, false) => OperationMode::Append,
-        (false, false, true) => OperationMode::Replace,
-        _ => {
-            //FIXME: Replace me with an error
-            panic!("Conflicting options supplied for mode of operation");
-        }
+    let list = cli.list;
+    let operation_mode = match (cli.append, cli.write) {
+        (true, false) => OperationMode::Append,
+        (false, true) => OperationMode::Replace,
+        (false, false) => OperationMode::Inspect,
+        (true, true) => panic!("Append and replace cannot be specified at the same time"),
     };
 
     let tags = comments_to_list(cli.tags)?;
     println!("Operating in mode: {:?} (tags={:?})", operation_mode, tags);
 
     let action = match operation_mode {
-        OperationMode::List => CommentRewriterAction::NoChange,
+        OperationMode::Inspect => CommentRewriterAction::NoChange,
         OperationMode::Append => todo!("Append not yet implemented"),
         OperationMode::Replace => CommentRewriterAction::Replace(tags),
     };
@@ -90,7 +88,7 @@ fn main_impl() -> Result<(), Error> {
     let mut input_file = BufReader::new(input_file);
 
     let mut output_file = match operation_mode {
-        OperationMode::List => OutputFile::new_sink(),
+        OperationMode::Inspect => OutputFile::new_sink(),
         OperationMode::Append | OperationMode::Replace => OutputFile::new_target(&input_path)?,
     };
 
@@ -112,12 +110,15 @@ fn main_impl() -> Result<(), Error> {
             // We finished processing the file but never got the headers
             eprintln!("File {} appeared to be oddly truncated. Doing nothing.", input_path.display());
         }
-        Ok(SubmitResult::HeadersUnchanged(comments)) | Ok(SubmitResult::HeadersChanged { to: comments, .. }) => {
-            match operation_mode {
-                OperationMode::List => comments.write_as_text(io::stdout()).map_err(Error::ConsoleIoError)?,
-                _ => {
-                    output_file.commit()?;
-                }
+        Ok(SubmitResult::HeadersUnchanged(comments)) => {
+            if list {
+                comments.write_as_text(io::stdout()).map_err(Error::ConsoleIoError)?;
+            }
+        }
+        Ok(SubmitResult::HeadersChanged { to: comments, .. }) => {
+            output_file.commit()?;
+            if list {
+                comments.write_as_text(io::stdout()).map_err(Error::ConsoleIoError)?;
             }
         }
     };
