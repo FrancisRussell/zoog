@@ -43,6 +43,9 @@ struct Cli {
 
     /// Input file
     input_file: PathBuf,
+
+    /// Output file
+    output_file: Option<PathBuf>,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -89,7 +92,10 @@ fn main_impl() -> Result<(), Error> {
 
     let mut output_file = match operation_mode {
         OperationMode::Inspect => OutputFile::new_sink(),
-        OperationMode::Append | OperationMode::Replace => OutputFile::new_target(&input_path)?,
+        OperationMode::Append | OperationMode::Replace => {
+            let output_path = cli.output_file.unwrap_or(input_path.to_path_buf());
+            OutputFile::new_target(&output_path)?
+        }
     };
 
     let rewrite_result = {
