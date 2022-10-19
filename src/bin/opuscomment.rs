@@ -69,11 +69,7 @@ enum ValueMatch {
 }
 
 impl ValueMatch {
-    pub fn singleton(value: String) -> ValueMatch {
-        let mut set = HashSet::with_capacity(1);
-        set.insert(value);
-        ValueMatch::ContainedIn(set)
-    }
+    pub fn singleton(value: String) -> ValueMatch { ValueMatch::ContainedIn(HashSet::from([value])) }
 
     pub fn matches(&self, value: &str) -> bool {
         match self {
@@ -91,15 +87,33 @@ impl BitOrAssign for ValueMatch {
     fn bitor_assign(&mut self, rhs: ValueMatch) {
         let mut old_lhs = ValueMatch::All;
         std::mem::swap(self, &mut old_lhs);
-        let new_set = match (old_lhs, rhs) {
-            (ValueMatch::ContainedIn(mut lhs), ValueMatch::ContainedIn(rhs)) => {
+        let new_value = match (old_lhs, rhs) {
+            (ValueMatch::ContainedIn(mut lhs), ValueMatch::ContainedIn(mut rhs)) => {
+                // Preserve the larger set when merging
+                if rhs.len() > lhs.len() {
+                    std::mem::swap(&mut rhs, &mut lhs)
+                }
                 lhs.extend(rhs.into_iter());
-                Some(lhs)
+                ValueMatch::ContainedIn(lhs)
             }
-            _ => None,
+            _ => ValueMatch::All,
         };
-        if let Some(new_set) = new_set {
-            *self = ValueMatch::ContainedIn(new_set);
+        *self = new_value;
+    }
+}
+
+#[derive(Clone, Debug, Default)]
+struct KeyValueMatch {
+    keys: HashMap<String, ValueMatch>,
+}
+
+impl KeyValueMatch {
+    pub fn add(&mut self, key: String, value: ValueMatch) { *self.keys.entry(key).or_default() |= value; }
+
+    pub fn matches(&self, key: &str, value: &str) -> bool {
+        match self.keys.get(key) {
+            None => false,
+            Some(value_match) => value_match.matches(value),
         }
     }
 }
@@ -115,13 +129,13 @@ fn parse_new_comment_args<S: AsRef<str>, I: IntoIterator<Item = S>>(comments: I)
     Ok(result)
 }
 
-fn parse_delete_comment_args<S, I>(patterns: I) -> Result<HashMap<String, ValueMatch>, Error>
+fn parse_delete_comment_args<S, I>(patterns: I) -> Result<KeyValueMatch, Error>
 where
     S: AsRef<str>,
     I: IntoIterator<Item = S>,
 {
     let patterns = patterns.into_iter();
-    let mut result = HashMap::new();
+    let mut result = KeyValueMatch::default();
     for pattern_string in patterns {
         let pattern_string = pattern_string.as_ref();
         let (key, value) = match parse_comment(pattern_string) {
@@ -135,7 +149,7 @@ where
             None => ValueMatch::All,
             Some(value) => ValueMatch::singleton(value),
         };
-        *result.entry(key).or_default() |= rhs;
+        result.add(key, rhs);
     }
     Ok(result)
 }
