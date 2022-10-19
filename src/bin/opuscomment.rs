@@ -28,15 +28,15 @@ fn main() {
 #[derive(Debug, Parser)]
 #[clap(author, version, about = "List or edit comments in Ogg Opus files.")]
 struct Cli {
-    #[clap(short, long, action)]
+    #[clap(short, long, action, conflicts_with = "write", conflicts_with = "append")]
     /// List comments in the Ogg Opus file
     list: bool,
 
-    #[clap(short, long, action)]
+    #[clap(short, long, action, conflicts_with = "write")]
     /// Append comments in the Ogg Opus file
     append: bool,
 
-    #[clap(short, long, action, conflicts_with = "append")]
+    #[clap(short, long, action)]
     /// Replace comments in the Ogg Opus file
     write: bool,
 
@@ -61,7 +61,7 @@ struct Cli {
 
 #[derive(Clone, Copy, Debug)]
 enum OperationMode {
-    Inspect,
+    List,
     Append,
     Replace,
 }
@@ -169,12 +169,11 @@ where
 
 fn main_impl() -> Result<(), Error> {
     let cli = Cli::parse_from(wild::args_os());
-    let list = cli.list;
-    let operation_mode = match (cli.append, cli.write) {
-        (true, false) => OperationMode::Append,
-        (false, true) => OperationMode::Replace,
-        (false, false) => OperationMode::Inspect,
-        (true, true) => panic!("Append and replace cannot be specified at the same time"),
+    let operation_mode = match (cli.list, cli.append, cli.write) {
+        (_, false, false) => OperationMode::List,
+        (false, true, false) => OperationMode::Append,
+        (false, false, true) => OperationMode::Replace,
+        _ => panic!("Invalid combination of options (clap should prevent this)"),
     };
 
     let escape = cli.escapes;
@@ -185,7 +184,7 @@ fn main_impl() -> Result<(), Error> {
     println!("delete_tags={:?}", delete_tags);
 
     let action = match operation_mode {
-        OperationMode::Inspect => CommentRewriterAction::NoChange,
+        OperationMode::List => CommentRewriterAction::NoChange,
         OperationMode::Append => {
             let retain: Box<dyn Fn(&str, &str) -> bool> = Box::new(|k, v| !delete_tags.matches(k, v));
             CommentRewriterAction::Modify { retain, append }
@@ -199,7 +198,7 @@ fn main_impl() -> Result<(), Error> {
     let mut input_file = BufReader::new(input_file);
 
     let mut output_file = match operation_mode {
-        OperationMode::Inspect => OutputFile::new_sink(),
+        OperationMode::List => OutputFile::new_sink(),
         OperationMode::Append | OperationMode::Replace => {
             let output_path = cli.output_file.unwrap_or(input_path.to_path_buf());
             OutputFile::new_target(&output_path)?
@@ -225,15 +224,12 @@ fn main_impl() -> Result<(), Error> {
             eprintln!("File {} appeared to be oddly truncated. Doing nothing.", input_path.display());
         }
         Ok(SubmitResult::HeadersUnchanged(comments)) => {
-            if list {
+            if let OperationMode::List = operation_mode {
                 comments.write_as_text(io::stdout(), escape).map_err(Error::ConsoleIoError)?;
             }
         }
-        Ok(SubmitResult::HeadersChanged { to: comments, .. }) => {
+        Ok(SubmitResult::HeadersChanged { .. }) => {
             output_file.commit()?;
-            if list {
-                comments.write_as_text(io::stdout(), escape).map_err(Error::ConsoleIoError)?;
-            }
         }
     };
     Ok(())
