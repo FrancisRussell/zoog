@@ -1,5 +1,7 @@
 use std::borrow::Cow;
 
+use thiserror::Error;
+
 /// Wraps an iterator to apply `vorbiscomemnt`-style character escaping
 #[derive(Debug)]
 struct EscapingIterator<I> {
@@ -46,6 +48,45 @@ pub fn escape_str(value: &str) -> Cow<str> {
     EscapingIterator::new(value.chars()).collect()
 }
 
+#[derive(Debug, Error)]
+pub enum EscapeDecodeError {
+    /// The string ended with a backslash
+    #[error("Trailing backslash in escaped string")]
+    TrailingBackSlash,
+
+    /// An invalid character followd a backlash in an escaped string
+    #[error("Invalid character following backslash in escaped string: `{0}`")]
+    InvalidEscape(char),
+}
+
+/// Unescapes a string slice using `vorbiscomment`-style escaping
+pub fn unescape_str(value: &str) -> Result<Cow<str>, EscapeDecodeError> {
+    let mut result = String::with_capacity(value.len());
+    let mut is_escape = false;
+    for c in value.chars() {
+        if is_escape {
+            match c {
+                '0' => result.push('\0'),
+                'n' => result.push('\n'),
+                'r' => result.push('\r'),
+                '\\' => result.push('\\'),
+                _ => return Err(EscapeDecodeError::InvalidEscape(c)),
+            }
+            is_escape = false;
+        } else if c == '\\' {
+            is_escape = true;
+        } else {
+            result.push(c);
+        }
+    }
+
+    if is_escape {
+        Err(EscapeDecodeError::TrailingBackSlash)
+    } else {
+        Ok(result.into())
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -62,5 +103,13 @@ mod tests {
         let test_string = "\0\n\r\\";
         let escaped = escape_str(test_string);
         assert_eq!(escaped, "\\0\\n\\r\\\\");
+    }
+
+    #[test]
+    fn escaping_is_invertible() {
+        let test_string = "\0\n\r\\";
+        let escaped = escape_str(test_string);
+        let unescaped = unescape_str(&escaped).expect("Unable to reverse escaping");
+        assert_eq!(test_string, unescaped);
     }
 }
