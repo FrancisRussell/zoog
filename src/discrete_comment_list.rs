@@ -75,6 +75,8 @@ impl CommentList for DiscreteCommentList {
     }
 
     fn iter(&self) -> Iter<'_> { Iter { inner: self.comments.iter() } }
+
+    fn retain<F: FnMut(&str, &str) -> bool>(&mut self, mut f: F) { self.comments.retain(|(k, v)| f(k, v)); }
 }
 
 #[cfg(test)]

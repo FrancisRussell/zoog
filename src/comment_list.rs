@@ -34,6 +34,9 @@ pub trait CommentList {
     /// Iterate over the entries of the comment list
     fn iter(&self) -> Self::Iter<'_>;
 
+    /// Retain only the key value mappings for which the predicate returns true
+    fn retain<F: FnMut(&str, &str) -> bool>(&mut self, f: F);
+
     /// Write each comment in the user-friendly textual representation
     fn write_as_text<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
         for (k, v) in self.iter() {

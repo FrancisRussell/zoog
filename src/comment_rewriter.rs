@@ -1,5 +1,3 @@
-use std::collections::{HashMap, HashSet};
-
 use derivative::Derivative;
 
 use crate::comment_list::CommentList;

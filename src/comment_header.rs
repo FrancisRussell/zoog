@@ -156,6 +156,8 @@ impl<'a> CommentList for CommentHeader<'a> {
     fn append(&mut self, key: &str, value: &str) -> Result<(), Error> { self.user_comments.append(key, value) }
 
     fn iter(&self) -> Self::Iter<'_> { self.user_comments.iter() }
+
+    fn retain<F: FnMut(&str, &str) -> bool>(&mut self, f: F) { self.user_comments.retain(f) }
 }
 
 impl<'a> Drop for CommentHeader<'a> {
