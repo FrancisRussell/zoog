@@ -69,7 +69,7 @@ impl<'a> CommentHeader<'a> {
             Self::read_exact(&mut reader, &mut comment)?;
             let comment = String::from_utf8(comment)?;
             let (key, value) = parse_comment(&comment)?;
-            user_comments.push(&key, &value)?;
+            user_comments.push(key, value)?;
         }
         let result = CommentHeader { data, vendor, user_comments };
         Ok(Some(result))

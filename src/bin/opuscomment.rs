@@ -150,7 +150,7 @@ where
         let comment = comment.as_ref();
         let (key, value) = parse_comment(comment)?;
         let value = if escaped { escaping::unescape_str(value)? } else { Cow::from(value) };
-        result.push(&key, &value)?;
+        result.push(key, &value)?;
     }
     Ok(result)
 }
@@ -159,7 +159,7 @@ fn validate_comment_filename(path: &Path) -> Result<(), AppError> {
     if let Some(ext) = path.extension() {
         let mut ext = ext.to_string_lossy().to_string();
         ext.make_ascii_lowercase();
-        if OGG_OPUS_EXTENSIONS.iter().find(|e| &ext == *e).is_some() {
+        if OGG_OPUS_EXTENSIONS.iter().any(|e| ext == *e) {
             eprintln!(
                 "Based on file extension {:?} looks like it might be an Opus file. Refusing to use it for tags.",
                 path
@@ -207,7 +207,7 @@ fn read_comments_from_file<P: AsRef<Path>>(path: P, escaped: bool) -> Result<Dis
         let line = line.map_err(|e| Error::FileReadError(path.to_path_buf(), e))?;
         let (key, value) = parse_comment(&line)?;
         let value = if escaped { escaping::unescape_str(value)? } else { Cow::from(value) };
-        result.push(&key, &value)?;
+        result.push(key, &value)?;
     }
     Ok(result)
 }
@@ -269,7 +269,7 @@ fn main_impl() -> Result<(), AppError> {
     let mut output_file = match operation_mode {
         OperationMode::List => OutputFile::new_sink(),
         OperationMode::Append | OperationMode::Replace => {
-            let output_path = cli.output_file.unwrap_or(input_path.to_path_buf());
+            let output_path = cli.output_file.unwrap_or_else(|| input_path.to_path_buf());
             OutputFile::new_target(&output_path)?
         }
     };
