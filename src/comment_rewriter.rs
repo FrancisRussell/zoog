@@ -11,9 +11,9 @@ use crate::Error;
 pub enum CommentRewriterAction {
     NoChange,
     Modify {
-        append: DiscreteCommentList,
         #[derivative(Debug = "ignore")]
-        delete: Box<dyn Fn(&str, &str) -> bool>,
+        retain: Box<dyn Fn(&str, &str) -> bool>,
+        append: DiscreteCommentList,
     },
     Replace(DiscreteCommentList),
 }
@@ -53,7 +53,10 @@ impl HeaderRewrite for CommentHeaderRewrite {
                 comment_header.clear();
                 comment_header.extend(tags.iter())?;
             }
-            a => todo!("CommentHeaderRewrite action unimplemented: {:?}", a),
+            CommentRewriterAction::Modify { retain, append } => {
+                comment_header.retain(retain);
+                comment_header.extend(append.iter())?;
+            }
         }
         Ok(())
     }
