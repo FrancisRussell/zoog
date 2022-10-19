@@ -47,6 +47,10 @@ struct Cli {
     /// Specify a tag name or name-value mapping to be deleted
     delete: Vec<String>,
 
+    #[clap(short, long, action)]
+    /// Use escapes \n, \r, \0 and \\ for tag-value input and output
+    escapes: bool,
+
     /// Input file
     input_file: PathBuf,
 
@@ -201,6 +205,7 @@ fn main_impl() -> Result<(), Error> {
     };
     drop(input_file);
 
+    let escape = cli.escapes;
     match rewrite_result {
         Err(e) => {
             eprintln!("Failure during processing of {}.", input_path.display());
@@ -212,13 +217,13 @@ fn main_impl() -> Result<(), Error> {
         }
         Ok(SubmitResult::HeadersUnchanged(comments)) => {
             if list {
-                comments.write_as_text(io::stdout()).map_err(Error::ConsoleIoError)?;
+                comments.write_as_text(io::stdout(), escape).map_err(Error::ConsoleIoError)?;
             }
         }
         Ok(SubmitResult::HeadersChanged { to: comments, .. }) => {
             output_file.commit()?;
             if list {
-                comments.write_as_text(io::stdout()).map_err(Error::ConsoleIoError)?;
+                comments.write_as_text(io::stdout(), escape).map_err(Error::ConsoleIoError)?;
             }
         }
     };

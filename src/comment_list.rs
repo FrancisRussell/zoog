@@ -1,7 +1,8 @@
+use std::borrow::Cow;
 use std::io::{self, Write};
 
 use crate::constants::opus::FIELD_NAME_TERMINATOR;
-use crate::Error;
+use crate::{escaping, Error};
 
 pub trait CommentList {
     type Iter<'a>: Iterator<Item = (&'a str, &'a str)>
@@ -38,8 +39,9 @@ pub trait CommentList {
     fn retain<F: FnMut(&str, &str) -> bool>(&mut self, f: F);
 
     /// Write each comment in the user-friendly textual representation
-    fn write_as_text<W: Write>(&self, mut writer: W) -> Result<(), io::Error> {
+    fn write_as_text<W: Write>(&self, mut writer: W, escape: bool) -> Result<(), io::Error> {
         for (k, v) in self.iter() {
+            let v = if escape { escaping::escape_str(v) } else { Cow::from(v) };
             writeln!(writer, "{}{}{}", k, FIELD_NAME_TERMINATOR as char, v)?;
         }
         Ok(())

@@ -1,4 +1,4 @@
-#![feature(const_trait_impl)]
+#![feature(const_trait_impl, let_chains)]
 
 mod comment_header;
 mod comment_list;
@@ -6,6 +6,7 @@ mod constants;
 mod decibels;
 mod discrete_comment_list;
 mod error;
+mod escaping;
 mod fixed_point_gain;
 mod opus_header;
 
