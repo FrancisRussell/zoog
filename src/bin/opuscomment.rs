@@ -10,18 +10,28 @@ use std::path::PathBuf;
 
 use clap::Parser;
 use output_file::OutputFile;
+use thiserror::Error;
 use zoog::comment_rewriter::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
 use zoog::header_rewriter::{rewrite_stream, SubmitResult};
 use zoog::opus::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::{escaping, Error};
 
+#[derive(Debug, Error)]
+enum AppError {
+    #[error("{0}")]
+    LibraryError(#[from] Error),
+
+    #[error("Silent exit because error was already printed")]
+    SilentExit,
+}
+
 fn main() {
-    match main_impl() {
-        Ok(()) => {}
-        Err(e) => {
-            eprintln!("Aborted due to error: {}", e);
-            std::process::exit(1);
+    if let Err(e) = main_impl() {
+        match e {
+            AppError::LibraryError(e) => eprintln!("Aborted due to error: {}", e),
+            AppError::SilentExit => {}
         }
+        std::process::exit(1);
     }
 }
 
@@ -167,13 +177,16 @@ where
     Ok(result)
 }
 
-fn main_impl() -> Result<(), Error> {
+fn main_impl() -> Result<(), AppError> {
     let cli = Cli::parse_from(wild::args_os());
     let operation_mode = match (cli.list, cli.append, cli.write) {
         (_, false, false) => OperationMode::List,
         (false, true, false) => OperationMode::Append,
         (false, false, true) => OperationMode::Replace,
-        _ => panic!("Invalid combination of options (clap should prevent this)"),
+        _ => {
+            eprintln!("Invalid combination of modes passed");
+            return Err(AppError::SilentExit);
+        }
     };
 
     let escape = cli.escapes;
@@ -217,7 +230,7 @@ fn main_impl() -> Result<(), Error> {
     match rewrite_result {
         Err(e) => {
             eprintln!("Failure during processing of {}.", input_path.display());
-            return Err(e);
+            return Err(e.into());
         }
         Ok(SubmitResult::Good) => {
             // We finished processing the file but never got the headers
