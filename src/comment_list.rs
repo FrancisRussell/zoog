@@ -30,7 +30,7 @@ pub trait CommentList {
     fn remove_all(&mut self, key: &str);
 
     /// Appends the specified mapping.
-    fn append(&mut self, key: &str, value: &str) -> Result<(), Error>;
+    fn push(&mut self, key: &str, value: &str) -> Result<(), Error>;
 
     /// Iterate over the entries of the comment list
     fn iter(&self) -> Self::Iter<'_>;
@@ -57,7 +57,7 @@ pub trait CommentList {
         let comments = comments.into_iter();
         for (key, value) in comments {
             let (key, value) = (key.as_ref(), value.as_ref());
-            self.append(key, value)?;
+            self.push(key, value)?;
         }
         Ok(())
     }

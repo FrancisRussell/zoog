@@ -16,6 +16,9 @@ impl DiscreteCommentList {
     pub fn with_capacity(cap: usize) -> DiscreteCommentList {
         DiscreteCommentList { comments: Vec::with_capacity(cap) }
     }
+
+    /// Appends all comments from the other list, leaving it empty
+    pub fn append(&mut self, other: &mut DiscreteCommentList) { self.comments.append(&mut other.comments); }
 }
 
 /// Iterator for `DiscreteCommentList`
@@ -63,12 +66,12 @@ impl CommentList for DiscreteCommentList {
 
         // If the key did not exist, we append
         if !found {
-            self.append(key, value)?;
+            self.push(key, value)?;
         }
         Ok(())
     }
 
-    fn append(&mut self, key: &str, value: &str) -> Result<(), Error> {
+    fn push(&mut self, key: &str, value: &str) -> Result<(), Error> {
         validate_comment_field_name(key)?;
         self.comments.push((Arc::new(key.into()), Arc::new(value.into())));
         Ok(())

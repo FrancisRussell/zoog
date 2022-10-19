@@ -4,9 +4,9 @@ mod output_file;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{self, BufReader, BufWriter};
+use std::io::{self, BufRead, BufReader, BufWriter};
 use std::ops::BitOrAssign;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 use clap::Parser;
 use output_file::OutputFile;
@@ -15,6 +15,8 @@ use zoog::comment_rewriter::{CommentHeaderRewrite, CommentRewriterAction, Commen
 use zoog::header_rewriter::{rewrite_stream, SubmitResult};
 use zoog::opus::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::{escaping, Error};
+
+const OGG_OPUS_EXTENSIONS: [&str; 3] = ["oga", "ogg", "opus"];
 
 #[derive(Debug, Error)]
 enum AppError {
@@ -61,6 +63,10 @@ struct Cli {
     #[clap(short, long, action)]
     /// Use escapes \n, \r, \0 and \\ for tag-value input and output
     escapes: bool,
+
+    #[clap(short = 'c', long = "commentfile")]
+    /// File for reading/writing comments to, depending on mode
+    comment_file: Option<PathBuf>,
 
     /// Input file
     input_file: PathBuf,
@@ -144,9 +150,24 @@ where
         let comment = comment.as_ref();
         let (key, value) = parse_comment(comment)?;
         let value = if escaped { escaping::unescape_str(value)? } else { Cow::from(value) };
-        result.append(&key, &value)?;
+        result.push(&key, &value)?;
     }
     Ok(result)
+}
+
+fn validate_comment_filename(path: &Path) -> Result<(), AppError> {
+    if let Some(ext) = path.extension() {
+        let mut ext = ext.to_string_lossy().to_string();
+        ext.make_ascii_lowercase();
+        if OGG_OPUS_EXTENSIONS.iter().find(|e| &ext == *e).is_some() {
+            eprintln!(
+                "Based on file extension {:?} looks like it might be an Opus file. Refusing to use it for tags.",
+                path
+            );
+            return Err(AppError::SilentExit);
+        }
+    }
+    Ok(())
 }
 
 fn parse_delete_comment_args<S, I>(patterns: I, escaped: bool) -> Result<KeyValueMatch, Error>
@@ -177,6 +198,20 @@ where
     Ok(result)
 }
 
+fn read_comments_from_file<P: AsRef<Path>>(path: P, escaped: bool) -> Result<DiscreteCommentList, Error> {
+    let path = path.as_ref();
+    let file = File::open(path).map_err(|e| Error::FileOpenError(path.to_path_buf(), e))?;
+    let file = BufReader::new(file);
+    let mut result = DiscreteCommentList::default();
+    for line in file.lines() {
+        let line = line.map_err(|e| Error::FileReadError(path.to_path_buf(), e))?;
+        let (key, value) = parse_comment(&line)?;
+        let value = if escaped { escaping::unescape_str(value)? } else { Cow::from(value) };
+        result.push(&key, &value)?;
+    }
+    Ok(result)
+}
+
 fn main_impl() -> Result<(), AppError> {
     let cli = Cli::parse_from(wild::args_os());
     let operation_mode = match (cli.list, cli.append, cli.write) {
@@ -189,9 +224,30 @@ fn main_impl() -> Result<(), AppError> {
         }
     };
 
+    if let Some(ref filename) = cli.comment_file {
+        validate_comment_filename(filename)?;
+    }
+
     let escape = cli.escapes;
-    let append = parse_new_comment_args(cli.tags, escape)?;
     let delete_tags = parse_delete_comment_args(cli.delete, escape)?;
+    let append = match operation_mode {
+        OperationMode::List => {
+            if cli.tags.is_empty() {
+                DiscreteCommentList::default()
+            } else {
+                eprintln!("List operation does not take tags as a parameter");
+                return Err(AppError::SilentExit);
+            }
+        }
+        OperationMode::Append | OperationMode::Replace => {
+            let mut append = parse_new_comment_args(cli.tags, escape)?;
+            if let Some(file) = cli.comment_file {
+                let mut from_file = read_comments_from_file(file, escape)?;
+                append.append(&mut from_file);
+            }
+            append
+        }
+    };
     println!("Operating in mode: {:?}", operation_mode);
     println!("tags={:?}", append);
     println!("delete_tags={:?}", delete_tags);

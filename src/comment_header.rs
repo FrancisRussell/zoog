@@ -69,7 +69,7 @@ impl<'a> CommentHeader<'a> {
             Self::read_exact(&mut reader, &mut comment)?;
             let comment = String::from_utf8(comment)?;
             let (key, value) = parse_comment(&comment)?;
-            user_comments.append(&key, &value)?;
+            user_comments.push(&key, &value)?;
         }
         let result = CommentHeader { data, vendor, user_comments };
         Ok(Some(result))
@@ -153,7 +153,7 @@ impl<'a> CommentList for CommentHeader<'a> {
 
     fn replace(&mut self, key: &str, value: &str) -> Result<(), Error> { self.user_comments.replace(key, value) }
 
-    fn append(&mut self, key: &str, value: &str) -> Result<(), Error> { self.user_comments.append(key, value) }
+    fn push(&mut self, key: &str, value: &str) -> Result<(), Error> { self.user_comments.push(key, value) }
 
     fn iter(&self) -> Self::Iter<'_> { self.user_comments.iter() }
 
@@ -214,7 +214,7 @@ mod tests {
         for _ in 0..num_comments {
             let key = random_string(engine, true);
             let value = random_string(engine, false);
-            header.append(key.as_str(), value.as_str()).expect("Unable to add comment");
+            header.push(key.as_str(), value.as_str()).expect("Unable to add comment");
         }
         header
     }
