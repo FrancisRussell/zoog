@@ -17,6 +17,10 @@ pub enum Error {
     #[error("Unable to read from file `{0}` due to `{1}`")]
     FileReadError(PathBuf, std::io::Error),
 
+    /// An error occurred writing to the file
+    #[error("Unable to write to file `{0}` due to `{1}`")]
+    FileWriteError(PathBuf, std::io::Error),
+
     /// A temporary file could not be opened due to an IO error
     #[error("Unable to open temporary file in `{0}` due to `{1}`")]
     TempFileOpenError(PathBuf, std::io::Error),

@@ -4,7 +4,7 @@ mod output_file;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter};
+use std::io::{self, BufRead, BufReader, BufWriter, Write};
 use std::ops::BitOrAssign;
 use std::path::{Path, PathBuf};
 
@@ -241,7 +241,7 @@ fn main_impl() -> Result<(), AppError> {
         }
         OperationMode::Append | OperationMode::Replace => {
             let mut append = parse_new_comment_args(cli.tags, escape)?;
-            if let Some(file) = cli.comment_file {
+            if let Some(ref file) = cli.comment_file {
                 let mut from_file = read_comments_from_file(file, escape)?;
                 append.append(&mut from_file);
             }
@@ -294,7 +294,19 @@ fn main_impl() -> Result<(), AppError> {
         }
         Ok(SubmitResult::HeadersUnchanged(comments)) => {
             if let OperationMode::List = operation_mode {
-                comments.write_as_text(io::stdout(), escape).map_err(Error::ConsoleIoError)?;
+                if let Some(ref path) = cli.comment_file {
+                    let mut comment_file = OutputFile::new_target(path)?;
+                    {
+                        let mut comment_file = BufWriter::new(comment_file.as_write());
+                        comments
+                            .write_as_text(&mut comment_file, escape)
+                            .map_err(|e| Error::FileWriteError(path.into(), e))?;
+                        comment_file.flush().map_err(|e| Error::FileWriteError(path.into(), e))?;
+                    }
+                    comment_file.commit()?;
+                } else {
+                    comments.write_as_text(io::stdout(), escape).map_err(Error::ConsoleIoError)?;
+                }
             }
         }
         Ok(SubmitResult::HeadersChanged { .. }) => {
