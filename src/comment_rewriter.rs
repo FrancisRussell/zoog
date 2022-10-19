@@ -8,11 +8,11 @@ use crate::Error;
 /// Mode type for `CommentRewriter`
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub enum CommentRewriterAction {
+pub enum CommentRewriterAction<'a> {
     NoChange,
     Modify {
         #[derivative(Debug = "ignore")]
-        retain: Box<dyn Fn(&str, &str) -> bool>,
+        retain: Box<dyn Fn(&str, &str) -> bool + 'a>,
         append: DiscreteCommentList,
     },
     Replace(DiscreteCommentList),
@@ -20,23 +20,23 @@ pub enum CommentRewriterAction {
 
 /// Configuration type for `CommentRewriter`
 #[derive(Debug)]
-pub struct CommentRewriterConfig {
+pub struct CommentRewriterConfig<'a> {
     /// The action to be performed
-    pub action: CommentRewriterAction,
+    pub action: CommentRewriterAction<'a>,
 }
 
 /// Parameterization struct for `HeaderRewriter` to rewrite ouput gain and R128
 /// tags.
 #[derive(Debug)]
-pub struct CommentHeaderRewrite {
-    config: CommentRewriterConfig,
+pub struct CommentHeaderRewrite<'a> {
+    config: CommentRewriterConfig<'a>,
 }
 
-impl CommentHeaderRewrite {
+impl CommentHeaderRewrite<'_> {
     pub fn new(config: CommentRewriterConfig) -> CommentHeaderRewrite { CommentHeaderRewrite { config } }
 }
 
-impl HeaderRewrite for CommentHeaderRewrite {
+impl HeaderRewrite for CommentHeaderRewrite<'_> {
     type Error = Error;
     type Summary = DiscreteCommentList;
 

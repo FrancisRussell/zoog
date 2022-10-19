@@ -173,7 +173,7 @@ fn main_impl() -> Result<(), Error> {
     let action = match operation_mode {
         OperationMode::Inspect => CommentRewriterAction::NoChange,
         OperationMode::Append => {
-            let retain: Box<dyn Fn(&str, &str) -> bool> = Box::new(move |k, v| !delete_tags.matches(k, v));
+            let retain: Box<dyn Fn(&str, &str) -> bool> = Box::new(|k, v| !delete_tags.matches(k, v));
             CommentRewriterAction::Modify { retain, append }
         }
         OperationMode::Replace => CommentRewriterAction::Replace(append),
