@@ -164,16 +164,19 @@ fn main_impl() -> Result<(), Error> {
         (true, true) => panic!("Append and replace cannot be specified at the same time"),
     };
 
-    let tags = parse_new_comment_args(cli.tags)?;
+    let append = parse_new_comment_args(cli.tags)?;
     let delete_tags = parse_delete_comment_args(cli.delete)?;
     println!("Operating in mode: {:?}", operation_mode);
-    println!("tags={:?}", tags);
+    println!("tags={:?}", append);
     println!("delete_tags={:?}", delete_tags);
 
     let action = match operation_mode {
         OperationMode::Inspect => CommentRewriterAction::NoChange,
-        OperationMode::Append => todo!("Append not yet implemented"),
-        OperationMode::Replace => CommentRewriterAction::Replace(tags),
+        OperationMode::Append => {
+            let retain: Box<dyn Fn(&str, &str) -> bool> = Box::new(move |k, v| !delete_tags.matches(k, v));
+            CommentRewriterAction::Modify { retain, append }
+        }
+        OperationMode::Replace => CommentRewriterAction::Replace(append),
     };
 
     let rewriter_config = CommentRewriterConfig { action };
