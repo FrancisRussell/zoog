@@ -1,20 +1,27 @@
 use std::collections::{HashMap, HashSet};
 
+use derivative::Derivative;
+
 use crate::comment_list::CommentList;
 use crate::header_rewriter::{self, HeaderRewrite};
 use crate::opus::{CommentHeader, DiscreteCommentList, OpusHeader};
 use crate::Error;
 
 /// Mode type for `CommentRewriter`
-#[derive(Clone, Debug)]
+#[derive(Derivative)]
+#[derivative(Debug)]
 pub enum CommentRewriterAction {
     NoChange,
-    Modify { append: DiscreteCommentList, delete: HashMap<String, Option<HashSet<String>>> },
+    Modify {
+        append: DiscreteCommentList,
+        #[derivative(Debug = "ignore")]
+        delete: Box<dyn Fn(&str, &str) -> bool>,
+    },
     Replace(DiscreteCommentList),
 }
 
 /// Configuration type for `CommentRewriter`
-#[derive(Clone, Debug)]
+#[derive(Debug)]
 pub struct CommentRewriterConfig {
     /// The action to be performed
     pub action: CommentRewriterAction,
