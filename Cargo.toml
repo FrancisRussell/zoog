@@ -27,7 +27,7 @@ wild = "2.1.0"
 [dependencies.clap]
 version = "4.0.10"
 default-features = false
-features = [ "derive", "help", "std", "usage", "wrap_help" ]
+features = [ "derive", "help", "std", "usage", "wrap_help", "suggestions" ]
 
 [dev-dependencies.rand]
 version = "0.8.0"
