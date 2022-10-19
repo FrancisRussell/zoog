@@ -39,11 +39,11 @@ struct Cli {
     /// Replace comments in the Ogg Opus file
     write: bool,
 
-    #[clap(short = 't', long = "tag", id = "NAME")]
+    #[clap(short = 't', long = "tag", value_name = "NAME")]
     /// Specify a tag
     tags: Vec<String>,
 
-    #[clap(short = 'd', long = "rm", id = "NAME[=VALUE]")]
+    #[clap(short = 'd', long = "rm", value_name = "NAME[=VALUE]", conflicts_with = "write")]
     /// Specify a tag name or name-value mapping to be deleted
     delete: Vec<String>,
 
