@@ -1,6 +1,7 @@
 #[path = "../output_file.rs"]
 mod output_file;
 
+use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
 use std::io::{self, BufReader, BufWriter};
@@ -12,7 +13,7 @@ use output_file::OutputFile;
 use zoog::comment_rewriter::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
 use zoog::header_rewriter::{rewrite_stream, SubmitResult};
 use zoog::opus::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
-use zoog::Error;
+use zoog::{escaping, Error};
 
 fn main() {
     match main_impl() {
@@ -122,18 +123,23 @@ impl KeyValueMatch {
     }
 }
 
-fn parse_new_comment_args<S: AsRef<str>, I: IntoIterator<Item = S>>(comments: I) -> Result<DiscreteCommentList, Error> {
+fn parse_new_comment_args<S, I>(comments: I, escaped: bool) -> Result<DiscreteCommentList, Error>
+where
+    S: AsRef<str>,
+    I: IntoIterator<Item = S>,
+{
     let comments = comments.into_iter();
     let mut result = DiscreteCommentList::with_capacity(comments.size_hint().0);
     for comment in comments {
         let comment = comment.as_ref();
         let (key, value) = parse_comment(comment)?;
+        let value = if escaped { escaping::unescape_str(value)? } else { Cow::from(value) };
         result.append(&key, &value)?;
     }
     Ok(result)
 }
 
-fn parse_delete_comment_args<S, I>(patterns: I) -> Result<KeyValueMatch, Error>
+fn parse_delete_comment_args<S, I>(patterns: I, escaped: bool) -> Result<KeyValueMatch, Error>
 where
     S: AsRef<str>,
     I: IntoIterator<Item = S>,
@@ -143,17 +149,20 @@ where
     for pattern_string in patterns {
         let pattern_string = pattern_string.as_ref();
         let (key, value) = match parse_comment(pattern_string) {
-            Ok((key, value)) => (key, Some(value)),
+            Ok((key, value)) => {
+                let value = if escaped { escaping::unescape_str(value)? } else { Cow::from(value) };
+                (key, Some(value))
+            }
             Err(_) => match validate_comment_field_name(pattern_string) {
-                Ok(()) => (pattern_string.to_string(), None),
+                Ok(()) => (pattern_string, None),
                 Err(e) => return Err(e),
             },
         };
         let rhs = match value {
             None => ValueMatch::All,
-            Some(value) => ValueMatch::singleton(value),
+            Some(value) => ValueMatch::singleton(value.to_string()),
         };
-        result.add(key, rhs);
+        result.add(key.to_string(), rhs);
     }
     Ok(result)
 }
@@ -168,8 +177,9 @@ fn main_impl() -> Result<(), Error> {
         (true, true) => panic!("Append and replace cannot be specified at the same time"),
     };
 
-    let append = parse_new_comment_args(cli.tags)?;
-    let delete_tags = parse_delete_comment_args(cli.delete)?;
+    let escape = cli.escapes;
+    let append = parse_new_comment_args(cli.tags, escape)?;
+    let delete_tags = parse_delete_comment_args(cli.delete, escape)?;
     println!("Operating in mode: {:?}", operation_mode);
     println!("tags={:?}", append);
     println!("delete_tags={:?}", delete_tags);
@@ -205,7 +215,6 @@ fn main_impl() -> Result<(), Error> {
     };
     drop(input_file);
 
-    let escape = cli.escapes;
     match rewrite_result {
         Err(e) => {
             eprintln!("Failure during processing of {}.", input_path.display());

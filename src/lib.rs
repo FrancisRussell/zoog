@@ -6,9 +6,11 @@ mod constants;
 mod decibels;
 mod discrete_comment_list;
 mod error;
-mod escaping;
 mod fixed_point_gain;
 mod opus_header;
+
+/// Functionality for escaping and unescaping values for command-line tools
+pub mod escaping;
 
 /// Functionality for rewriting Ogg Opus streams with new headers
 pub mod header_rewriter;

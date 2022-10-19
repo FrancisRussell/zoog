@@ -4,6 +4,8 @@ use ogg::reading::OggReadError;
 use tempfile::PersistError;
 use thiserror::Error;
 
+use crate::escaping;
+
 /// The Zoog error type
 #[derive(Debug, Error)]
 pub enum Error {
@@ -86,4 +88,8 @@ pub enum Error {
     /// Invalid Opus comment field name
     #[error("Invalid Opus comment field name: `{0}`")]
     InvalidOpusCommentFieldName(String),
+
+    /// An escaped string was invalid
+    #[error("{0}")]
+    EscapeDecodeError(#[from] escaping::EscapeDecodeError),
 }

@@ -64,11 +64,11 @@ pub trait CommentList {
 }
 
 /// Parses the textual representation of an Opus comment
-pub fn parse_comment(comment: &str) -> Result<(String, String), Error> {
+pub fn parse_comment(comment: &str) -> Result<(&str, &str), Error> {
     let offset = comment.find(char::from(FIELD_NAME_TERMINATOR)).ok_or(Error::MissingOpusCommentSeparator)?;
     let (key, value) = comment.split_at(offset);
     validate_comment_field_name(key)?;
-    Ok((key.into(), value[1..].into()))
+    Ok((key, &value[1..]))
 }
 
 /// Validates the field name of a comment
