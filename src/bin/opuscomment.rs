@@ -57,7 +57,7 @@ struct Cli {
     /// Replace comments in the Ogg Opus file
     write: bool,
 
-    #[clap(short = 't', long = "tag", value_name = "NAME")]
+    #[clap(short = 't', long = "tag", value_name = "NAME=VALUE")]
     /// Specify a tag
     tags: Vec<String>,
 
