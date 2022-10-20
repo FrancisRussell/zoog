@@ -213,6 +213,9 @@ where
     let mut result = DiscreteCommentList::default();
     for line in read.lines() {
         let line = line.map_err(&error_map)?;
+        if line.trim().is_empty() {
+            continue;
+        }
         let (key, value) = parse_comment(&line)?;
         let value = if escaped { escaping::unescape_str(value).map_err(|e| e.into())? } else { Cow::from(value) };
         result.push(key, &value)?;
