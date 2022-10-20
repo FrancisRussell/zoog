@@ -1,3 +1,5 @@
+#![feature(let_chains)]
+
 #[path = "../output_file.rs"]
 mod output_file;
 
@@ -17,7 +19,7 @@ use zoog::opus::{parse_comment, validate_comment_field_name, CommentList, Discre
 use zoog::{escaping, Error};
 
 const OGG_OPUS_EXTENSIONS: [&str; 3] = ["oga", "ogg", "opus"];
-const STDIN_NAME: &str = "-";
+const STANDARD_STREAM_NAME: &str = "-";
 
 #[derive(Debug, Error)]
 enum AppError {
@@ -263,7 +265,7 @@ fn main_impl() -> Result<(), AppError> {
     } else {
         let mut append = parse_new_comment_args(cli.tags, escape)?;
         if let Some(ref file) = cli.comment_file {
-            let mut tags = if file == std::ffi::OsStr::new(STDIN_NAME) {
+            let mut tags = if file == std::ffi::OsStr::new(STANDARD_STREAM_NAME) {
                 read_comments_from_stdin(escape)?
             } else {
                 read_comments_from_file(file, escape)?
@@ -315,7 +317,7 @@ fn main_impl() -> Result<(), AppError> {
         }
         Ok(SubmitResult::HeadersUnchanged(comments)) => {
             if let OperationMode::List = operation_mode {
-                if let Some(ref path) = cli.comment_file {
+                if let Some(ref path) = cli.comment_file && path != std::ffi::OsStr::new(STANDARD_STREAM_NAME) {
                     let mut comment_file = OutputFile::new_target(path)?;
                     {
                         let mut comment_file = BufWriter::new(comment_file.as_write());
