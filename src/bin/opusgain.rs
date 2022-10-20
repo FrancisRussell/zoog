@@ -1,3 +1,5 @@
+#![feature(let_chains)]
+
 #[path = "../console_output.rs"]
 mod console_output;
 
@@ -63,11 +65,9 @@ where
         }
     };
     let result = body();
-    if report_error {
-        if let Err(ref e) = result {
-            writeln!(console_output.err(), "Failed to analyze volume of {}: {}", path.as_ref().display(), e)
-                .map_err(Error::ConsoleIoError)?;
-        }
+    if report_error && let Err(ref e) = result {
+        writeln!(console_output.err(), "Failed to analyze volume of {}: {}", path.as_ref().display(), e)
+            .map_err(Error::ConsoleIoError)?;
     }
     result
 }
