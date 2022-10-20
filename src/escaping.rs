@@ -56,13 +56,14 @@ pub fn escape_str(value: &str) -> Cow<str> {
     }
 }
 
+/// Error type for failure to decode an escaped string
 #[derive(Debug, Error)]
 pub enum EscapeDecodeError {
     /// The string ended with a backslash
     #[error("Trailing backslash in escaped string")]
-    TrailingBackSlash,
+    TrailingBackslash,
 
-    /// An invalid character followd a backlash in an escaped string
+    /// An invalid character followed a backslash in an escaped string
     #[error("Invalid character following backslash in escaped string: `{0}`")]
     InvalidEscape(char),
 }
@@ -92,7 +93,7 @@ pub fn unescape_str(value: &str) -> Result<Cow<str>, EscapeDecodeError> {
     }
 
     if is_escape {
-        Err(EscapeDecodeError::TrailingBackSlash)
+        Err(EscapeDecodeError::TrailingBackslash)
     } else {
         Ok(result.into())
     }
