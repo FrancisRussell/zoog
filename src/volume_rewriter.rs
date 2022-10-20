@@ -1,6 +1,6 @@
 use std::convert::TryFrom;
 
-use crate::header_rewriter::{self, HeaderRewrite};
+use crate::header_rewriter::HeaderRewrite;
 use crate::opus::{CommentHeader, CommentList, FixedPointGain, OpusHeader, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::{Decibels, Error, R128_LUFS};
 
