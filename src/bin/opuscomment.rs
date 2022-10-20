@@ -47,23 +47,23 @@ fn main() {
 #[derive(Debug, Parser)]
 #[clap(author, version, about = "List or edit comments in Ogg Opus files.")]
 struct Cli {
-    #[clap(short, long, action, conflicts_with = "write", conflicts_with = "append")]
+    #[clap(short, long, action, conflicts_with = "replace", conflicts_with = "modify")]
     /// List comments in the Ogg Opus file
     list: bool,
 
-    #[clap(short, long, action, conflicts_with = "write")]
+    #[clap(short, long, action, conflicts_with = "replace")]
     /// Delete specific comments and append new ones to the Ogg Opus file
-    append: bool,
+    modify: bool,
 
     #[clap(short, long, action)]
     /// Replace comments in the Ogg Opus file
-    write: bool,
+    replace: bool,
 
     #[clap(short = 't', long = "tag", value_name = "NAME=VALUE")]
     /// Specify a tag
     tags: Vec<String>,
 
-    #[clap(short = 'd', long = "rm", value_name = "NAME[=VALUE]", conflicts_with = "write")]
+    #[clap(short, long, value_name = "NAME[=VALUE]", conflicts_with = "replace")]
     /// Specify a tag name or name-value mapping to be deleted
     delete: Vec<String>,
 
@@ -71,9 +71,13 @@ struct Cli {
     /// Use escapes \n, \r, \0 and \\ for tag-value input and output
     escapes: bool,
 
-    #[clap(short = 'c', long = "commentfile")]
-    /// File for reading/writing comments to, depending on mode
-    comment_file: Option<PathBuf>,
+    #[clap(short = 'I', long = "tags-in", conflicts_with = "list")]
+    /// File for reading tags from
+    tags_in: Option<PathBuf>,
+
+    #[clap(short = 'O', long = "tags-out", conflicts_with = "modify", conflicts_with = "replace")]
+    /// File for writing tags to
+    tags_out: Option<PathBuf>,
 
     /// Input file
     input_file: PathBuf,
@@ -85,7 +89,7 @@ struct Cli {
 #[derive(Clone, Copy, Debug)]
 enum OperationMode {
     List,
-    Append,
+    Modify,
     Replace,
 }
 
@@ -240,9 +244,9 @@ fn read_comments_from_stdin(escaped: bool) -> Result<DiscreteCommentList, AppErr
 
 fn main_impl() -> Result<(), AppError> {
     let cli = Cli::parse_from(wild::args_os());
-    let operation_mode = match (cli.list, cli.append, cli.write) {
+    let operation_mode = match (cli.list, cli.modify, cli.replace) {
         (_, false, false) => OperationMode::List,
-        (false, true, false) => OperationMode::Append,
+        (false, true, false) => OperationMode::Modify,
         (false, false, true) => OperationMode::Replace,
         _ => {
             eprintln!("Invalid combination of modes passed");
@@ -250,8 +254,10 @@ fn main_impl() -> Result<(), AppError> {
         }
     };
 
-    if let Some(ref filename) = cli.comment_file {
-        validate_comment_filename(filename)?;
+    for comment_file in [&cli.tags_in, &cli.tags_out] {
+        if let Some(filename) = comment_file {
+            validate_comment_filename(filename)?;
+        }
     }
 
     let escape = cli.escapes;
@@ -264,7 +270,7 @@ fn main_impl() -> Result<(), AppError> {
         DiscreteCommentList::default()
     } else {
         let mut append = parse_new_comment_args(cli.tags, escape)?;
-        if let Some(ref file) = cli.comment_file {
+        if let Some(ref file) = cli.tags_in {
             let mut tags = if file == std::ffi::OsStr::new(STANDARD_STREAM_NAME) {
                 read_comments_from_stdin(escape)?
             } else {
@@ -277,7 +283,7 @@ fn main_impl() -> Result<(), AppError> {
 
     let action = match operation_mode {
         OperationMode::List => CommentRewriterAction::NoChange,
-        OperationMode::Append => {
+        OperationMode::Modify => {
             let retain: Box<dyn Fn(&str, &str) -> bool> = Box::new(|k, v| !delete_tags.matches(k, v));
             CommentRewriterAction::Modify { retain, append }
         }
@@ -291,7 +297,7 @@ fn main_impl() -> Result<(), AppError> {
 
     let mut output_file = match operation_mode {
         OperationMode::List => OutputFile::new_sink(),
-        OperationMode::Append | OperationMode::Replace => {
+        OperationMode::Modify | OperationMode::Replace => {
             let output_path = cli.output_file.unwrap_or_else(|| input_path.to_path_buf());
             OutputFile::new_target(&output_path)?
         }
@@ -317,7 +323,7 @@ fn main_impl() -> Result<(), AppError> {
         }
         Ok(SubmitResult::HeadersUnchanged(comments)) => {
             if let OperationMode::List = operation_mode {
-                if let Some(ref path) = cli.comment_file && path != std::ffi::OsStr::new(STANDARD_STREAM_NAME) {
+                if let Some(ref path) = cli.tags_out && path != std::ffi::OsStr::new(STANDARD_STREAM_NAME) {
                     let mut comment_file = OutputFile::new_target(path)?;
                     {
                         let mut comment_file = BufWriter::new(comment_file.as_write());

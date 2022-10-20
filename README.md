@@ -118,17 +118,17 @@ The following options are available:
 * `-l, --list`: List all tags in the file in `NAME=VALUE` format. This will be to
   standard output unless `-c` is specified.
 
-* `-a, --append`: Tags specified using `-t` or `-c` will be appended to the
+* `-m, --modify`: Tags specified using `-t` or `-I` will be appended to the
   specified file. Tags matching patterns specified using `-d` will be
   removed from the existing tags on the file.
 
-* `-w, --write`: All existing tags in the file will be removed and will be
-  replaced with those specified using `-t` or `-c`.
+* `-r, --replace`: All existing tags in the file will be removed and will be
+  replaced with those specified using `-t` or `-I`.
 
 * `-t NAME=VALUE, --tag NAME=VALUE`. The specified tag is will be added to the
-  file in append or write mode.
+  file in modify or replace mode.
 
-* `-d NAME[=VALUE], --rm NAME[=VALUE]`. Specifies either a tag name, or a
+* `-d NAME[=VALUE], --delete NAME[=VALUE]`. Specifies either a tag name, or a
   name-value mapping to be deleted. All tags that match the pattern will be
   removed, not just the first. This option is only valid in append mode.
 
@@ -138,12 +138,16 @@ The following options are available:
   invalid. This option makes it possible to specify tags which contain newlines
   which would otherwise fail to be parsed correctly from a comment file.
 
-* `-c COMMENT_FILE, --commentfile COMMENT_FILE`: In append and write modes, the
+* `-I COMMENT_FILE, --tags-in COMMENT_FILE`: In append and write modes, the
   tags to added will be read from this file in addition to those specified on
-  the command line. In list mode, tags will be written to this file. Tags are
-  read and written in `NAME=VALUE` format, with one tag per line. If `-` is
-  specified for the file name, standard-input and standard-output will be used
-  for reads and writes, respectively.
+  the command line. Tags are read in `NAME=VALUE` format, with one
+  tag per line. If `-` is specified for the file name, tags will be read from
+  standard-input.
+
+* `-O COMMENT_FILE, --tags-out COMMENT_FILE`: In list mode, tags will be
+  written to this file. Tags are read in `NAME=VALUE` format, with one tag per
+  line. If `-` is specified for the file name, tags will be written to standard
+  output.
 
 `opuscomment` only has knowledge of UTF-8. Usage on systems where UTF-8 is not
 the character encoding scheme in use may encounter issues.
