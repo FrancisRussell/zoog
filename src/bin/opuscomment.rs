@@ -59,11 +59,11 @@ struct Cli {
     /// Replace comments in the Ogg Opus file
     replace: bool,
 
-    #[clap(short = 't', long = "tag", value_name = "NAME=VALUE")]
+    #[clap(short = 't', long = "tag", value_name = "NAME=VALUE", conflicts_with = "list")]
     /// Specify a tag
     tags: Vec<String>,
 
-    #[clap(short, long, value_name = "NAME[=VALUE]", conflicts_with = "replace")]
+    #[clap(short, long, value_name = "NAME[=VALUE]", conflicts_with = "replace", conflicts_with = "list")]
     /// Specify a tag name or name-value mapping to be deleted
     delete: Vec<String>,
 
@@ -82,7 +82,8 @@ struct Cli {
     /// Input file
     input_file: PathBuf,
 
-    /// Output file
+    /// Output file (cannot be specified in list mode)
+    #[clap(conflicts_with = "list")]
     output_file: Option<PathBuf>,
 }
 
@@ -343,4 +344,88 @@ fn main_impl() -> Result<(), AppError> {
         }
     };
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use clap::error::ErrorKind;
+
+    use super::*;
+
+    #[test]
+    fn cli_modes_conflict() {
+        let result = Cli::try_parse_from(["opuscomment", "--replace", "--list", "input.ogg"]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
+
+        let result = Cli::try_parse_from(["opuscomment", "--replace", "--modify", "input.ogg"]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
+
+        let result = Cli::try_parse_from(["opuscomment", "--modify", "--list", "input.ogg"]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn cli_list_mode() {
+        let result = Cli::try_parse_from(["opuscomment", "--list", "input.ogg"]);
+        assert!(result.is_ok());
+
+        let result = Cli::try_parse_from(["opuscomment", "--list", "input.ogg", "output.ogg"]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
+
+        let result = Cli::try_parse_from(["opuscomment", "--list", "-O", "output.tags", "input.ogg"]);
+        assert!(result.is_ok());
+
+        let result = Cli::try_parse_from(["opuscomment", "--list", "-I", "input.tags", "input.ogg"]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
+
+        let result = Cli::try_parse_from(["opuscomment", "--list", "-d", "TAG=VALUE", "input.ogg"]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
+
+        let result = Cli::try_parse_from(["opuscomment", "--list", "-t", "TAG=VALUE", "input.ogg"]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
+    }
+
+    #[test]
+    fn cli_modify_mode() {
+        let result = Cli::try_parse_from(["opuscomment", "--modify", "input.ogg"]);
+        assert!(result.is_ok());
+
+        let result = Cli::try_parse_from(["opuscomment", "--modify", "-I", "input.tags", "input.ogg"]);
+        assert!(result.is_ok());
+
+        let result = Cli::try_parse_from(["opuscomment", "--modify", "-I", "input.tags", "input.ogg", "output.ogg"]);
+        assert!(result.is_ok());
+
+        let result = Cli::try_parse_from(["opuscomment", "--modify", "-O", "output.tags", "input.ogg"]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
+
+        let result = Cli::try_parse_from([
+            "opuscomment",
+            "--modify",
+            "-I",
+            "input.tags",
+            "-d",
+            "TAG=VALUE",
+            "-t",
+            "TAG2=VALUE2",
+            "input.ogg",
+        ]);
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn cli_replace_mode() {
+        let result = Cli::try_parse_from(["opuscomment", "--replace", "input.ogg", "output.ogg"]);
+        assert!(result.is_ok());
+
+        let result =
+            Cli::try_parse_from(["opuscomment", "--replace", "-I", "input.tags", "-t", "TAG=VALUE", "input.ogg"]);
+        assert!(result.is_ok());
+
+        let result = Cli::try_parse_from(["opuscomment", "--replace", "-O", "output.tags", "input.ogg"]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
+
+        let result = Cli::try_parse_from(["opuscomment", "--replace", "-d", "TAG=VALUE", "input.ogg"]);
+        assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
+    }
 }
