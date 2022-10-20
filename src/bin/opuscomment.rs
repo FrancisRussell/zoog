@@ -255,8 +255,11 @@ fn main_impl() -> Result<(), AppError> {
     let escape = cli.escapes;
     let delete_tags = parse_delete_comment_args(cli.delete, escape)?;
     let append = if let OperationMode::List = operation_mode {
-        eprintln!("List operation does not take tags as a parameter");
-        return Err(AppError::SilentExit);
+        if !cli.tags.is_empty() {
+            eprintln!("List operation does not take tags as a parameter");
+            return Err(AppError::SilentExit);
+        }
+        DiscreteCommentList::default()
     } else {
         let mut append = parse_new_comment_args(cli.tags, escape)?;
         if let Some(ref file) = cli.comment_file {
