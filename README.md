@@ -134,10 +134,11 @@ The following options are available (run `opuscomment --help` for usage):
   removed, not just the first. This option is only valid in modify mode.
 
 * `-e, --escapes`: In all tag input/output either on the command-line or
-  to/from a file escapes will be used for line-feeds (\n), carriage returns
-  (\r), backslashes (\\\\) and the null character (\0). All other escapes are
-  invalid. This option makes it possible to specify tags which contain newlines
-  which would otherwise fail to be parsed correctly from a comment file.
+  to/from a file escapes will be used for line-feeds (`\n`), carriage returns
+  (`\r`), backslashes (`\\`) and the null character (`\0`). All other escapes
+  are invalid. This option makes it possible to specify tags which contain
+  newlines which would otherwise fail to be parsed correctly from a comment
+  file.
 
 * `-I COMMENT_FILE, --tags-in COMMENT_FILE`: In the modify and replace modes,
   the tags to added will be read from this file in addition to those specified
