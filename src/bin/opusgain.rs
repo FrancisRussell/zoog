@@ -10,6 +10,7 @@ use std::collections::{BTreeMap, HashMap};
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use clap::{Parser, ValueEnum};
 use console_output::{ConsoleOutput, DelayedConsoleOutput, Standard};
@@ -232,8 +233,8 @@ fn main_impl() -> Result<(), Error> {
         (album_mode, volume_target)
     };
 
-    let num_processed = Mutex::new(0);
-    let num_already_normalized = Mutex::new(0);
+    let num_processed = AtomicUsize::new(0);
+    let num_already_normalized = AtomicUsize::new(0);
 
     if display_only {
         println!("Display-only mode is enabled so no files will actually be modified.\n");
@@ -294,7 +295,7 @@ fn main_impl() -> Result<(), Error> {
                     rewrite_stream(rewrite, &mut input_file, &mut output_file, abort_on_unchanged)
                 };
                 drop(input_file); // Important for Windows
-                *num_processed.lock() += 1;
+                num_processed.fetch_add(1, Ordering::Relaxed);
 
                 match rewrite_result {
                     Err(e) => {
@@ -324,7 +325,7 @@ fn main_impl() -> Result<(), Error> {
                         writeln!(console.out(), "All gains are already correct so doing nothing. Existing gains were:")
                             .map_err(Error::ConsoleIoError)?;
                         print_gains(&gains, console)?;
-                        *num_already_normalized.lock() += 1;
+                        num_already_normalized.fetch_add(1, Ordering::Relaxed);
                     }
                 }
                 drop(rewrite_guard);
