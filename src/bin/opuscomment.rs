@@ -255,10 +255,8 @@ fn main_impl() -> Result<(), AppError> {
         }
     };
 
-    for comment_file in [&cli.tags_in, &cli.tags_out] {
-        if let Some(filename) = comment_file {
-            validate_comment_filename(filename)?;
-        }
+    for comment_file in [&cli.tags_in, &cli.tags_out].iter().copied().flatten() {
+        validate_comment_filename(comment_file)?;
     }
 
     let escape = cli.escapes;
