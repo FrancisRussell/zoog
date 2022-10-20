@@ -2,7 +2,11 @@ use std::borrow::Cow;
 
 use thiserror::Error;
 
+/// The escape character
 const ESCAPE_CHAR: char = '\\';
+
+/// Characters which are escaped by tag processing tools
+const ESCAPED_CHARS: [char; 4] = ['\0', '\n', '\r', '\\'];
 
 /// Wraps an iterator to apply `vorbiscomemnt`-style character escaping
 #[derive(Debug)]
@@ -45,9 +49,11 @@ where
 
 /// Escapes a string slice using `vorbiscomment`-style escaping
 pub fn escape_str(value: &str) -> Cow<str> {
-    // We may be able to return a reference to the original string if no escaping is
-    // needed
-    EscapingIterator::new(value.chars()).collect()
+    if !value.contains(ESCAPED_CHARS) {
+        return value.into();
+    } else {
+        EscapingIterator::new(value.chars()).collect()
+    }
 }
 
 #[derive(Debug, Error)]
@@ -96,25 +102,56 @@ pub fn unescape_str(value: &str) -> Result<Cow<str>, EscapeDecodeError> {
 mod tests {
     use super::*;
 
+    fn is_safe(value: &str) -> bool {
+        // Escaped strings may still contain the escape character so we don't include it
+        !value.contains(&['\0', '\n', '\r'])
+    }
+
     #[test]
     fn escape_non_special() {
-        let test_string = "The quick brown fox jumps over the lazy dog";
-        let escaped = escape_str(test_string);
-        assert_eq!(test_string, escaped);
+        let original = "The quick brown fox jumps over the lazy dog";
+        assert!(is_safe(original));
+
+        let escaped = escape_str(original);
+        assert!(is_safe(&escaped));
+        assert!(escaped.is_borrowed());
+        assert_eq!(original, escaped);
+
+        let unescaped = unescape_str(&escaped).expect("Unable to unescape string");
+        assert!(unescaped.is_borrowed());
+        assert_eq!(original, unescaped);
     }
 
     #[test]
     fn escape_special() {
-        let test_string = "\0\n\r\\";
-        let escaped = escape_str(test_string);
+        let original = "\0\n\r\\";
+        assert!(!is_safe(&original));
+
+        let escaped = escape_str(original);
+        assert!(is_safe(&escaped));
+        assert!(escaped.is_owned());
         assert_eq!(escaped, "\\0\\n\\r\\\\");
+
+        let unescaped = unescape_str(&escaped).expect("Unable to reverse escaping");
+        assert!(unescaped.is_owned());
+        assert_eq!(original, unescaped);
     }
 
     #[test]
-    fn escaping_is_invertible() {
-        let test_string = "\0\n\r\\";
-        let escaped = escape_str(test_string);
-        let unescaped = unescape_str(&escaped).expect("Unable to reverse escaping");
-        assert_eq!(test_string, unescaped);
+    fn escaping_special_by_char() {
+        // Pick up bugs in detecting if strings need to be escaped by testing each
+        // escaped character individually
+        for c in ESCAPED_CHARS.iter() {
+            let original = c.to_string();
+
+            let escaped = escape_str(&original);
+            assert_eq!(escaped.len(), 2);
+            assert!(is_safe(&escaped));
+            assert!(escaped.is_owned());
+
+            let unescaped = unescape_str(&escaped).expect("Unable to reverse escaping");
+            assert!(unescaped.is_owned());
+            assert_eq!(original, unescaped);
+        }
     }
 }

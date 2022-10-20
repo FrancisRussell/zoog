@@ -1,4 +1,4 @@
-#![feature(const_trait_impl, let_chains)]
+#![feature(const_trait_impl, let_chains, cow_is_borrowed)]
 
 mod comment_header;
 mod comment_list;
