@@ -87,19 +87,19 @@ mod tests {
     use super::*;
 
     #[test]
-    fn replace_appends_on_missing() -> Result<(), Error> {
+    fn replace_pushes_on_missing() -> Result<(), Error> {
         let key = "foo";
         let value = "bar";
 
         let mut list_1 = DiscreteCommentList::default();
-        list_1.append("v0", "k0")?;
-        list_1.append(key, value)?;
-        list_1.append("v1", "k1")?;
+        list_1.push("v0", "k0")?;
+        list_1.push(key, value)?;
+        list_1.push("v1", "k1")?;
 
         let mut list_2 = DiscreteCommentList::default();
-        list_2.append("v0", "k0")?;
+        list_2.push("v0", "k0")?;
         list_2.replace(key, value)?;
-        list_2.append("v1", "k1")?;
+        list_2.push("v1", "k1")?;
 
         assert_eq!(list_1, list_2);
         Ok(())
@@ -108,23 +108,23 @@ mod tests {
     #[test]
     fn replace_replaces_on_duplicates() -> Result<(), Error> {
         let mut list_1 = DiscreteCommentList::default();
-        list_1.append("v0", "k0")?;
-        list_1.append("v1", "k1")?;
-        list_1.append("v2", "k2")?;
-        list_1.append("v3", "k3")?;
-        list_1.append("v2", "k4")?;
-        list_1.append("v5", "k5")?;
-        list_1.append("v2", "k6")?;
-        list_1.append("v7", "k7")?;
+        list_1.push("v0", "k0")?;
+        list_1.push("v1", "k1")?;
+        list_1.push("v2", "k2")?;
+        list_1.push("v3", "k3")?;
+        list_1.push("v2", "k4")?;
+        list_1.push("v5", "k5")?;
+        list_1.push("v2", "k6")?;
+        list_1.push("v7", "k7")?;
         list_1.replace("v2", "k8")?;
 
         let mut list_2 = DiscreteCommentList::default();
-        list_2.append("v0", "k0")?;
-        list_2.append("v1", "k1")?;
-        list_2.append("v2", "k8")?;
-        list_2.append("v3", "k3")?;
-        list_2.append("v5", "k5")?;
-        list_2.append("v7", "k7")?;
+        list_2.push("v0", "k0")?;
+        list_2.push("v1", "k1")?;
+        list_2.push("v2", "k8")?;
+        list_2.push("v3", "k3")?;
+        list_2.push("v5", "k5")?;
+        list_2.push("v7", "k7")?;
 
         assert_eq!(list_1, list_2);
         Ok(())
@@ -133,9 +133,9 @@ mod tests {
     #[test]
     fn get_first_case_insensitive() -> Result<(), Error> {
         let mut list_1 = DiscreteCommentList::default();
-        list_1.append("FooBar", "1")?;
-        list_1.append("FOOBAR", "2")?;
-        list_1.append("foobar", "3")?;
+        list_1.push("FooBar", "1")?;
+        list_1.push("FOOBAR", "2")?;
+        list_1.push("foobar", "3")?;
 
         assert_eq!(list_1.get_first("FooBar"), Some("1"));
         assert_eq!(list_1.get_first("FOOBAR"), Some("1"));
@@ -147,9 +147,9 @@ mod tests {
     #[test]
     fn replace_case_insensitive() -> Result<(), Error> {
         let mut list_1 = DiscreteCommentList::default();
-        list_1.append("FooBar", "1")?;
-        list_1.append("FOOBAR", "2")?;
-        list_1.append("foobar", "3")?;
+        list_1.push("FooBar", "1")?;
+        list_1.push("FOOBAR", "2")?;
+        list_1.push("foobar", "3")?;
         list_1.replace("FoObAr", "42")?;
 
         assert_eq!(list_1.get_first("FOObar"), Some("42"));
@@ -160,16 +160,16 @@ mod tests {
     #[test]
     fn remove_all_case_insensitive() -> Result<(), Error> {
         let mut list_1 = DiscreteCommentList::default();
-        list_1.append("FooBar", "1")?;
-        list_1.append("FOOBAR", "2")?;
-        list_1.append("v0", "k0")?;
-        list_1.append("foobar", "3")?;
-        list_1.append("v5", "k5")?;
+        list_1.push("FooBar", "1")?;
+        list_1.push("FOOBAR", "2")?;
+        list_1.push("v0", "k0")?;
+        list_1.push("foobar", "3")?;
+        list_1.push("v5", "k5")?;
         list_1.remove_all("FOObar");
 
         let mut list_2 = DiscreteCommentList::default();
-        list_2.append("v0", "k0")?;
-        list_2.append("v5", "k5")?;
+        list_2.push("v0", "k0")?;
+        list_2.push("v5", "k5")?;
 
         assert_eq!(list_1, list_2);
         Ok(())
