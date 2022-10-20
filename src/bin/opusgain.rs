@@ -293,7 +293,7 @@ fn main_impl() -> Result<(), Error> {
                     let abort_on_unchanged = true;
                     rewrite_stream(rewrite, &mut input_file, &mut output_file, abort_on_unchanged)
                 };
-                drop(input_file); // Close to avoid potential issues with renaming
+                drop(input_file); // Important for Windows
                 *num_processed.lock() += 1;
 
                 match rewrite_result {

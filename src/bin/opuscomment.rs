@@ -304,7 +304,7 @@ fn main_impl() -> Result<(), AppError> {
         let abort_on_unchanged = true;
         rewrite_stream(rewrite, &mut input_file, &mut output_file, abort_on_unchanged)
     };
-    drop(input_file);
+    drop(input_file); // Important for Windows
 
     match rewrite_result {
         Err(e) => {
