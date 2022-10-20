@@ -2,6 +2,8 @@ use std::borrow::Cow;
 
 use thiserror::Error;
 
+const ESCAPE_CHAR: char = '\\';
+
 /// Wraps an iterator to apply `vorbiscomemnt`-style character escaping
 #[derive(Debug)]
 struct EscapingIterator<I> {
@@ -29,7 +31,7 @@ where
                 _ => {},
             }
             Some(if self.delayed.is_some() {
-                '\\'
+                ESCAPE_CHAR
             } else {
                 c
             })
@@ -61,6 +63,9 @@ pub enum EscapeDecodeError {
 
 /// Unescapes a string slice using `vorbiscomment`-style escaping
 pub fn unescape_str(value: &str) -> Result<Cow<str>, EscapeDecodeError> {
+    if !value.contains(ESCAPE_CHAR) {
+        return Ok(value.into());
+    }
     let mut result = String::with_capacity(value.len());
     let mut is_escape = false;
     for c in value.chars() {
@@ -73,7 +78,7 @@ pub fn unescape_str(value: &str) -> Result<Cow<str>, EscapeDecodeError> {
                 _ => return Err(EscapeDecodeError::InvalidEscape(c)),
             }
             is_escape = false;
-        } else if c == '\\' {
+        } else if c == ESCAPE_CHAR {
             is_escape = true;
         } else {
             result.push(c);
