@@ -17,4 +17,7 @@ pub mod opus {
     /// The name of the tag used to identify the album gain in Opus comment
     /// headers
     pub const TAG_ALBUM_GAIN: &str = "R128_ALBUM_GAIN";
+
+    /// Separator between field-names and values in comments
+    pub const FIELD_NAME_TERMINATOR: u8 = b'=';
 }

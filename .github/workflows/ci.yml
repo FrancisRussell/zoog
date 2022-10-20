@@ -32,6 +32,8 @@ jobs:
           path: |
             target/${{ matrix.target }}/debug/opusgain
             target/${{ matrix.target }}/debug/opusgain.exe
+            target/${{ matrix.target }}/debug/opuscomment
+            target/${{ matrix.target }}/debug/opuscomment.exe
           if-no-files-found: error
 
   cargo-test:

@@ -25,7 +25,7 @@ mkdir "${NAME}"
 cp -a "${TOP}/README.md" "${NAME}"
 cp -a "${TOP}/CHANGELOG.md" "${NAME}"
 cp -a "${TOP}/LICENSE" "${NAME}"
-for BINARY in opusgain; do
+for BINARY in opusgain opuscomment; do
   BINARY_PATH="${TOP}/target/${TARGET}/release/${BINARY}${EXE_SUFFIX}"
   if [ -f "${BINARY_PATH}" ]; then
     cp -a "${BINARY_PATH}" "${NAME}"

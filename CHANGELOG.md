@@ -7,6 +7,11 @@
 * Deliberately panic on some exceptional Opus comment cases.
 * Treat Opus comment keys case-insensitively and add tests (bugfix).
 * Improve Opus comment field name validation.
+* Define a trait for comment lists.
+* Define a type for holding comment lists.
+* Refactor `VolumeRewriter` to be more generic.
+* Add `opuscomment` binary for manipulating comments in Ogg Opus files.
+* Add library functionality for escaping and unescaping comments.
 
 ## 0.3.0
 
@@ -23,7 +28,7 @@
 * Upgrade to `clap` version 4.
 * Use `wild` for wildcard support on Windows.
 * Enable parallel volume analysis of multiple files.
-* Ensure input file is closed before renaming.
+* Ensure input file is closed before renaming (bugfix on Windows).
 * Add option to generate tags without changing output gain.
 * Add option to clear `R128` tags from specified files.
 

@@ -7,8 +7,8 @@ homepage = "https://github.com/FrancisRussell/zoog"
 readme = "README.md"
 repository = "https://github.com/FrancisRussell/zoog.git"
 license = "BSD-3-Clause"
-keywords = ["opus", "normalization"]
-description = "Modifies Opus output gain values and R128 tags"
+keywords = ["ogg", "opus", "normalization"]
+description = "Tools for modifying Ogg Opus comment tags, R128 tags and output gain"
 
 [dependencies]
 audiopus_sys = { version = "0.2.2", features = ["static"] }
@@ -27,7 +27,7 @@ wild = "2.1.0"
 [dependencies.clap]
 version = "4.0.10"
 default-features = false
-features = [ "derive", "help", "std", "usage", "wrap_help" ]
+features = [ "derive", "help", "std", "usage", "wrap_help", "suggestions" ]
 
 [dev-dependencies.rand]
 version = "0.8.0"

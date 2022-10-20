@@ -5,11 +5,11 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
 use thiserror::Error;
 
-use crate::opus::{FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use crate::constants::opus::FIELD_NAME_TERMINATOR;
+use crate::opus::{parse_comment, CommentList, DiscreteCommentList, FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::Error;
 
 const COMMENT_MAGIC: &[u8] = b"OpusTags";
-const FIELD_NAME_TERMINATOR: u8 = b'=';
 
 /// Allows querying and modification of an Opus comment header
 #[derive(Derivative)]
@@ -18,7 +18,7 @@ pub struct CommentHeader<'a> {
     #[derivative(Debug = "ignore")]
     data: &'a mut Vec<u8>,
     vendor: String,
-    user_comments: Vec<(String, String)>,
+    user_comments: DiscreteCommentList,
 }
 
 #[derive(Debug, Error)]
@@ -36,22 +36,10 @@ impl<'a> CommentHeader<'a> {
         reader.read_exact(data).map_err(|_| Error::MalformedCommentHeader)
     }
 
-    fn keys_equal(k1: &str, k2: &str) -> bool { k1.eq_ignore_ascii_case(k2) }
-
-    fn validate_field_name(field_name: &str) -> Result<(), Error> {
-        for c in field_name.chars() {
-            match c {
-                ' '..='<' | '>'..='}' => {}
-                _ => return Err(Error::InvalidOpusCommentFieldName(field_name.into())),
-            }
-        }
-        Ok(())
-    }
-
     /// Constructs an empty `CommentHeader`. The comment data will be placed in
     /// the supplied `Vec`. Any existing content will be discarded.
     pub fn empty(data: &'a mut Vec<u8>) -> CommentHeader<'a> {
-        CommentHeader { data, vendor: String::new(), user_comments: Vec::new() }
+        CommentHeader { data, vendor: String::new(), user_comments: DiscreteCommentList::default() }
     }
 
     /// Sets the vendor field.
@@ -74,61 +62,17 @@ impl<'a> CommentHeader<'a> {
         Self::read_exact(&mut reader, &mut vendor)?;
         let vendor = String::from_utf8(vendor)?;
         let num_comments = Self::read_length(&mut reader)?;
-        let mut user_comments = Vec::with_capacity(num_comments as usize);
+        let mut user_comments = DiscreteCommentList::with_capacity(num_comments as usize);
         for _ in 0..num_comments {
             let comment_len = Self::read_length(&mut reader)?;
             let mut comment = vec![0u8; comment_len as usize];
             Self::read_exact(&mut reader, &mut comment)?;
             let comment = String::from_utf8(comment)?;
-            let offset = comment.find(char::from(FIELD_NAME_TERMINATOR)).ok_or(Error::MalformedCommentHeader)?;
-            let (key, value) = comment.split_at(offset);
-            Self::validate_field_name(key)?;
-            user_comments.push((String::from(key), String::from(&value[1..])));
+            let (key, value) = parse_comment(&comment)?;
+            user_comments.push(key, value)?;
         }
         let result = CommentHeader { data, vendor, user_comments };
         Ok(Some(result))
-    }
-
-    /// Returns the first mapped value for the specified key.
-    pub fn get_first(&self, key: &str) -> Option<&str> {
-        self.user_comments.iter().find(|(k, _)| Self::keys_equal(k, key)).map(|(_, v)| v.as_str())
-    }
-
-    /// Removes all mappings for the specified key.
-    pub fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| !Self::keys_equal(key, k)); }
-
-    /// If the key already exists, update the first mapping's value to the one
-    /// supplied and discard any later mappings. If the key does not exist,
-    /// append the mapping to the end of the list.
-    pub fn replace(&mut self, key: &str, value: &str) -> Result<(), Error> {
-        let mut found = false;
-        self.user_comments.retain_mut(|(k, ref mut v)| {
-            if Self::keys_equal(k, key) {
-                if found {
-                    // If we have already found the key, discard this mapping
-                    false
-                } else {
-                    *v = value.into();
-                    found = true;
-                    true
-                }
-            } else {
-                true
-            }
-        });
-
-        // If the key did not exist, we append
-        if !found {
-            self.append(key, value)?;
-        }
-        Ok(())
-    }
-
-    /// Appends the specified mapping.
-    pub fn append(&mut self, key: &str, value: &str) -> Result<(), Error> {
-        Self::validate_field_name(key)?;
-        self.user_comments.push((key.into(), value.into()));
-        Ok(())
     }
 
     /// Attempts to parse the first mapping for the specified key as the
@@ -169,11 +113,8 @@ impl<'a> CommentHeader<'a> {
         Ok(())
     }
 
-    /// Returns the number of user comments in the header
-    pub fn len(&self) -> usize { self.user_comments.len() }
-
-    /// Does the header contain any user comments?
-    pub fn is_empty(&self) -> bool { self.user_comments.is_empty() }
+    /// Returns the comments in the header as a `DiscreteCommentList`.
+    pub fn to_discrete_comment_list(&self) -> DiscreteCommentList { self.user_comments.clone() }
 
     fn commit(&mut self) -> Result<(), CommitError> {
         let data = &mut self.data;
@@ -195,6 +136,28 @@ impl<'a> CommentHeader<'a> {
         }
         Ok(())
     }
+}
+
+impl<'a> CommentList for CommentHeader<'a> {
+    type Iter<'b> = <DiscreteCommentList as CommentList>::Iter<'b> where Self: 'b;
+
+    fn len(&self) -> usize { self.user_comments.len() }
+
+    fn is_empty(&self) -> bool { self.user_comments.is_empty() }
+
+    fn clear(&mut self) { self.user_comments.clear() }
+
+    fn get_first(&self, key: &str) -> Option<&str> { self.user_comments.get_first(key) }
+
+    fn remove_all(&mut self, key: &str) { self.user_comments.remove_all(key) }
+
+    fn replace(&mut self, key: &str, value: &str) -> Result<(), Error> { self.user_comments.replace(key, value) }
+
+    fn push(&mut self, key: &str, value: &str) -> Result<(), Error> { self.user_comments.push(key, value) }
+
+    fn iter(&self) -> Self::Iter<'_> { self.user_comments.iter() }
+
+    fn retain<F: FnMut(&str, &str) -> bool>(&mut self, f: F) { self.user_comments.retain(f) }
 }
 
 impl<'a> Drop for CommentHeader<'a> {
@@ -251,7 +214,7 @@ mod tests {
         for _ in 0..num_comments {
             let key = random_string(engine, true);
             let value = random_string(engine, false);
-            header.append(key.as_str(), value.as_str()).expect("Unable to add comment");
+            header.push(key.as_str(), value.as_str()).expect("Unable to add comment");
         }
         header
     }
@@ -299,102 +262,5 @@ mod tests {
             Err(Error::MalformedCommentHeader) => {}
             _ => assert!(false, "Wrong error for malformed header"),
         };
-    }
-
-    #[test]
-    fn replace_appends_on_missing() -> Result<(), Error> {
-        let key = "foo";
-        let value = "bar";
-
-        let mut data_1 = Vec::new();
-        let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("v0", "k0")?;
-        header_1.append(key, value)?;
-        header_1.append("v1", "k1")?;
-
-        let mut data_2 = Vec::new();
-        let mut header_2 = CommentHeader::empty(&mut data_2);
-        header_2.append("v0", "k0")?;
-        header_2.replace(key, value)?;
-        header_2.append("v1", "k1")?;
-
-        assert_eq!(header_1, header_2);
-        Ok(())
-    }
-
-    #[test]
-    fn replace_replaces_on_duplicates() -> Result<(), Error> {
-        let mut data_1 = Vec::new();
-        let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("v0", "k0")?;
-        header_1.append("v1", "k1")?;
-        header_1.append("v2", "k2")?;
-        header_1.append("v3", "k3")?;
-        header_1.append("v2", "k4")?;
-        header_1.append("v5", "k5")?;
-        header_1.append("v2", "k6")?;
-        header_1.append("v7", "k7")?;
-        header_1.replace("v2", "k8")?;
-
-        let mut data_2 = Vec::new();
-        let mut header_2 = CommentHeader::empty(&mut data_2);
-        header_2.append("v0", "k0")?;
-        header_2.append("v1", "k1")?;
-        header_2.append("v2", "k8")?;
-        header_2.append("v3", "k3")?;
-        header_2.append("v5", "k5")?;
-        header_2.append("v7", "k7")?;
-
-        assert_eq!(header_1, header_2);
-        Ok(())
-    }
-
-    #[test]
-    fn get_first_case_insensitive() -> Result<(), Error> {
-        let mut data_1 = Vec::new();
-        let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("FooBar", "1")?;
-        header_1.append("FOOBAR", "2")?;
-        header_1.append("foobar", "3")?;
-
-        assert_eq!(header_1.get_first("FooBar"), Some("1"));
-        assert_eq!(header_1.get_first("FOOBAR"), Some("1"));
-        assert_eq!(header_1.get_first("foobar"), Some("1"));
-        assert_eq!(header_1.get_first("FoObAr"), Some("1"));
-        Ok(())
-    }
-
-    #[test]
-    fn replace_case_insensitive() -> Result<(), Error> {
-        let mut data_1 = Vec::new();
-        let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("FooBar", "1")?;
-        header_1.append("FOOBAR", "2")?;
-        header_1.append("foobar", "3")?;
-        header_1.replace("FoObAr", "42")?;
-
-        assert_eq!(header_1.get_first("FOObar"), Some("42"));
-        assert_eq!(header_1.len(), 1);
-        Ok(())
-    }
-
-    #[test]
-    fn remove_all_case_insensitive() -> Result<(), Error> {
-        let mut data_1 = Vec::new();
-        let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("FooBar", "1")?;
-        header_1.append("FOOBAR", "2")?;
-        header_1.append("v0", "k0")?;
-        header_1.append("foobar", "3")?;
-        header_1.append("v5", "k5")?;
-        header_1.remove_all("FOObar");
-
-        let mut data_2 = Vec::new();
-        let mut header_2 = CommentHeader::empty(&mut data_2);
-        header_2.append("v0", "k0")?;
-        header_2.append("v5", "k5")?;
-
-        assert_eq!(header_1, header_2);
-        Ok(())
     }
 }
