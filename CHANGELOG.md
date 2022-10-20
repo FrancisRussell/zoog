@@ -9,6 +9,9 @@
 * Improve Opus comment field name validation.
 * Define a trait for comment lists.
 * Define a type for holding comment lists.
+* Refactor `VolumeRewriter` to be more generic.
+* Add `opuscomment` binary for manipulating comments in Ogg Opus files.
+* Add library functionality for escaping and unescaping comments.
 
 ## 0.3.0
 
