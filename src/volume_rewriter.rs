@@ -130,6 +130,3 @@ impl HeaderRewrite for VolumeHeaderRewrite {
         Ok(())
     }
 }
-
-/// The result type of submitting a packet
-pub type SubmitResult = header_rewriter::SubmitResult<OpusGains>;

@@ -16,12 +16,10 @@ use output_file::OutputFile;
 use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
-use zoog::header_rewriter::rewrite_stream;
+use zoog::header_rewriter::{rewrite_stream, SubmitResult};
 use zoog::opus::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use zoog::volume_analyzer::VolumeAnalyzer;
-use zoog::volume_rewriter::{
-    OpusGains, OutputGainMode, SubmitResult, VolumeHeaderRewrite, VolumeRewriterConfig, VolumeTarget,
-};
+use zoog::volume_rewriter::{OpusGains, OutputGainMode, VolumeHeaderRewrite, VolumeRewriterConfig, VolumeTarget};
 use zoog::{Decibels, Error, R128_LUFS, REPLAY_GAIN_LUFS};
 
 fn main() {
