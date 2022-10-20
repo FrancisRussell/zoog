@@ -155,7 +155,7 @@ enum OutputGainSetting {
 }
 
 #[derive(Debug, Parser)]
-#[clap(author, version, about)]
+#[clap(author, version, about = "Modifies Ogg Opus output gain values and R128 tags")]
 struct Cli {
     #[clap(short, long, action)]
     /// Enable album mode
