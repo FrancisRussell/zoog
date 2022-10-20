@@ -254,27 +254,20 @@ fn main_impl() -> Result<(), AppError> {
 
     let escape = cli.escapes;
     let delete_tags = parse_delete_comment_args(cli.delete, escape)?;
-    let append = match operation_mode {
-        OperationMode::List => {
-            if cli.tags.is_empty() {
-                DiscreteCommentList::default()
+    let append = if let OperationMode::List = operation_mode {
+        eprintln!("List operation does not take tags as a parameter");
+        return Err(AppError::SilentExit);
+    } else {
+        let mut append = parse_new_comment_args(cli.tags, escape)?;
+        if let Some(ref file) = cli.comment_file {
+            let mut tags = if file == std::ffi::OsStr::new(STDIN_NAME) {
+                read_comments_from_stdin(escape)?
             } else {
-                eprintln!("List operation does not take tags as a parameter");
-                return Err(AppError::SilentExit);
-            }
+                read_comments_from_file(file, escape)?
+            };
+            append.append(&mut tags);
         }
-        OperationMode::Append | OperationMode::Replace => {
-            let mut append = parse_new_comment_args(cli.tags, escape)?;
-            if let Some(ref file) = cli.comment_file {
-                let mut tags = if file == std::ffi::OsStr::new(STDIN_NAME) {
-                    read_comments_from_stdin(escape)?
-                } else {
-                    read_comments_from_file(file, escape)?
-                };
-                append.append(&mut tags);
-            }
-            append
-        }
+        append
     };
 
     let action = match operation_mode {
