@@ -4,7 +4,7 @@ mod output_file;
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::ops::BitOrAssign;
 use std::path::{Path, PathBuf};
 
@@ -17,6 +17,7 @@ use zoog::opus::{parse_comment, validate_comment_field_name, CommentList, Discre
 use zoog::{escaping, Error};
 
 const OGG_OPUS_EXTENSIONS: [&str; 3] = ["oga", "ogg", "opus"];
+const STDIN_NAME: &str = "-";
 
 #[derive(Debug, Error)]
 enum AppError {
@@ -25,6 +26,9 @@ enum AppError {
 
     #[error("Silent exit because error was already printed")]
     SilentExit,
+
+    #[error("Failed to read from standard input: `{0}`")]
+    StandardInputReadError(io::Error),
 }
 
 fn main() {
@@ -32,6 +36,7 @@ fn main() {
         match e {
             AppError::LibraryError(e) => eprintln!("Aborted due to error: {}", e),
             AppError::SilentExit => {}
+            e => eprintln!("{}", e),
         }
         std::process::exit(1);
     }
@@ -45,7 +50,7 @@ struct Cli {
     list: bool,
 
     #[clap(short, long, action, conflicts_with = "write")]
-    /// Append comments in the Ogg Opus file
+    /// Delete specific comments and append new ones to the Ogg Opus file
     append: bool,
 
     #[clap(short, long, action)]
@@ -198,18 +203,34 @@ where
     Ok(result)
 }
 
-fn read_comments_from_file<P: AsRef<Path>>(path: P, escaped: bool) -> Result<DiscreteCommentList, Error> {
-    let path = path.as_ref();
-    let file = File::open(path).map_err(|e| Error::FileOpenError(path.to_path_buf(), e))?;
-    let file = BufReader::new(file);
+fn read_comments_from_read<R, M, E>(read: R, escaped: bool, error_map: M) -> Result<DiscreteCommentList, E>
+where
+    R: Read,
+    M: Fn(io::Error) -> E,
+    E: From<Error>,
+{
+    let read = BufReader::new(read);
     let mut result = DiscreteCommentList::default();
-    for line in file.lines() {
-        let line = line.map_err(|e| Error::FileReadError(path.to_path_buf(), e))?;
+    for line in read.lines() {
+        let line = line.map_err(&error_map)?;
         let (key, value) = parse_comment(&line)?;
-        let value = if escaped { escaping::unescape_str(value)? } else { Cow::from(value) };
+        let value = if escaped { escaping::unescape_str(value).map_err(|e| e.into())? } else { Cow::from(value) };
         result.push(key, &value)?;
     }
     Ok(result)
+}
+
+fn read_comments_from_file<P: AsRef<Path>>(path: P, escaped: bool) -> Result<DiscreteCommentList, Error> {
+    let path = path.as_ref();
+    let file = File::open(path).map_err(|e| Error::FileOpenError(path.to_path_buf(), e))?;
+    let error_map = |e| Error::FileReadError(path.to_path_buf(), e);
+    read_comments_from_read(file, escaped, error_map)
+}
+
+fn read_comments_from_stdin(escaped: bool) -> Result<DiscreteCommentList, AppError> {
+    let stdin = io::stdin();
+    let error_map = AppError::StandardInputReadError;
+    read_comments_from_read(stdin, escaped, error_map)
 }
 
 fn main_impl() -> Result<(), AppError> {
@@ -242,15 +263,16 @@ fn main_impl() -> Result<(), AppError> {
         OperationMode::Append | OperationMode::Replace => {
             let mut append = parse_new_comment_args(cli.tags, escape)?;
             if let Some(ref file) = cli.comment_file {
-                let mut from_file = read_comments_from_file(file, escape)?;
-                append.append(&mut from_file);
+                let mut tags = if file == std::ffi::OsStr::new(STDIN_NAME) {
+                    read_comments_from_stdin(escape)?
+                } else {
+                    read_comments_from_file(file, escape)?
+                };
+                append.append(&mut tags);
             }
             append
         }
     };
-    println!("Operating in mode: {:?}", operation_mode);
-    println!("tags={:?}", append);
-    println!("delete_tags={:?}", delete_tags);
 
     let action = match operation_mode {
         OperationMode::List => CommentRewriterAction::NoChange,
