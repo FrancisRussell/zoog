@@ -117,7 +117,7 @@ located in an Ogg Opus file.
 The following options are available (run `opuscomment --help` for usage):
 
 * `-l, --list`: List all tags in the file in `NAME=VALUE` format. This will be to
-  standard output unless `-c` is specified.
+  standard output unless `-O` is specified.
 
 * `-m, --modify`: Tags specified using `-t` or `-I` will be appended to the
   specified file. Tags matching patterns specified using `-d` will be
@@ -147,7 +147,7 @@ The following options are available (run `opuscomment --help` for usage):
   standard input.
 
 * `-O COMMENT_FILE, --tags-out COMMENT_FILE`: In list mode, tags will be
-  written to this file. Tags are read in `NAME=VALUE` format, with one tag per
+  written to this file. Tags are written in `NAME=VALUE` format, with one tag per
   line. If `-` is specified for the file name, tags will be written to standard
   output.
 
