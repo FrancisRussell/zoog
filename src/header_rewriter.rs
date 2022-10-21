@@ -130,13 +130,7 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
         }
 
         while let Some(packet) = self.packet_queue.pop_front() {
-            let packet_info = if packet.last_in_stream() {
-                PacketWriteEndInfo::EndStream
-            } else if packet.last_in_page() {
-                PacketWriteEndInfo::EndPage
-            } else {
-                PacketWriteEndInfo::NormalPacket
-            };
+            let packet_info = Self::packet_write_end_info(&packet);
             let packet_serial = packet.stream_serial();
             let packet_granule = packet.absgp_page();
 
@@ -145,6 +139,16 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
                 .map_err(Error::WriteError)?;
         }
         Ok(SubmitResult::Good)
+    }
+
+    fn packet_write_end_info(packet: &Packet) -> PacketWriteEndInfo {
+        if packet.last_in_stream() {
+            PacketWriteEndInfo::EndStream
+        } else if packet.last_in_page() {
+            PacketWriteEndInfo::EndPage
+        } else {
+            PacketWriteEndInfo::NormalPacket
+        }
     }
 }
 
