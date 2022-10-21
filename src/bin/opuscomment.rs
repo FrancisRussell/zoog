@@ -167,6 +167,7 @@ where
     Ok(result)
 }
 
+/// Try to protect user against passing a media file as a tags file
 fn validate_comment_filename(path: &Path) -> Result<(), AppError> {
     if let Some(ext) = path.extension() {
         let mut ext = ext.to_string_lossy().to_string();
