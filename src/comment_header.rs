@@ -75,18 +75,6 @@ impl<'a> CommentHeader<'a> {
         Ok(Some(result))
     }
 
-    /// Attempts to parse the first mapping for the specified key as the
-    /// fixed-point Decibel representation used in Opus comment headers.
-    pub fn get_gain_from_tag(&self, tag: &str) -> Result<Option<FixedPointGain>, Error> {
-        let parsed =
-            self.get_first(tag).map(|v| v.parse::<FixedPointGain>().map_err(|_| Error::InvalidR128Tag(v.into())));
-        match parsed {
-            Some(Ok(v)) => Ok(Some(v)),
-            Some(Err(e)) => Err(e),
-            None => Ok(None),
-        }
-    }
-
     /// Applies the specified delta to either or both of the album and track
     /// gains if present. If neither as present, this function will do
     /// nothing.
