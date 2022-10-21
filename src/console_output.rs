@@ -1,6 +1,7 @@
 use std::collections::VecDeque;
 use std::io::{self, Stderr, Stdout, Write};
 use std::ops::DerefMut;
+use std::sync::atomic::{AtomicUsize, Ordering};
 
 use parking_lot::{Mutex, MutexGuard};
 
@@ -82,16 +83,11 @@ impl StreamWrites {
 
 #[derive(Debug, Default)]
 struct IdGenerator {
-    next: Mutex<usize>,
+    next: AtomicUsize,
 }
 
 impl IdGenerator {
-    pub fn next(&self) -> usize {
-        let mut guard = self.next.lock();
-        let id = *guard;
-        *guard += 1;
-        id
-    }
+    pub fn next(&self) -> usize { self.next.fetch_add(1, Ordering::Relaxed) }
 }
 
 #[derive(Debug)]

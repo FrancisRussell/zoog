@@ -6,7 +6,7 @@ use crate::opus::FixedPointGain;
 use crate::Error;
 
 const OPUS_MIN_HEADER_SIZE: usize = 19;
-const OPUS_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x48, 0x65, 0x61, 0x64];
+const OPUS_MAGIC: &[u8] = b"OpusHead";
 
 /// Allows querying and modification of an Opus identification header
 pub struct OpusHeader<'a> {

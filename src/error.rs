@@ -4,6 +4,8 @@ use ogg::reading::OggReadError;
 use tempfile::PersistError;
 use thiserror::Error;
 
+use crate::escaping;
+
 /// The Zoog error type
 #[derive(Debug, Error)]
 pub enum Error {
@@ -11,9 +13,17 @@ pub enum Error {
     #[error("Unable to open file `{0}` due to `{1}`")]
     FileOpenError(PathBuf, std::io::Error),
 
+    /// An error occurred reading from the file
+    #[error("Unable to read from file `{0}` due to `{1}`")]
+    FileReadError(PathBuf, std::io::Error),
+
+    /// An error occurred writing to the file
+    #[error("Unable to write to file `{0}` due to `{1}`")]
+    FileWriteError(PathBuf, std::io::Error),
+
     /// A temporary file could not be opened due to an IO error
-    #[error("Unable to open temporary file due to `{0}`")]
-    TempFileOpenError(std::io::Error),
+    #[error("Unable to open temporary file in `{0}` due to `{1}`")]
+    TempFileOpenError(PathBuf, std::io::Error),
 
     /// An Ogg stream failed to decode correctly
     #[error("Ogg decoding error: `{0}`")]
@@ -35,6 +45,10 @@ pub enum Error {
     #[error("Malformed comment header")]
     MalformedCommentHeader,
 
+    /// Missing Opus comment separator
+    #[error("Missing separator in Opus comment")]
+    MissingOpusCommentSeparator,
+
     /// An invalid UTF-8 sequence was encountered
     #[error("UTF-8 encoding error")]
     UTF8Error(#[from] std::string::FromUtf8Error),
@@ -46,10 +60,6 @@ pub enum Error {
     /// A gain value was out of bounds for being representable
     #[error("A computed gain value was not representable")]
     GainOutOfBounds,
-
-    /// An error occurred during a file rename
-    #[error("Failed to rename `{0}` to `{1}` due to `{2}`")]
-    FileMove(PathBuf, PathBuf, std::io::Error),
 
     /// An error occurred during a file deletion
     #[error("Failed to delete `{0}` due to `{1}`")]
@@ -82,4 +92,12 @@ pub enum Error {
     /// A path did not have a final named component
     #[error("The path `{0}` did not have a final named component")]
     NotAFilePath(PathBuf),
+
+    /// Invalid Opus comment field name
+    #[error("Invalid Opus comment field name: `{0}`")]
+    InvalidOpusCommentFieldName(String),
+
+    /// An escaped string was invalid
+    #[error("{0}")]
+    EscapeDecodeError(#[from] escaping::EscapeDecodeError),
 }

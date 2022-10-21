@@ -1,12 +1,15 @@
-use std::io::{Cursor, Read, Write};
+use std::convert::TryInto;
+use std::io::{Cursor, Read};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
+use thiserror::Error;
 
-use crate::opus::{FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use crate::constants::opus::FIELD_NAME_TERMINATOR;
+use crate::opus::{parse_comment, CommentList, DiscreteCommentList};
 use crate::Error;
 
-const COMMENT_MAGIC: &[u8] = &[0x4f, 0x70, 0x75, 0x73, 0x54, 0x61, 0x67, 0x73];
+const COMMENT_MAGIC: &[u8] = b"OpusTags";
 
 /// Allows querying and modification of an Opus comment header
 #[derive(Derivative)]
@@ -15,7 +18,13 @@ pub struct CommentHeader<'a> {
     #[derivative(Debug = "ignore")]
     data: &'a mut Vec<u8>,
     vendor: String,
-    user_comments: Vec<(String, String)>,
+    user_comments: DiscreteCommentList,
+}
+
+#[derive(Debug, Error)]
+enum CommitError {
+    #[error("Value unrepresentable in Opus comment header")]
+    ValueTooLarge,
 }
 
 impl<'a> CommentHeader<'a> {
@@ -30,11 +39,11 @@ impl<'a> CommentHeader<'a> {
     /// Constructs an empty `CommentHeader`. The comment data will be placed in
     /// the supplied `Vec`. Any existing content will be discarded.
     pub fn empty(data: &'a mut Vec<u8>) -> CommentHeader<'a> {
-        CommentHeader { data, vendor: String::new(), user_comments: Vec::new() }
+        CommentHeader { data, vendor: String::new(), user_comments: DiscreteCommentList::default() }
     }
 
     /// Sets the vendor field.
-    pub fn set_vendor(&mut self, vendor: &str) { self.vendor = vendor.to_string(); }
+    pub fn set_vendor(&mut self, vendor: &str) { self.vendor = vendor.into(); }
 
     /// Attempts to parse the supplied `Vec` as an Opus comment header. An error
     /// is returned if the header is believed to be corrupt, otherwise an
@@ -53,124 +62,72 @@ impl<'a> CommentHeader<'a> {
         Self::read_exact(&mut reader, &mut vendor)?;
         let vendor = String::from_utf8(vendor)?;
         let num_comments = Self::read_length(&mut reader)?;
-        let mut user_comments = Vec::with_capacity(num_comments as usize);
+        let mut user_comments = DiscreteCommentList::with_capacity(num_comments as usize);
         for _ in 0..num_comments {
             let comment_len = Self::read_length(&mut reader)?;
             let mut comment = vec![0u8; comment_len as usize];
             Self::read_exact(&mut reader, &mut comment)?;
             let comment = String::from_utf8(comment)?;
-            let offset = comment.find('=').ok_or(Error::MalformedCommentHeader)?;
-            let (key, value) = comment.split_at(offset);
-            user_comments.push((String::from(key), String::from(&value[1..])));
+            let (key, value) = parse_comment(&comment)?;
+            user_comments.push(key, value)?;
         }
         let result = CommentHeader { data, vendor, user_comments };
         Ok(Some(result))
     }
 
-    /// Returns the first mapped value for the specified key.
-    pub fn get_first(&self, key: &str) -> Option<&str> {
-        for (k, v) in self.user_comments.iter() {
-            if k == key {
-                return Some(v);
-            }
-        }
-        None
-    }
+    /// Returns the comments in the header as a `DiscreteCommentList`.
+    pub fn to_discrete_comment_list(&self) -> DiscreteCommentList { self.user_comments.clone() }
 
-    /// Removes all mappings for the specified key.
-    pub fn remove_all(&mut self, key: &str) { self.user_comments.retain(|(k, _)| key != k); }
-
-    /// If the key already exists, update the first mapping's value to the one
-    /// supplied and discard any later mappings. If the key does not exist,
-    /// append the mapping to the end of the list.
-    pub fn replace(&mut self, key: &str, value: &str) {
-        let mut found = false;
-        self.user_comments.retain_mut(|(k, ref mut v)| {
-            if k == key {
-                if found {
-                    // If we have already found the key, discard this mapping
-                    false
-                } else {
-                    *v = value.to_string();
-                    found = true;
-                    true
-                }
-            } else {
-                true
-            }
-        });
-
-        // If the key did not exist, we append
-        if !found {
-            self.append(key, value);
-        }
-    }
-
-    /// Appends the specified mapping.
-    pub fn append(&mut self, key: &str, value: &str) {
-        self.user_comments.push((String::from(key), String::from(value)));
-    }
-
-    /// Attempts to parse the first mapping for the specified key as the
-    /// fixed-point Decibel representation used in Opus comment headers.
-    pub fn get_gain_from_tag(&self, tag: &str) -> Result<Option<FixedPointGain>, Error> {
-        let parsed =
-            self.get_first(tag).map(|v| v.parse::<FixedPointGain>().map_err(|_| Error::InvalidR128Tag(v.to_string())));
-        match parsed {
-            Some(Ok(v)) => Ok(Some(v)),
-            Some(Err(e)) => Err(e),
-            None => Ok(None),
-        }
-    }
-
-    /// Returns the album gain if present, else the track gain, else `None`.
-    pub fn get_album_or_track_gain(&self) -> Result<Option<FixedPointGain>, Error> {
-        for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
-            if let Some(gain) = self.get_gain_from_tag(tag)? {
-                return Ok(Some(gain));
-            }
-        }
-        Ok(None)
-    }
-
-    /// Applies the specified delta to either or both of the album and track
-    /// gains if present. If neither as present, this function will do
-    /// nothing.
-    pub fn adjust_gains(&mut self, adjustment: FixedPointGain) -> Result<(), Error> {
-        if adjustment.is_zero() {
-            return Ok(());
-        }
-        for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
-            if let Some(gain) = self.get_gain_from_tag(tag)? {
-                let gain = gain.checked_add(adjustment).ok_or(Error::GainOutOfBounds)?;
-                self.replace(tag, &format!("{}", gain.as_fixed_point()));
-            }
+    fn commit(&mut self) -> Result<(), CommitError> {
+        let data = &mut self.data;
+        data.clear();
+        data.extend(COMMENT_MAGIC);
+        let vendor = self.vendor.as_bytes();
+        let vendor_len = vendor.len().try_into().map_err(|_| CommitError::ValueTooLarge)?;
+        data.write_u32::<LittleEndian>(vendor_len).expect("Error writing vendor length");
+        data.extend(vendor);
+        let user_comments_len = self.user_comments.len().try_into().map_err(|_| CommitError::ValueTooLarge)?;
+        data.write_u32::<LittleEndian>(user_comments_len).expect("Error writing user comment count");
+        for (k, v) in self.user_comments.iter().map(|(k, v)| (k.as_bytes(), v.as_bytes())) {
+            let comment_len = k.len() + v.len() + 1;
+            let comment_len = comment_len.try_into().map_err(|_| CommitError::ValueTooLarge)?;
+            data.write_u32::<LittleEndian>(comment_len).expect("Error writing user comment length");
+            data.extend(k);
+            data.push(FIELD_NAME_TERMINATOR);
+            data.extend(v);
         }
         Ok(())
     }
+}
 
-    fn commit(&mut self) {
-        //TODO: Look more into why we can't use https://github.com/rust-lang/rust/pull/46830
-        let mut writer = Cursor::new(Vec::new());
-        writer.write_all(COMMENT_MAGIC).unwrap();
-        let vendor = self.vendor.as_bytes();
-        writer.write_u32::<LittleEndian>(vendor.len() as u32).unwrap();
-        writer.write_all(vendor).unwrap();
-        writer.write_u32::<LittleEndian>(self.user_comments.len() as u32).unwrap();
-        let equals: &[u8] = &[0x3d];
-        for (k, v) in self.user_comments.iter().map(|(k, v)| (k.as_bytes(), v.as_bytes())) {
-            let len = k.len() + v.len() + 1;
-            writer.write_u32::<LittleEndian>(len as u32).unwrap();
-            writer.write_all(k).unwrap();
-            writer.write_all(equals).unwrap();
-            writer.write_all(v).unwrap();
-        }
-        *self.data = writer.into_inner();
-    }
+impl<'a> CommentList for CommentHeader<'a> {
+    type Iter<'b> = <DiscreteCommentList as CommentList>::Iter<'b> where Self: 'b;
+
+    fn len(&self) -> usize { self.user_comments.len() }
+
+    fn is_empty(&self) -> bool { self.user_comments.is_empty() }
+
+    fn clear(&mut self) { self.user_comments.clear() }
+
+    fn get_first(&self, key: &str) -> Option<&str> { self.user_comments.get_first(key) }
+
+    fn remove_all(&mut self, key: &str) { self.user_comments.remove_all(key) }
+
+    fn replace(&mut self, key: &str, value: &str) -> Result<(), Error> { self.user_comments.replace(key, value) }
+
+    fn push(&mut self, key: &str, value: &str) -> Result<(), Error> { self.user_comments.push(key, value) }
+
+    fn iter(&self) -> Self::Iter<'_> { self.user_comments.iter() }
+
+    fn retain<F: FnMut(&str, &str) -> bool>(&mut self, f: F) { self.user_comments.retain(f) }
 }
 
 impl<'a> Drop for CommentHeader<'a> {
-    fn drop(&mut self) { self.commit(); }
+    fn drop(&mut self) {
+        if let Err(e) = self.commit() {
+            panic!("Failed to commit changes to CommentHeader: {}", e);
+        }
+    }
 }
 
 impl<'a> PartialEq for CommentHeader<'a> {
@@ -191,27 +148,35 @@ mod tests {
     const MAX_COMMENTS: usize = 128;
     const NUM_IDENTITY_TESTS: usize = 256;
 
-    fn random_string<R: Rng>(engine: &mut R, allow_empty: bool) -> String {
-        let min_len = if allow_empty { 0 } else { 1 };
+    fn random_string<R: Rng>(engine: &mut R, is_key: bool) -> String {
+        let min_len = if is_key { 1 } else { 0 };
         let len_distr = Uniform::new_inclusive(min_len, MAX_STRING_LENGTH);
         let len = engine.sample(len_distr);
         let mut result = String::new();
         result.reserve(len);
-        for c in engine.sample_iter(&Standard).take(len) {
-            result.push(c);
+        if is_key {
+            let valid_chars: Vec<char> = (' '..='<').chain('>'..='}').collect();
+            let char_index_dist = Uniform::new(0, valid_chars.len());
+            for _ in 0..len {
+                result.push(valid_chars[engine.sample(char_index_dist)]);
+            }
+        } else {
+            for c in engine.sample_iter(&Standard).take(len) {
+                result.push(c);
+            }
         }
         result
     }
 
     fn create_random_header<'a, 'b, R: Rng>(engine: &'b mut R, data: &'a mut Vec<u8>) -> CommentHeader<'a> {
         let mut header = CommentHeader::empty(data);
-        header.set_vendor(&random_string(engine, true));
+        header.set_vendor(&random_string(engine, false));
         let num_comments_dist = Uniform::new_inclusive(0, MAX_COMMENTS);
         let num_comments = engine.sample(&num_comments_dist);
         for _ in 0..num_comments {
-            let key = random_string(engine, false);
-            let value = random_string(engine, true);
-            header.append(key.as_str(), value.as_str());
+            let key = random_string(engine, true);
+            let value = random_string(engine, false);
+            header.push(key.as_str(), value.as_str()).expect("Unable to add comment");
         }
         header
     }
@@ -259,51 +224,5 @@ mod tests {
             Err(Error::MalformedCommentHeader) => {}
             _ => assert!(false, "Wrong error for malformed header"),
         };
-    }
-
-    #[test]
-    fn replace_appends_on_missing() {
-        let key = "foo";
-        let value = "bar";
-
-        let mut data_1 = Vec::new();
-        let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("v0", "k0");
-        header_1.append(key, value);
-        header_1.append("v1", "k1");
-
-        let mut data_2 = Vec::new();
-        let mut header_2 = CommentHeader::empty(&mut data_2);
-        header_2.append("v0", "k0");
-        header_2.replace(key, value);
-        header_2.append("v1", "k1");
-
-        assert_eq!(header_1, header_2);
-    }
-
-    #[test]
-    fn replace_replaces_on_duplicates() {
-        let mut data_1 = Vec::new();
-        let mut header_1 = CommentHeader::empty(&mut data_1);
-        header_1.append("v0", "k0");
-        header_1.append("v1", "k1");
-        header_1.append("v2", "k2");
-        header_1.append("v3", "k3");
-        header_1.append("v2", "k4");
-        header_1.append("v5", "k5");
-        header_1.append("v2", "k6");
-        header_1.append("v7", "k7");
-        header_1.replace("v2", "k8");
-
-        let mut data_2 = Vec::new();
-        let mut header_2 = CommentHeader::empty(&mut data_2);
-        header_2.append("v0", "k0");
-        header_2.append("v1", "k1");
-        header_2.append("v2", "k8");
-        header_2.append("v3", "k3");
-        header_2.append("v5", "k5");
-        header_2.append("v7", "k7");
-
-        assert_eq!(header_1, header_2);
     }
 }
