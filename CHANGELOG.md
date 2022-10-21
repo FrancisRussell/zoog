@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.4.0
 
 * Minor code cleanup.
 * Document `VolumeAnalyzer::mean_lufs_across_multiple()`.
