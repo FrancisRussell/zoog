@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.5.0
+
+* Add some missing docs.
+* Remove an unnecessary type alias (hence the version bump).
+
 ## 0.4.0
 
 * Minor code cleanup.
