@@ -87,16 +87,6 @@ impl<'a> CommentHeader<'a> {
         }
     }
 
-    /// Returns the album gain if present, else the track gain, else `None`.
-    pub fn get_album_or_track_gain(&self) -> Result<Option<FixedPointGain>, Error> {
-        for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
-            if let Some(gain) = self.get_gain_from_tag(tag)? {
-                return Ok(Some(gain));
-            }
-        }
-        Ok(None)
-    }
-
     /// Applies the specified delta to either or both of the album and track
     /// gains if present. If neither as present, this function will do
     /// nothing.
