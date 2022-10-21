@@ -94,7 +94,7 @@ The following options are available (run `opusgain --help` for usage):
   apply the calculated album gain, but this behaviour can be overridden using
   the `--output-gain-mode` option.
 
-* `-d, --display-only`: Displays the same output that `opusgain` would otherwise
+* `-n, --dry-run`: Displays the same output that `opusgain` would otherwise
   produce, but does not make any changes to the supplied files.
 
 * `-j N, --num-threads=N`: Use `N` threads for processing. The default is to use the

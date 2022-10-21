@@ -179,9 +179,9 @@ struct Cli {
     /// The Opus files to process
     input_files: Vec<PathBuf>,
 
-    #[clap(short, long, action)]
+    #[clap(short = 'n', long = "dry-run", action)]
     /// Display output without performing any file modification.
-    display_only: bool,
+    dry_run: bool,
 
     #[clap(short='j', long, default_value_t = num_cpus::get())]
     /// Number of threads to use for processing. Default is the number of cores
@@ -224,7 +224,7 @@ fn main_impl() -> Result<(), Error> {
         Preset::NoChange => VolumeTarget::NoChange,
     };
 
-    let display_only = cli.display_only;
+    let dry_run = cli.dry_run;
     let clear = cli.clear;
     let (album_mode, volume_target) = if clear {
         // We do not compute album loudness or change output gain when clearing tags
@@ -236,7 +236,7 @@ fn main_impl() -> Result<(), Error> {
     let num_processed = AtomicUsize::new(0);
     let num_already_normalized = AtomicUsize::new(0);
 
-    if display_only {
+    if dry_run {
         println!("Display-only mode is enabled so no files will actually be modified.\n");
     }
 
@@ -286,7 +286,7 @@ fn main_impl() -> Result<(), Error> {
             {
                 let rewrite_guard = rewrite_mutex.lock();
                 let mut output_file =
-                    if display_only { OutputFile::new_sink() } else { OutputFile::new_target(&input_path)? };
+                    if dry_run { OutputFile::new_sink() } else { OutputFile::new_target(&input_path)? };
                 let rewrite_result = {
                     let output_file = output_file.as_write();
                     let mut output_file = BufWriter::new(output_file);
