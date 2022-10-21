@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use clap::Parser;
 use output_file::OutputFile;
 use thiserror::Error;
-use zoog::comment_rewriter::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
+use zoog::comment_rewrite::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
 use zoog::header_rewriter::{rewrite_stream, SubmitResult};
 use zoog::opus::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::{escaping, Error};
