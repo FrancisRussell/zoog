@@ -1,7 +1,7 @@
 use derivative::Derivative;
 
 use crate::comment_list::CommentList;
-use crate::header_rewriter::{self, HeaderRewrite};
+use crate::header_rewriter::HeaderRewrite;
 use crate::opus::{CommentHeader, DiscreteCommentList, OpusHeader};
 use crate::Error;
 
@@ -61,6 +61,3 @@ impl HeaderRewrite for CommentHeaderRewrite<'_> {
         Ok(())
     }
 }
-
-/// The result type of submitting a packet
-pub type SubmitResult = header_rewriter::SubmitResult<DiscreteCommentList>;
