@@ -122,7 +122,7 @@ impl HeaderRewrite for VolumeHeaderRewrite {
         let album_gain_r128 = compute_gain(self.config.album_volume)?;
         for (tag, gain) in [(TAG_TRACK_GAIN, track_gain_r128), (TAG_ALBUM_GAIN, album_gain_r128)] {
             if let Some(gain) = gain {
-                comment_header.replace(tag, &format!("{}", gain.as_fixed_point()))?;
+                comment_header.set_tag_to_gain(tag, gain)?;
             } else {
                 comment_header.remove_all(tag);
             }

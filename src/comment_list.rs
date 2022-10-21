@@ -74,6 +74,13 @@ pub trait CommentList {
             None => Ok(None),
         }
     }
+
+    /// Sets the specified tag to the supplied gain using the fixed-point
+    /// representation used in Ogg Opus comment headers. All other mappings
+    /// for the same tag will be removed.
+    fn set_tag_to_gain(&mut self, tag: &str, gain: FixedPointGain) -> Result<(), Error> {
+        self.replace(tag, &format!("{}", gain.as_fixed_point()))
+    }
 }
 
 /// Parses the textual representation of an Opus comment
