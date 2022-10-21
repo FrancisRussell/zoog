@@ -13,7 +13,7 @@ use std::path::{Path, PathBuf};
 use clap::Parser;
 use output_file::OutputFile;
 use thiserror::Error;
-use zoog::comment_rewriter::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
+use zoog::comment_rewrite::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
 use zoog::header_rewriter::{rewrite_stream, SubmitResult};
 use zoog::opus::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::{escaping, Error};
@@ -167,6 +167,7 @@ where
     Ok(result)
 }
 
+/// Try to protect user against passing a media file as a tags file
 fn validate_comment_filename(path: &Path) -> Result<(), AppError> {
     if let Some(ext) = path.extension() {
         let mut ext = ext.to_string_lossy().to_string();
@@ -261,13 +262,7 @@ fn main_impl() -> Result<(), AppError> {
 
     let escape = cli.escapes;
     let delete_tags = parse_delete_comment_args(cli.delete, escape)?;
-    let append = if let OperationMode::List = operation_mode {
-        if !cli.tags.is_empty() {
-            eprintln!("List operation does not take tags as a parameter");
-            return Err(AppError::SilentExit);
-        }
-        DiscreteCommentList::default()
-    } else {
+    let append = {
         let mut append = parse_new_comment_args(cli.tags, escape)?;
         if let Some(ref file) = cli.tags_in {
             let mut tags = if file == std::ffi::OsStr::new(STANDARD_STREAM_NAME) {

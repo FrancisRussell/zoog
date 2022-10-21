@@ -6,7 +6,7 @@ use derivative::Derivative;
 use thiserror::Error;
 
 use crate::constants::opus::FIELD_NAME_TERMINATOR;
-use crate::opus::{parse_comment, CommentList, DiscreteCommentList, FixedPointGain, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use crate::opus::{parse_comment, CommentList, DiscreteCommentList};
 use crate::Error;
 
 const COMMENT_MAGIC: &[u8] = b"OpusTags";
@@ -73,44 +73,6 @@ impl<'a> CommentHeader<'a> {
         }
         let result = CommentHeader { data, vendor, user_comments };
         Ok(Some(result))
-    }
-
-    /// Attempts to parse the first mapping for the specified key as the
-    /// fixed-point Decibel representation used in Opus comment headers.
-    pub fn get_gain_from_tag(&self, tag: &str) -> Result<Option<FixedPointGain>, Error> {
-        let parsed =
-            self.get_first(tag).map(|v| v.parse::<FixedPointGain>().map_err(|_| Error::InvalidR128Tag(v.into())));
-        match parsed {
-            Some(Ok(v)) => Ok(Some(v)),
-            Some(Err(e)) => Err(e),
-            None => Ok(None),
-        }
-    }
-
-    /// Returns the album gain if present, else the track gain, else `None`.
-    pub fn get_album_or_track_gain(&self) -> Result<Option<FixedPointGain>, Error> {
-        for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
-            if let Some(gain) = self.get_gain_from_tag(tag)? {
-                return Ok(Some(gain));
-            }
-        }
-        Ok(None)
-    }
-
-    /// Applies the specified delta to either or both of the album and track
-    /// gains if present. If neither as present, this function will do
-    /// nothing.
-    pub fn adjust_gains(&mut self, adjustment: FixedPointGain) -> Result<(), Error> {
-        if adjustment.is_zero() {
-            return Ok(());
-        }
-        for tag in [TAG_ALBUM_GAIN, TAG_TRACK_GAIN].iter() {
-            if let Some(gain) = self.get_gain_from_tag(tag)? {
-                let gain = gain.checked_add(adjustment).ok_or(Error::GainOutOfBounds)?;
-                self.replace(tag, &format!("{}", gain.as_fixed_point()))?;
-            }
-        }
-        Ok(())
     }
 
     /// Returns the comments in the header as a `DiscreteCommentList`.

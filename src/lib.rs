@@ -16,11 +16,11 @@ pub mod escaping;
 pub mod header_rewriter;
 
 /// Functionality for rewriting Ogg Opus streams with new comments
-pub mod comment_rewriter;
+pub mod comment_rewrite;
 
 /// Functionality for rewriting Ogg Opus streams with altered output gain and
 /// volume tags
-pub mod volume_rewriter;
+pub mod volume_rewrite;
 
 /// Functionality for determining BS.1770 loudness of Ogg Opus streams
 pub mod volume_analyzer;
