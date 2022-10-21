@@ -8,6 +8,7 @@ use ogg::{Packet, PacketReader};
 use crate::opus::{CommentHeader, OpusHeader};
 use crate::Error;
 
+/// The result of submitting a packet to a `HeaderRewriter`
 #[derive(Debug)]
 pub enum SubmitResult<S> {
     /// Packet was accepted
@@ -28,11 +29,19 @@ enum State {
     Forwarding,
 }
 
+/// Trait for types used to parameterize a `HeaderRewriter`
 pub trait HeaderRewrite {
+    /// Type for summarizing header content which is reported back via `SubmitResult`
     type Summary;
+
+    /// Type for errors thrown during summarization or header update
     type Error;
+
+    /// Summarizes the content of a header to be reported back via `SubmitResult`
     fn summarize(&self, opus_header: &OpusHeader, comment_header: &CommentHeader)
         -> Result<Self::Summary, Self::Error>;
+
+    /// Rewrites the Opus and Opus comment headers
     fn rewrite(&self, opus_header: &mut OpusHeader, comment_header: &mut CommentHeader) -> Result<(), Self::Error>;
 }
 
