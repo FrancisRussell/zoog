@@ -3,6 +3,8 @@
 ## Unreleased
 
 * Add support for interrupting a stream rewrite.
+* Allow interrupts during stream rewrite in `opusgain`.
+* Add interrupt support to `opuscomment`.
 
 ## 0.5.1
 
