@@ -14,6 +14,7 @@ description = "Tools for modifying Ogg Opus comment tags, R128 tags and output g
 audiopus_sys = { version = "0.2.2", features = ["static"] }
 bs1770 = "1.0.0"
 byteorder = "1.3.4"
+ctrlc = { version = "3.2.3", features = [ "termination" ] }
 derivative = "2.1.1"
 num_cpus = "1.13.1"
 ogg = "0.9.0"
