@@ -5,6 +5,7 @@ use derivative::Derivative;
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use ogg::{Packet, PacketReader};
 
+use crate::interrupt::{Interrupt, Never};
 use crate::opus::{CommentHeader, OpusHeader};
 use crate::Error;
 
@@ -163,22 +164,31 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
     }
 }
 
-/// Convenience function for performing a rewrite. Rewrites the headers of an
-/// Ogg Opus stream using the supplied `HeaderRewrite`. If `abort_on_unchanged`
-/// is set, the function will terminate immediately if it is detected that no
-/// headers were modified, otherwise it will continue to rewrite the stream
-/// until the input stream is exhausted or an error occurs.
-pub fn rewrite_stream<HR: HeaderRewrite, R: Read + Seek, W: Write>(
-    rewrite: HR, input: R, mut output: W, abort_on_unchanged: bool,
+/// Convenience function for performing a rewrite.
+///
+/// Rewrites the headers of an Ogg Opus stream using the supplied
+/// `HeaderRewrite`. If `abort_on_unchanged` is set, the function will terminate
+/// immediately if it is detected that no headers were modified, otherwise it
+/// will continue to rewrite the stream until the input stream is exhausted, an
+/// error occurs or the interrupt condition is set.
+pub fn rewrite_stream_with_interrupt<HR, R, W, I>(
+    rewrite: HR, input: R, mut output: W, abort_on_unchanged: bool, interrupt: I,
 ) -> Result<SubmitResult<HR::Summary>, HR::Error>
 where
     HR::Error: From<Error>,
+    R: Read + Seek,
+    W: Write,
+    HR: HeaderRewrite,
+    I: Interrupt,
 {
     let mut ogg_reader = PacketReader::new(input);
     let ogg_writer = PacketWriter::new(&mut output);
     let mut rewriter = HeaderRewriter::new(rewrite, ogg_writer);
     let mut result = SubmitResult::Good;
     loop {
+        if interrupt.is_set() {
+            return Err(Error::Interrupted.into());
+        }
         match ogg_reader.read_packet() {
             Err(e) => break Err(Error::OggDecode(e).into()),
             Ok(None) => {
@@ -208,4 +218,18 @@ where
             }
         }
     }
+}
+
+/// Identical to `rewrite_stream_with_interrupt` except the rewrite loop cannot
+/// be interrupted.
+pub fn rewrite_stream<HR, R, W>(
+    rewrite: HR, input: R, output: W, abort_on_unchanged: bool,
+) -> Result<SubmitResult<HR::Summary>, HR::Error>
+where
+    HR::Error: From<Error>,
+    R: Read + Seek,
+    W: Write,
+    HR: HeaderRewrite,
+{
+    rewrite_stream_with_interrupt(rewrite, input, output, abort_on_unchanged, Never::default())
 }

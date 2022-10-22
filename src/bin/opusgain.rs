@@ -24,7 +24,7 @@ use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use thiserror::Error;
-use zoog::header_rewriter::{rewrite_stream, SubmitResult};
+use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::opus::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use zoog::volume_analyzer::VolumeAnalyzer;
 use zoog::volume_rewrite::{OpusGains, OutputGainMode, VolumeHeaderRewrite, VolumeRewriterConfig, VolumeTarget};
@@ -327,7 +327,13 @@ fn main_impl() -> Result<(), AppError> {
                     let mut output_file = BufWriter::new(output_file);
                     let rewrite = VolumeHeaderRewrite::new(rewriter_config);
                     let abort_on_unchanged = true;
-                    rewrite_stream(rewrite, &mut input_file, &mut output_file, abort_on_unchanged)
+                    rewrite_stream_with_interrupt(
+                        rewrite,
+                        &mut input_file,
+                        &mut output_file,
+                        abort_on_unchanged,
+                        interrupt_checker.clone(),
+                    )
                 };
                 drop(input_file); // Important for Windows
                 num_processed.fetch_add(1, Ordering::Relaxed);

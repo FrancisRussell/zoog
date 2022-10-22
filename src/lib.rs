@@ -18,6 +18,9 @@ pub mod header_rewriter;
 /// Functionality for rewriting Ogg Opus streams with new comments
 pub mod comment_rewrite;
 
+/// Support for detecting an operation should be interrupted
+pub mod interrupt;
+
 /// Functionality for rewriting Ogg Opus streams with altered output gain and
 /// volume tags
 pub mod volume_rewrite;
