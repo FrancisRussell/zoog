@@ -3,8 +3,8 @@
 #[path = "../console_output.rs"]
 mod console_output;
 
-#[path = "../interrupt.rs"]
-mod interrupt;
+#[path = "../ctrlc_handling.rs"]
+mod ctrlc_handling;
 
 #[path = "../output_file.rs"]
 mod output_file;
@@ -17,14 +17,14 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use clap::{Parser, ValueEnum};
 use console_output::{ConsoleOutput, DelayedConsoleOutput, Standard};
-use interrupt::InterruptChecker;
+use ctrlc_handling::CtrlCChecker;
 use ogg::reading::PacketReader;
 use output_file::OutputFile;
 use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use thiserror::Error;
-use zoog::header_rewriter::{rewrite_stream, SubmitResult};
+use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::opus::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use zoog::volume_analyzer::VolumeAnalyzer;
 use zoog::volume_rewrite::{OpusGains, OutputGainMode, VolumeHeaderRewrite, VolumeRewriterConfig, VolumeTarget};
@@ -36,10 +36,7 @@ enum AppError {
     Library(#[from] Error),
 
     #[error("Unable to register Ctrl-C handler: `{0}`")]
-    InteruptRegistration(#[from] interrupt::InteruptRegistrationError),
-
-    #[error("Interrupted by user")]
-    UserInterrupted,
+    CtrlCRegistration(#[from] ctrlc_handling::CtrlCRegistrationError),
 }
 
 fn main() {
@@ -52,22 +49,22 @@ fn main() {
     }
 }
 
-fn check_running(checker: &InterruptChecker) -> Result<(), AppError> {
+fn check_running(checker: &CtrlCChecker) -> Result<(), Error> {
     if checker.is_running() {
         Ok(())
     } else {
-        Err(AppError::UserInterrupted)
+        Err(Error::Interrupted)
     }
 }
 
 fn apply_volume_analysis<P, C>(
-    analyzer: &mut VolumeAnalyzer, path: P, console_output: C, report_error: bool, interrupt_checker: InterruptChecker,
-) -> Result<(), AppError>
+    analyzer: &mut VolumeAnalyzer, path: P, console_output: C, report_error: bool, interrupt_checker: CtrlCChecker,
+) -> Result<(), Error>
 where
     P: AsRef<Path>,
     C: ConsoleOutput,
 {
-    let mut body = || -> Result<(), AppError> {
+    let mut body = || -> Result<(), Error> {
         let input_path = path.as_ref();
         let input_file = File::open(input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
         let input_file = BufReader::new(input_file);
@@ -126,8 +123,8 @@ impl AlbumVolume {
 }
 
 fn compute_album_volume<I, P, C>(
-    paths: I, console_output: C, interrupt_checker: InterruptChecker,
-) -> Result<AlbumVolume, AppError>
+    paths: I, console_output: C, interrupt_checker: CtrlCChecker,
+) -> Result<AlbumVolume, Error>
 where
     I: IntoIterator<Item = P>,
     P: AsRef<Path>,
@@ -141,7 +138,7 @@ where
     // This is a BTreeMap so we process the analyzers in the supplied order
     let analyzers = Mutex::new(BTreeMap::new());
 
-    paths.into_par_iter().panic_fuse().try_for_each(|(idx, input_path)| -> Result<(), AppError> {
+    paths.into_par_iter().panic_fuse().try_for_each(|(idx, input_path)| -> Result<(), Error> {
         let mut analyzer = VolumeAnalyzer::default();
         apply_volume_analysis(
             &mut analyzer,
@@ -224,7 +221,7 @@ struct Cli {
 }
 
 fn main_impl() -> Result<(), AppError> {
-    let interrupt_checker = InterruptChecker::new()?;
+    let interrupt_checker = CtrlCChecker::new()?;
     let cli = Cli::parse_from(wild::args_os());
     let album_mode = cli.album;
     let num_threads = if cli.num_threads == 0 {
@@ -327,7 +324,13 @@ fn main_impl() -> Result<(), AppError> {
                     let mut output_file = BufWriter::new(output_file);
                     let rewrite = VolumeHeaderRewrite::new(rewriter_config);
                     let abort_on_unchanged = true;
-                    rewrite_stream(rewrite, &mut input_file, &mut output_file, abort_on_unchanged)
+                    rewrite_stream_with_interrupt(
+                        rewrite,
+                        &mut input_file,
+                        &mut output_file,
+                        abort_on_unchanged,
+                        interrupt_checker.clone(),
+                    )
                 };
                 drop(input_file); // Important for Windows
                 num_processed.fetch_add(1, Ordering::Relaxed);
