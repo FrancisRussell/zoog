@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.5.1
 
 * Add Ctrl-C support for stopping `opusgain`.
 
