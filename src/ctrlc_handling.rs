@@ -1,15 +1,15 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-pub type InteruptRegistrationError = ctrlc::Error;
+pub type CtrlCRegistrationError = ctrlc::Error;
 
 #[derive(Clone, Debug)]
-pub struct InterruptChecker {
+pub struct CtrlCChecker {
     running: Arc<AtomicBool>,
 }
 
-impl InterruptChecker {
-    pub fn new() -> Result<InterruptChecker, InteruptRegistrationError> {
+impl CtrlCChecker {
+    pub fn new() -> Result<CtrlCChecker, CtrlCRegistrationError> {
         let running = Arc::new(AtomicBool::new(true));
         {
             let running = running.clone();
@@ -17,7 +17,7 @@ impl InterruptChecker {
                 running.store(false, Ordering::Relaxed);
             })?;
         }
-        let result = InterruptChecker { running };
+        let result = CtrlCChecker { running };
         Ok(result)
     }
 

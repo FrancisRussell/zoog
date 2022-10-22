@@ -3,8 +3,8 @@
 #[path = "../console_output.rs"]
 mod console_output;
 
-#[path = "../interrupt.rs"]
-mod interrupt;
+#[path = "../ctrlc_handling.rs"]
+mod ctrlc_handling;
 
 #[path = "../output_file.rs"]
 mod output_file;
@@ -17,7 +17,7 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use clap::{Parser, ValueEnum};
 use console_output::{ConsoleOutput, DelayedConsoleOutput, Standard};
-use interrupt::InterruptChecker;
+use ctrlc_handling::CtrlCChecker;
 use ogg::reading::PacketReader;
 use output_file::OutputFile;
 use parking_lot::Mutex;
@@ -36,10 +36,10 @@ enum AppError {
     Library(#[from] Error),
 
     #[error("Unable to register Ctrl-C handler: `{0}`")]
-    InteruptRegistration(#[from] interrupt::InteruptRegistrationError),
+    CtrlCRegistration(#[from] ctrlc_handling::CtrlCRegistrationError),
 
-    #[error("Interrupted by user")]
-    UserInterrupted,
+    #[error("CtrlCed by user")]
+    UserCtrlCed,
 }
 
 fn main() {
@@ -52,16 +52,16 @@ fn main() {
     }
 }
 
-fn check_running(checker: &InterruptChecker) -> Result<(), AppError> {
+fn check_running(checker: &CtrlCChecker) -> Result<(), AppError> {
     if checker.is_running() {
         Ok(())
     } else {
-        Err(AppError::UserInterrupted)
+        Err(AppError::UserCtrlCed)
     }
 }
 
 fn apply_volume_analysis<P, C>(
-    analyzer: &mut VolumeAnalyzer, path: P, console_output: C, report_error: bool, interrupt_checker: InterruptChecker,
+    analyzer: &mut VolumeAnalyzer, path: P, console_output: C, report_error: bool, interrupt_checker: CtrlCChecker,
 ) -> Result<(), AppError>
 where
     P: AsRef<Path>,
@@ -126,7 +126,7 @@ impl AlbumVolume {
 }
 
 fn compute_album_volume<I, P, C>(
-    paths: I, console_output: C, interrupt_checker: InterruptChecker,
+    paths: I, console_output: C, interrupt_checker: CtrlCChecker,
 ) -> Result<AlbumVolume, AppError>
 where
     I: IntoIterator<Item = P>,
@@ -224,7 +224,7 @@ struct Cli {
 }
 
 fn main_impl() -> Result<(), AppError> {
-    let interrupt_checker = InterruptChecker::new()?;
+    let interrupt_checker = CtrlCChecker::new()?;
     let cli = Cli::parse_from(wild::args_os());
     let album_mode = cli.album;
     let num_threads = if cli.num_threads == 0 {
