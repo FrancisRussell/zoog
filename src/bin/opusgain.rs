@@ -319,6 +319,7 @@ fn main_impl() -> Result<(), AppError> {
 
             {
                 let rewrite_guard = rewrite_mutex.lock();
+                check_running(&interrupt_checker)?;
                 let mut output_file =
                     if dry_run { OutputFile::new_sink() } else { OutputFile::new_target(&input_path)? };
                 let rewrite_result = {
