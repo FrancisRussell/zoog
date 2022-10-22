@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* Add support for interrupting a stream rewrite.
+
 ## 0.5.1
 
 * Add Ctrl-C support for stopping `opusgain`.
