@@ -37,9 +37,6 @@ enum AppError {
 
     #[error("Unable to register Ctrl-C handler: `{0}`")]
     CtrlCRegistration(#[from] ctrlc_handling::CtrlCRegistrationError),
-
-    #[error("CtrlCed by user")]
-    UserCtrlCed,
 }
 
 fn main() {
@@ -52,22 +49,22 @@ fn main() {
     }
 }
 
-fn check_running(checker: &CtrlCChecker) -> Result<(), AppError> {
+fn check_running(checker: &CtrlCChecker) -> Result<(), Error> {
     if checker.is_running() {
         Ok(())
     } else {
-        Err(AppError::UserCtrlCed)
+        Err(Error::Interrupted)
     }
 }
 
 fn apply_volume_analysis<P, C>(
     analyzer: &mut VolumeAnalyzer, path: P, console_output: C, report_error: bool, interrupt_checker: CtrlCChecker,
-) -> Result<(), AppError>
+) -> Result<(), Error>
 where
     P: AsRef<Path>,
     C: ConsoleOutput,
 {
-    let mut body = || -> Result<(), AppError> {
+    let mut body = || -> Result<(), Error> {
         let input_path = path.as_ref();
         let input_file = File::open(input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
         let input_file = BufReader::new(input_file);
@@ -127,7 +124,7 @@ impl AlbumVolume {
 
 fn compute_album_volume<I, P, C>(
     paths: I, console_output: C, interrupt_checker: CtrlCChecker,
-) -> Result<AlbumVolume, AppError>
+) -> Result<AlbumVolume, Error>
 where
     I: IntoIterator<Item = P>,
     P: AsRef<Path>,
@@ -141,7 +138,7 @@ where
     // This is a BTreeMap so we process the analyzers in the supplied order
     let analyzers = Mutex::new(BTreeMap::new());
 
-    paths.into_par_iter().panic_fuse().try_for_each(|(idx, input_path)| -> Result<(), AppError> {
+    paths.into_par_iter().panic_fuse().try_for_each(|(idx, input_path)| -> Result<(), Error> {
         let mut analyzer = VolumeAnalyzer::default();
         apply_volume_analysis(
             &mut analyzer,
