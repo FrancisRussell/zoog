@@ -3,6 +3,9 @@
 #[path = "../console_output.rs"]
 mod console_output;
 
+#[path = "../interrupt.rs"]
+mod interrupt;
+
 #[path = "../output_file.rs"]
 mod output_file;
 
@@ -14,16 +17,30 @@ use std::sync::atomic::{AtomicUsize, Ordering};
 
 use clap::{Parser, ValueEnum};
 use console_output::{ConsoleOutput, DelayedConsoleOutput, Standard};
+use interrupt::InterruptChecker;
 use ogg::reading::PacketReader;
 use output_file::OutputFile;
 use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
+use thiserror::Error;
 use zoog::header_rewriter::{rewrite_stream, SubmitResult};
 use zoog::opus::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use zoog::volume_analyzer::VolumeAnalyzer;
 use zoog::volume_rewrite::{OpusGains, OutputGainMode, VolumeHeaderRewrite, VolumeRewriterConfig, VolumeTarget};
 use zoog::{Decibels, Error, R128_LUFS, REPLAY_GAIN_LUFS};
+
+#[derive(Debug, Error)]
+enum AppError {
+    #[error("{0}")]
+    Library(#[from] Error),
+
+    #[error("Unable to register Ctrl-C handler: `{0}`")]
+    InteruptRegistration(#[from] interrupt::InteruptRegistrationError),
+
+    #[error("Interrupted by user")]
+    UserInterrupted,
+}
 
 fn main() {
     match main_impl() {
@@ -35,21 +52,30 @@ fn main() {
     }
 }
 
+fn check_running(checker: &InterruptChecker) -> Result<(), AppError> {
+    if checker.is_running() {
+        Ok(())
+    } else {
+        Err(AppError::UserInterrupted)
+    }
+}
+
 fn apply_volume_analysis<P, C>(
-    analyzer: &mut VolumeAnalyzer, path: P, console_output: C, report_error: bool,
-) -> Result<(), Error>
+    analyzer: &mut VolumeAnalyzer, path: P, console_output: C, report_error: bool, interrupt_checker: InterruptChecker,
+) -> Result<(), AppError>
 where
     P: AsRef<Path>,
     C: ConsoleOutput,
 {
-    let mut body = || {
+    let mut body = || -> Result<(), AppError> {
         let input_path = path.as_ref();
         let input_file = File::open(input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
         let input_file = BufReader::new(input_file);
         let mut ogg_reader = PacketReader::new(input_file);
         loop {
+            check_running(&interrupt_checker)?;
             match ogg_reader.read_packet() {
-                Err(e) => break Err(Error::OggDecode(e)),
+                Err(e) => break Err(Error::OggDecode(e).into()),
                 Ok(None) => {
                     analyzer.file_complete();
                     writeln!(
@@ -99,7 +125,9 @@ impl AlbumVolume {
     pub fn get_track_mean(&self, path: &Path) -> Option<Decibels> { self.tracks.get(path).cloned() }
 }
 
-fn compute_album_volume<I, P, C>(paths: I, console_output: C) -> Result<AlbumVolume, Error>
+fn compute_album_volume<I, P, C>(
+    paths: I, console_output: C, interrupt_checker: InterruptChecker,
+) -> Result<AlbumVolume, AppError>
 where
     I: IntoIterator<Item = P>,
     P: AsRef<Path>,
@@ -113,13 +141,14 @@ where
     // This is a BTreeMap so we process the analyzers in the supplied order
     let analyzers = Mutex::new(BTreeMap::new());
 
-    paths.into_par_iter().panic_fuse().try_for_each(|(idx, input_path)| -> Result<(), Error> {
+    paths.into_par_iter().panic_fuse().try_for_each(|(idx, input_path)| -> Result<(), AppError> {
         let mut analyzer = VolumeAnalyzer::default();
         apply_volume_analysis(
             &mut analyzer,
             input_path.as_ref(),
             &DelayedConsoleOutput::new(console_output.clone()),
             true,
+            interrupt_checker.clone(),
         )?;
         tracks.lock().insert(
             input_path.as_ref().to_path_buf(),
@@ -194,7 +223,8 @@ struct Cli {
     clear: bool,
 }
 
-fn main_impl() -> Result<(), Error> {
+fn main_impl() -> Result<(), AppError> {
+    let interrupt_checker = InterruptChecker::new()?;
     let cli = Cli::parse_from(wild::args_os());
     let album_mode = cli.album;
     let num_threads = if cli.num_threads == 0 {
@@ -242,16 +272,20 @@ fn main_impl() -> Result<(), Error> {
 
     let console_output = Standard::default();
     let input_files = cli.input_files;
-    let album_volume = if album_mode { Some(compute_album_volume(&input_files, &console_output)?) } else { None };
+    let album_volume = if album_mode {
+        Some(compute_album_volume(&input_files, &console_output, interrupt_checker.clone())?)
+    } else {
+        None
+    };
 
     // Prevent us from rewriting more than one file at once. This is to stop us
     // consuming too much disk space or leaving lots of temporary files around
     // if we encounter an error.
     let rewrite_mutex = Mutex::new(());
 
-    input_files.into_par_iter().panic_fuse().try_for_each(|input_path| -> Result<(), Error> {
+    input_files.into_par_iter().panic_fuse().try_for_each(|input_path| -> Result<(), AppError> {
         let console = &DelayedConsoleOutput::new(&console_output);
-        let body = || {
+        let body = || -> Result<(), AppError> {
             writeln!(
                 console.out(),
                 "Processing file {} with target loudness of {}...",
@@ -265,7 +299,7 @@ fn main_impl() -> Result<(), Error> {
                 Some(match &album_volume {
                     None => {
                         let mut analyzer = VolumeAnalyzer::default();
-                        apply_volume_analysis(&mut analyzer, &input_path, console, false)?;
+                        apply_volume_analysis(&mut analyzer, &input_path, console, false, interrupt_checker.clone())?;
                         analyzer.last_track_lufs().expect("Last track volume unexpectedly missing")
                     }
                     Some(album_volume) => album_volume
@@ -285,6 +319,7 @@ fn main_impl() -> Result<(), Error> {
 
             {
                 let rewrite_guard = rewrite_mutex.lock();
+                check_running(&interrupt_checker)?;
                 let mut output_file =
                     if dry_run { OutputFile::new_sink() } else { OutputFile::new_target(&input_path)? };
                 let rewrite_result = {
@@ -301,7 +336,7 @@ fn main_impl() -> Result<(), Error> {
                     Err(e) => {
                         writeln!(console.err(), "Failure during processing of {}.", input_path.display())
                             .map_err(Error::ConsoleIoError)?;
-                        return Err(e);
+                        return Err(e.into());
                     }
                     Ok(SubmitResult::Good) => {
                         // Either we should already be normalized or get back a result which

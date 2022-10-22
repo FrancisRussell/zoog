@@ -31,13 +31,15 @@ enum State {
 
 /// Trait for types used to parameterize a `HeaderRewriter`
 pub trait HeaderRewrite {
-    /// Type for summarizing header content which is reported back via `SubmitResult`
+    /// Type for summarizing header content which is reported back via
+    /// `SubmitResult`
     type Summary;
 
     /// Type for errors thrown during summarization or header update
     type Error;
 
-    /// Summarizes the content of a header to be reported back via `SubmitResult`
+    /// Summarizes the content of a header to be reported back via
+    /// `SubmitResult`
     fn summarize(&self, opus_header: &OpusHeader, comment_header: &CommentHeader)
         -> Result<Self::Summary, Self::Error>;
 

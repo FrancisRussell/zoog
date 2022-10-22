@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* Add Ctrl-C support for stopping `opusgain`.
+
 ## 0.5.0
 
 * Add some missing docs.
