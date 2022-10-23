@@ -1,5 +1,8 @@
 #![feature(let_chains)]
 
+#[path = "../ctrlc_handling.rs"]
+mod ctrlc_handling;
+
 #[path = "../output_file.rs"]
 mod output_file;
 
@@ -11,10 +14,11 @@ use std::ops::BitOrAssign;
 use std::path::{Path, PathBuf};
 
 use clap::Parser;
+use ctrlc_handling::CtrlCChecker;
 use output_file::OutputFile;
 use thiserror::Error;
 use zoog::comment_rewrite::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
-use zoog::header_rewriter::{rewrite_stream, SubmitResult};
+use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::opus::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::{escaping, Error};
 
@@ -28,6 +32,9 @@ enum AppError {
 
     #[error("Silent exit because error was already printed")]
     SilentExit,
+
+    #[error("Unable to register Ctrl-C handler: `{0}`")]
+    CtrlCRegistration(#[from] ctrlc_handling::CtrlCRegistrationError),
 
     #[error("Failed to read from standard input: `{0}`")]
     StandardInputReadError(io::Error),
@@ -245,6 +252,7 @@ fn read_comments_from_stdin(escaped: bool) -> Result<DiscreteCommentList, AppErr
 }
 
 fn main_impl() -> Result<(), AppError> {
+    let interrupt_checker = CtrlCChecker::new()?;
     let cli = Cli::parse_from(wild::args_os());
     let operation_mode = match (cli.list, cli.modify, cli.replace) {
         (_, false, false) => OperationMode::List,
@@ -302,7 +310,7 @@ fn main_impl() -> Result<(), AppError> {
         let mut output_file = BufWriter::new(output_file);
         let rewrite = CommentHeaderRewrite::new(rewriter_config);
         let abort_on_unchanged = true;
-        rewrite_stream(rewrite, &mut input_file, &mut output_file, abort_on_unchanged)
+        rewrite_stream_with_interrupt(rewrite, &mut input_file, &mut output_file, abort_on_unchanged, interrupt_checker)
     };
     drop(input_file); // Important for Windows
 

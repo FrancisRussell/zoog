@@ -100,4 +100,8 @@ pub enum Error {
     /// An escaped string was invalid
     #[error("{0}")]
     EscapeDecodeError(#[from] escaping::EscapeDecodeError),
+
+    /// An interrupt was detected
+    #[error("The operation was interrupted")]
+    Interrupted,
 }

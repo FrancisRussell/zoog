@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.6.0
+
+* Add support for interrupting a stream rewrite.
+* Allow interrupts during stream rewrite in `opusgain`.
+* Add interrupt support to `opuscomment`.
+
 ## 0.5.1
 
 * Add Ctrl-C support for stopping `opusgain`.
