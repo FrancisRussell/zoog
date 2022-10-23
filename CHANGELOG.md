@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.6.0
 
 * Add support for interrupting a stream rewrite.
 * Allow interrupts during stream rewrite in `opusgain`.
