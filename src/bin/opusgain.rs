@@ -72,7 +72,7 @@ where
         loop {
             check_running(&interrupt_checker)?;
             match ogg_reader.read_packet() {
-                Err(e) => break Err(Error::OggDecode(e).into()),
+                Err(e) => break Err(Error::OggDecode(e)),
                 Ok(None) => {
                     analyzer.file_complete();
                     writeln!(
