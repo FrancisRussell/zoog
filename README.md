@@ -154,6 +154,9 @@ The following options are available (run `opuscomment --help` for usage):
   line. If `-` is specified for the file name, tags will be written to standard
   output.
 
+* `-n, --dry-run`: Displays the same output that `opuscomment` would otherwise
+  produce, but does not make any changes to the filesystem.
+
 `opuscomment` only has knowledge of UTF-8. Usage on systems where UTF-8 is not
 the character encoding scheme in use may encounter issues.
 

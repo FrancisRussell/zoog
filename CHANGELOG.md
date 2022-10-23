@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* Add `--dry-run` option to `opuscomment`.
+
 ## 0.6.0
 
 * Add support for interrupting a stream rewrite.

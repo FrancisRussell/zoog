@@ -72,7 +72,7 @@ where
         loop {
             check_running(&interrupt_checker)?;
             match ogg_reader.read_packet() {
-                Err(e) => break Err(Error::OggDecode(e).into()),
+                Err(e) => break Err(Error::OggDecode(e)),
                 Ok(None) => {
                     analyzer.file_complete();
                     writeln!(
@@ -317,8 +317,7 @@ fn main_impl() -> Result<(), AppError> {
             {
                 let rewrite_guard = rewrite_mutex.lock();
                 check_running(&interrupt_checker)?;
-                let mut output_file =
-                    if dry_run { OutputFile::new_sink() } else { OutputFile::new_target(&input_path)? };
+                let mut output_file = OutputFile::new_target_or_discard(&input_path, dry_run)?;
                 let rewrite_result = {
                     let output_file = output_file.as_write();
                     let mut output_file = BufWriter::new(output_file);

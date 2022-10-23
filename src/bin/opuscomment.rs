@@ -78,6 +78,10 @@ struct Cli {
     /// Use escapes \n, \r, \0 and \\ for tag-value input and output
     escapes: bool,
 
+    #[clap(short = 'n', long = "dry-run", action)]
+    /// Display output without performing any file modification.
+    dry_run: bool,
+
     #[clap(short = 'I', long = "tags-in", conflicts_with = "list")]
     /// File for reading tags from
     tags_in: Option<PathBuf>,
@@ -268,6 +272,7 @@ fn main_impl() -> Result<(), AppError> {
         validate_comment_filename(comment_file)?;
     }
 
+    let dry_run = cli.dry_run;
     let escape = cli.escapes;
     let delete_tags = parse_delete_comment_args(cli.delete, escape)?;
     let append = {
@@ -301,7 +306,7 @@ fn main_impl() -> Result<(), AppError> {
         OperationMode::List => OutputFile::new_sink(),
         OperationMode::Modify | OperationMode::Replace => {
             let output_path = cli.output_file.unwrap_or_else(|| input_path.to_path_buf());
-            OutputFile::new_target(&output_path)?
+            OutputFile::new_target_or_discard(&output_path, dry_run)?
         }
     };
 
@@ -326,7 +331,7 @@ fn main_impl() -> Result<(), AppError> {
         Ok(SubmitResult::HeadersUnchanged(comments)) => {
             if let OperationMode::List = operation_mode {
                 if let Some(ref path) = cli.tags_out && path != std::ffi::OsStr::new(STANDARD_STREAM_NAME) {
-                    let mut comment_file = OutputFile::new_target(path)?;
+                    let mut comment_file = OutputFile::new_target_or_discard(path, dry_run)?;
                     {
                         let mut comment_file = BufWriter::new(comment_file.as_write());
                         comments
