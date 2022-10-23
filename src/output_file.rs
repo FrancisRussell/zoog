@@ -49,6 +49,16 @@ impl OutputFile {
         Ok(OutputFile { file_enum: FileEnum::Temp(temp, path.to_path_buf()) })
     }
 
+    /// Writes to a temporary that replaces the specified path on `commit()` if
+    /// `discard` is `false`. Otherwise discards all data written.
+    pub fn new_target_or_discard(path: &Path, discard: bool) -> Result<OutputFile, Error> {
+        if discard {
+            Ok(Self::new_sink())
+        } else {
+            Self::new_target(path)
+        }
+    }
+
     /// Returns the underlying file as a `Write`.
     pub fn as_write(&mut self) -> &mut dyn Write {
         match self.file_enum {
