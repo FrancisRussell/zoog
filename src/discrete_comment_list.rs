@@ -21,19 +21,23 @@ impl DiscreteCommentList {
     pub fn append(&mut self, other: &mut DiscreteCommentList) { self.comments.append(&mut other.comments); }
 }
 
-/// Iterator for `DiscreteCommentList`
-pub struct Iter<'a> {
-    inner: std::slice::Iter<'a, (Arc<String>, Arc<String>)>,
-}
+mod discrete_comment_list {
+    use super::*;
 
-impl<'a> Iterator for Iter<'a> {
-    type Item = (&'a str, &'a str);
+    /// Iterator for `DiscreteCommentList`
+    pub struct Iter<'a> {
+        pub(super) inner: std::slice::Iter<'a, (Arc<String>, Arc<String>)>,
+    }
 
-    fn next(&mut self) -> Option<Self::Item> { self.inner.next().map(|(k, v)| (k.as_str(), v.as_str())) }
+    impl<'a> Iterator for Iter<'a> {
+        type Item = (&'a str, &'a str);
+
+        fn next(&mut self) -> Option<Self::Item> { self.inner.next().map(|(k, v)| (k.as_str(), v.as_str())) }
+    }
 }
 
 impl CommentList for DiscreteCommentList {
-    type Iter<'a> = Iter<'a>;
+    type Iter<'a> = discrete_comment_list::Iter<'a>;
 
     fn len(&self) -> usize { self.comments.len() }
 
@@ -77,7 +81,7 @@ impl CommentList for DiscreteCommentList {
         Ok(())
     }
 
-    fn iter(&self) -> Iter<'_> { Iter { inner: self.comments.iter() } }
+    fn iter(&self) -> Self::Iter<'_> { Self::Iter { inner: self.comments.iter() } }
 
     fn retain<F: FnMut(&str, &str) -> bool>(&mut self, mut f: F) { self.comments.retain(|(k, v)| f(k, v)); }
 }
