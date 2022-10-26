@@ -3,6 +3,7 @@
 ## Unreleased
 
 * Add `--dry-run` option to `opuscomment`.
+* Move `DiscreteCommentList` iterator into submodule.
 
 ## 0.6.0
 
