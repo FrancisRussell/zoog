@@ -5,6 +5,7 @@ use crate::constants::opus::FIELD_NAME_TERMINATOR;
 use crate::opus::FixedPointGain;
 use crate::{escaping, Error};
 
+/// Provides functionality for manipulating comment lists
 pub trait CommentList {
     type Iter<'a>: Iterator<Item = (&'a str, &'a str)>
     where
