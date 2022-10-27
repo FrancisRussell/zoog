@@ -15,11 +15,12 @@ pub enum SubmitResult<S> {
     /// Packet was accepted
     Good,
 
-    /// The stream is already normalized so there is no need to rewrite it. The
-    /// existing gains are returned.
+    /// A rewrite was applied to the stream headers and no changes were made.
+    /// A summary of the headers is returned.
     HeadersUnchanged(S),
 
-    /// The gains of the stream will be changed from `from` to `to`.
+    /// The stream headers were changed. Summaries of the headers before and
+    /// after rewriting are returned.
     HeadersChanged { from: S, to: S },
 }
 
@@ -48,7 +49,7 @@ pub trait HeaderRewrite {
     fn rewrite(&self, opus_header: &mut OpusHeader, comment_header: &mut CommentHeader) -> Result<(), Self::Error>;
 }
 
-/// Re-writes an Ogg Opus stream with new output gain and comment gain values
+/// Re-writes an Ogg Opus stream with modified headers
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct HeaderRewriter<'a, HR: HeaderRewrite, W: Write> {
