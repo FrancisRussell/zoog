@@ -2,7 +2,7 @@
 name = "zoog"
 version = "0.7.0-develop"
 authors = ["Francis Russell <francis@unchartedbackwaters.co.uk>"]
-edition = "2018"
+edition = "2021"
 homepage = "https://github.com/FrancisRussell/zoog"
 readme = "README.md"
 repository = "https://github.com/FrancisRussell/zoog.git"
