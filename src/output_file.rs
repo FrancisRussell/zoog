@@ -92,7 +92,7 @@ impl OutputFile {
                 temp.as_file().sync_all().map_err(Error::WriteError)?;
 
                 // Persist the temporary to the final path
-                temp.persist(&final_path)
+                temp.persist(final_path)
                     .map_err(Error::PersistError)
                     .and_then(|f| f.sync_all().map_err(Error::WriteError))?;
             }
