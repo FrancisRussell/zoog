@@ -81,7 +81,7 @@ impl DecodeState {
                 channel_state.sample_buffer[i] = self.sample_buffer[offset];
             }
             // Feed to meter
-            channel_state.loudness_meter.push(channel_state.sample_buffer.iter().cloned());
+            channel_state.loudness_meter.push(channel_state.sample_buffer.iter().copied());
         }
         Ok(())
     }
@@ -201,13 +201,13 @@ impl VolumeAnalyzer {
 
     /// Returns the volume of the most recent track submitted to the volume
     /// analyzer
-    pub fn last_track_lufs(&self) -> Option<Decibels> { self.track_loudness.last().cloned() }
+    pub fn last_track_lufs(&self) -> Option<Decibels> { self.track_loudness.last().copied() }
 
     /// Returns the mean LUFS of all completed files submitted to the supplied
     /// volume analyzers
     pub fn mean_lufs_across_multiple<'a, I: IntoIterator<Item = &'a VolumeAnalyzer>>(analyzers: I) -> Decibels {
         let mut windows: Vec<Power> = Vec::new();
-        for analyzer in analyzers.into_iter() {
+        for analyzer in analyzers {
             windows.extend(analyzer.windows.inner.iter());
         }
         let windows = Windows100ms { inner: windows };

@@ -135,7 +135,7 @@ impl BitOrAssign for ValueMatch {
             (ValueMatch::ContainedIn(mut lhs), ValueMatch::ContainedIn(mut rhs)) => {
                 // Preserve the larger set when merging
                 if rhs.len() > lhs.len() {
-                    std::mem::swap(&mut rhs, &mut lhs)
+                    std::mem::swap(&mut rhs, &mut lhs);
                 }
                 lhs.extend(rhs.into_iter());
                 ValueMatch::ContainedIn(lhs)

@@ -119,7 +119,7 @@ struct AlbumVolume {
 impl AlbumVolume {
     pub fn get_album_mean(&self) -> Decibels { self.mean }
 
-    pub fn get_track_mean(&self, path: &Path) -> Option<Decibels> { self.tracks.get(path).cloned() }
+    pub fn get_track_mean(&self, path: &Path) -> Option<Decibels> { self.tracks.get(path).copied() }
 }
 
 fn compute_album_volume<I, P, C>(
@@ -127,8 +127,7 @@ fn compute_album_volume<I, P, C>(
 ) -> Result<AlbumVolume, Error>
 where
     I: IntoIterator<Item = P>,
-    P: AsRef<Path>,
-    P: Sync,
+    P: AsRef<Path> + Sync,
     C: ConsoleOutput + Clone + Sync,
 {
     let console_output = &console_output;
@@ -159,7 +158,7 @@ where
     let analyzers: Vec<_> = analyzers.into_values().collect();
     let tracks = tracks.into_inner();
     let mean = VolumeAnalyzer::mean_lufs_across_multiple(analyzers.iter());
-    let album_volume = AlbumVolume { tracks, mean };
+    let album_volume = AlbumVolume { mean, tracks };
     Ok(album_volume)
 }
 
