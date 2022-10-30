@@ -49,10 +49,10 @@ where
 
 /// Escapes a string slice using `vorbiscomment`-style escaping
 pub fn escape_str(value: &str) -> Cow<str> {
-    if !value.contains(ESCAPED_CHARS) {
-        value.into()
-    } else {
+    if value.contains(ESCAPED_CHARS) {
         EscapingIterator::new(value.chars()).collect()
+    } else {
+        value.into()
     }
 }
 
