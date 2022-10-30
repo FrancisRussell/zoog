@@ -4,6 +4,7 @@
 
 * Add `--dry-run` option to `opuscomment`.
 * Move `DiscreteCommentList` iterator into submodule.
+* Bump Rust edition to 2021.
 
 ## 0.6.0
 
