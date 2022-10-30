@@ -21,7 +21,7 @@ impl DiscreteCommentList {
     pub fn append(&mut self, other: &mut DiscreteCommentList) { self.comments.append(&mut other.comments); }
 }
 
-mod discrete_comment_list {
+mod internal {
     use super::*;
 
     /// Iterator for `DiscreteCommentList`
@@ -37,7 +37,7 @@ mod discrete_comment_list {
 }
 
 impl CommentList for DiscreteCommentList {
-    type Iter<'a> = discrete_comment_list::Iter<'a>;
+    type Iter<'a> = internal::Iter<'a>;
 
     fn len(&self) -> usize { self.comments.len() }
 
