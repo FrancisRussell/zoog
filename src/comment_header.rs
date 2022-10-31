@@ -79,7 +79,7 @@ impl<'a> CommentHeader<'a> {
     pub fn to_discrete_comment_list(&self) -> DiscreteCommentList { self.user_comments.clone() }
 
     fn commit(&mut self) -> Result<(), CommitError> {
-        let data = &mut self.data;
+        let data = &mut *self.data;
         data.clear();
         data.extend(COMMENT_MAGIC);
         let vendor = self.vendor.as_bytes();

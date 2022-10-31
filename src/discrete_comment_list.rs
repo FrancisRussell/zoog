@@ -22,7 +22,7 @@ impl DiscreteCommentList {
 }
 
 mod internal {
-    use super::*;
+    use super::Arc;
 
     /// Iterator for `DiscreteCommentList`
     pub struct Iter<'a> {

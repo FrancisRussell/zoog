@@ -173,7 +173,7 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
 /// will continue to rewrite the stream until the input stream is exhausted, an
 /// error occurs or the interrupt condition is set.
 pub fn rewrite_stream_with_interrupt<HR, R, W, I>(
-    rewrite: HR, input: R, mut output: W, abort_on_unchanged: bool, interrupt: I,
+    rewrite: HR, input: R, mut output: W, abort_on_unchanged: bool, interrupt: &I,
 ) -> Result<SubmitResult<HR::Summary>, HR::Error>
 where
     HR::Error: From<Error>,
@@ -210,9 +210,8 @@ where
                     Ok(r @ SubmitResult::HeadersUnchanged(_)) => {
                         if abort_on_unchanged {
                             break Ok(r);
-                        } else {
-                            result = r;
                         }
+                        result = r;
                     }
                     Err(_) => break submit_result,
                 }
@@ -232,5 +231,5 @@ where
     W: Write,
     HR: HeaderRewrite,
 {
-    rewrite_stream_with_interrupt(rewrite, input, output, abort_on_unchanged, Never::default())
+    rewrite_stream_with_interrupt(rewrite, input, output, abort_on_unchanged, &Never::default())
 }

@@ -327,7 +327,7 @@ fn main_impl() -> Result<(), AppError> {
                         &mut input_file,
                         &mut output_file,
                         abort_on_unchanged,
-                        interrupt_checker.clone(),
+                        &interrupt_checker,
                     )
                 };
                 drop(input_file); // Important for Windows

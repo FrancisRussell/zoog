@@ -315,7 +315,13 @@ fn main_impl() -> Result<(), AppError> {
         let mut output_file = BufWriter::new(output_file);
         let rewrite = CommentHeaderRewrite::new(rewriter_config);
         let abort_on_unchanged = true;
-        rewrite_stream_with_interrupt(rewrite, &mut input_file, &mut output_file, abort_on_unchanged, interrupt_checker)
+        rewrite_stream_with_interrupt(
+            rewrite,
+            &mut input_file,
+            &mut output_file,
+            abort_on_unchanged,
+            &interrupt_checker,
+        )
     };
     drop(input_file); // Important for Windows
 
