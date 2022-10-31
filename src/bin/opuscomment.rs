@@ -1,4 +1,6 @@
 #![feature(let_chains)]
+#![warn(clippy::pedantic)]
+#![allow(clippy::uninlined_format_args)]
 
 #[path = "../ctrlc_handling.rs"]
 mod ctrlc_handling;
@@ -8,6 +10,7 @@ mod output_file;
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
+use std::convert::Into;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
 use std::ops::BitOrAssign;
@@ -52,6 +55,7 @@ fn main() {
 }
 
 #[derive(Debug, Parser)]
+#[allow(clippy::struct_excessive_bools)]
 #[clap(author, version, about = "List or edit comments in Ogg Opus files.")]
 struct Cli {
     #[clap(short, long, action, conflicts_with = "replace", conflicts_with = "modify")]
@@ -236,7 +240,7 @@ where
             continue;
         }
         let (key, value) = parse_comment(&line)?;
-        let value = if escaped { escaping::unescape_str(value).map_err(|e| e.into())? } else { Cow::from(value) };
+        let value = if escaped { escaping::unescape_str(value).map_err(Into::into)? } else { Cow::from(value) };
         result.push(key, &value)?;
     }
     Ok(result)
@@ -299,13 +303,13 @@ fn main_impl() -> Result<(), AppError> {
 
     let rewriter_config = CommentRewriterConfig { action };
     let input_path = cli.input_file;
-    let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
+    let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.clone(), e))?;
     let mut input_file = BufReader::new(input_file);
 
     let mut output_file = match operation_mode {
         OperationMode::List => OutputFile::new_sink(),
         OperationMode::Modify | OperationMode::Replace => {
-            let output_path = cli.output_file.unwrap_or_else(|| input_path.to_path_buf());
+            let output_path = cli.output_file.unwrap_or_else(|| input_path.clone());
             OutputFile::new_target_or_discard(&output_path, dry_run)?
         }
     };
