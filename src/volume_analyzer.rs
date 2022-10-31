@@ -30,7 +30,8 @@ struct DecodeStateChannel {
 
 impl DecodeStateChannel {
     fn new(sample_rate: usize) -> DecodeStateChannel {
-        DecodeStateChannel { loudness_meter: ChannelLoudnessMeter::new(sample_rate as u32), sample_buffer: Vec::new() }
+        let sample_rate_u32: u32 = sample_rate.try_into().expect("Unable to truncate sample rate");
+        DecodeStateChannel { loudness_meter: ChannelLoudnessMeter::new(sample_rate_u32), sample_buffer: Vec::new() }
     }
 }
 
@@ -50,7 +51,8 @@ impl DecodeState {
             2 => Channels::Stereo,
             n => return Err(Error::InvalidChannelCount(n)),
         };
-        let decoder = Decoder::new(sample_rate as u32, channel_count_typed).map_err(Error::OpusError)?;
+        let sample_rate_u32: u32 = sample_rate.try_into().expect("Unable to truncate sample rate");
+        let decoder = Decoder::new(sample_rate_u32, channel_count_typed).map_err(Error::OpusError)?;
         let mut channel_states = Vec::with_capacity(channel_count);
         for _ in 0..channel_count {
             channel_states.push(DecodeStateChannel::new(sample_rate));
@@ -181,6 +183,7 @@ impl VolumeAnalyzer {
     /// This should be called after all packets from an Ogg Opus file have been
     /// submitted. It is then possible to start calculating the volume of a
     /// new file.
+    #[allow(clippy::missing_panics_doc)]
     pub fn file_complete(&mut self) {
         if let Some(decode_state) = self.decode_state.take() {
             let windows = decode_state.get_windows();

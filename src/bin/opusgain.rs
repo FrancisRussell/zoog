@@ -1,4 +1,6 @@
 #![feature(let_chains)]
+#![warn(clippy::pedantic)]
+#![allow(clippy::uninlined_format_args)]
 
 #[path = "../console_output.rs"]
 mod console_output;
@@ -16,7 +18,7 @@ use std::path::{Path, PathBuf};
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use clap::{Parser, ValueEnum};
-use console_output::{ConsoleOutput, DelayedConsoleOutput, Standard};
+use console_output::{ConsoleOutput, Delayed as DelayedConsoleOutput, Standard};
 use ctrlc_handling::CtrlCChecker;
 use ogg::reading::PacketReader;
 use output_file::OutputFile;
@@ -58,7 +60,7 @@ fn check_running(checker: &CtrlCChecker) -> Result<(), Error> {
 }
 
 fn apply_volume_analysis<P, C>(
-    analyzer: &mut VolumeAnalyzer, path: P, console_output: C, report_error: bool, interrupt_checker: CtrlCChecker,
+    analyzer: &mut VolumeAnalyzer, path: P, console_output: &C, report_error: bool, interrupt_checker: &CtrlCChecker,
 ) -> Result<(), Error>
 where
     P: AsRef<Path>,
@@ -70,7 +72,7 @@ where
         let input_file = BufReader::new(input_file);
         let mut ogg_reader = PacketReader::new(input_file);
         loop {
-            check_running(&interrupt_checker)?;
+            check_running(interrupt_checker)?;
             match ogg_reader.read_packet() {
                 Err(e) => break Err(Error::OggDecode(e)),
                 Ok(None) => {
@@ -96,7 +98,7 @@ where
     result
 }
 
-fn print_gains<C: ConsoleOutput>(gains: &OpusGains, console: C) -> Result<(), Error> {
+fn print_gains<C: ConsoleOutput>(gains: &OpusGains, console: &C) -> Result<(), Error> {
     let do_io = || {
         writeln!(console.out(), "\tOutput Gain: {}", gains.output)?;
         if let Some(gain) = gains.track_r128 {
@@ -123,14 +125,13 @@ impl AlbumVolume {
 }
 
 fn compute_album_volume<I, P, C>(
-    paths: I, console_output: C, interrupt_checker: CtrlCChecker,
+    paths: I, console_output: &C, interrupt_checker: &CtrlCChecker,
 ) -> Result<AlbumVolume, Error>
 where
     I: IntoIterator<Item = P>,
     P: AsRef<Path> + Sync,
-    C: ConsoleOutput + Clone + Sync,
+    C: ConsoleOutput + Sync,
 {
-    let console_output = &console_output;
     let paths: Vec<_> = paths.into_iter().enumerate().collect();
     let tracks = Mutex::new(HashMap::new());
 
@@ -142,9 +143,9 @@ where
         apply_volume_analysis(
             &mut analyzer,
             input_path.as_ref(),
-            &DelayedConsoleOutput::new(console_output.clone()),
+            &DelayedConsoleOutput::new(console_output),
             true,
-            interrupt_checker.clone(),
+            interrupt_checker,
         )?;
         tracks.lock().insert(
             input_path.as_ref().to_path_buf(),
@@ -218,7 +219,7 @@ struct Cli {
     /// unchanged regardless of the specified preset.
     clear: bool,
 }
-
+#[allow(clippy::too_many_lines)]
 fn main_impl() -> Result<(), AppError> {
     let interrupt_checker = CtrlCChecker::new()?;
     let cli = Cli::parse_from(wild::args_os());
@@ -237,10 +238,13 @@ fn main_impl() -> Result<(), AppError> {
     ThreadPoolBuilder::new().num_threads(num_threads).build_global().expect("Failed to initialize thread pool");
 
     let output_gain_mode = match cli.output_gain_mode {
-        OutputGainSetting::Auto => match album_mode {
-            true => OutputGainMode::Album,
-            false => OutputGainMode::Track,
-        },
+        OutputGainSetting::Auto => {
+            if album_mode {
+                OutputGainMode::Album
+            } else {
+                OutputGainMode::Track
+            }
+        }
         OutputGainSetting::Track => OutputGainMode::Track,
     };
     let volume_target = match cli.preset {
@@ -268,11 +272,8 @@ fn main_impl() -> Result<(), AppError> {
 
     let console_output = Standard::default();
     let input_files = cli.input_files;
-    let album_volume = if album_mode {
-        Some(compute_album_volume(&input_files, &console_output, interrupt_checker.clone())?)
-    } else {
-        None
-    };
+    let album_volume =
+        if album_mode { Some(compute_album_volume(&input_files, &console_output, &interrupt_checker)?) } else { None };
 
     // Prevent us from rewriting more than one file at once. This is to stop us
     // consuming too much disk space or leaving lots of temporary files around
@@ -295,7 +296,7 @@ fn main_impl() -> Result<(), AppError> {
                 Some(match &album_volume {
                     None => {
                         let mut analyzer = VolumeAnalyzer::default();
-                        apply_volume_analysis(&mut analyzer, &input_path, console, false, interrupt_checker.clone())?;
+                        apply_volume_analysis(&mut analyzer, &input_path, console, false, &interrupt_checker)?;
                         analyzer.last_track_lufs().expect("Last track volume unexpectedly missing")
                     }
                     Some(album_volume) => album_volume
@@ -307,10 +308,10 @@ fn main_impl() -> Result<(), AppError> {
                 output_gain: volume_target,
                 output_gain_mode,
                 track_volume,
-                album_volume: album_volume.as_ref().map(|a| a.get_album_mean()),
+                album_volume: album_volume.as_ref().map(AlbumVolume::get_album_mean),
             };
 
-            let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.to_path_buf(), e))?;
+            let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.clone(), e))?;
             let mut input_file = BufReader::new(input_file);
 
             {
@@ -327,7 +328,7 @@ fn main_impl() -> Result<(), AppError> {
                         &mut input_file,
                         &mut output_file,
                         abort_on_unchanged,
-                        interrupt_checker.clone(),
+                        &interrupt_checker,
                     )
                 };
                 drop(input_file); // Important for Windows

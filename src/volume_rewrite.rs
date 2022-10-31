@@ -1,4 +1,4 @@
-use std::convert::TryFrom;
+use std::convert::{Into, TryFrom};
 
 use crate::header_rewriter::HeaderRewrite;
 use crate::opus::{CommentHeader, CommentList, FixedPointGain, OpusHeader, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
@@ -94,8 +94,8 @@ impl HeaderRewrite for VolumeHeaderRewrite {
     fn summarize(&self, opus_header: &OpusHeader, comment_header: &CommentHeader) -> Result<OpusGains, Error> {
         let gains = OpusGains {
             output: opus_header.get_output_gain().into(),
-            track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).unwrap_or(None).map(|g| g.into()),
-            album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).unwrap_or(None).map(|g| g.into()),
+            track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).unwrap_or(None).map(Into::into),
+            album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).unwrap_or(None).map(Into::into),
         };
         Ok(gains)
     }

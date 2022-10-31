@@ -5,6 +5,8 @@
 * Add `--dry-run` option to `opuscomment`.
 * Move `DiscreteCommentList` iterator into submodule.
 * Bump Rust edition to 2021.
+* Use clippy in pedantic mode for library and executables.
+* Some code refactoring to make clippy happier.
 
 ## 0.6.0
 
