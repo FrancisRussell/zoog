@@ -47,7 +47,7 @@ pub trait ConsoleOutput {
     fn err(&self) -> Self::ErrStream<'_>;
 }
 
-impl ConsoleOutput for &Standard {
+impl ConsoleOutput for Standard {
     type ErrStream<'a> = &'a Stderr where Self: 'a;
     type OutStream<'a> = &'a Stdout where Self: 'a;
 
@@ -69,12 +69,14 @@ pub struct StreamWrites {
 }
 
 impl StreamWrites {
+    #[allow(clippy::unnecessary_wraps)]
     fn write(&mut self, id: usize, data: &[u8]) -> Result<usize, io::Error> {
         self.data.extend(data);
         self.operations.push_back((id, StreamOperation::Write(data.len())));
         Ok(data.len())
     }
 
+    #[allow(clippy::unnecessary_wraps)]
     fn flush(&mut self, id: usize) -> Result<(), io::Error> {
         self.operations.push_back((id, StreamOperation::Flush));
         Ok(())
@@ -91,8 +93,8 @@ impl IdGenerator {
 }
 
 #[derive(Debug)]
-pub struct DelayedConsoleOutput<W: ConsoleOutput> {
-    inner: W,
+pub struct Delayed<'a, W: ConsoleOutput> {
+    inner: &'a W,
     id_generator: IdGenerator,
     out: Mutex<StreamWrites>,
     err: Mutex<StreamWrites>,
@@ -143,7 +145,7 @@ impl LockableWriter for DelayedWriter<'_, &Mutex<StreamWrites>> {
     fn lock(&self) -> Self::Locked<'_> { DelayedWriter { id_generator: self.id_generator, writes: self.writes.lock() } }
 }
 
-impl<W: ConsoleOutput> ConsoleOutput for &DelayedConsoleOutput<W> {
+impl<W: ConsoleOutput> ConsoleOutput for Delayed<'_, W> {
     type ErrStream<'a> = DelayedWriter<'a, &'a Mutex<StreamWrites>> where Self: 'a;
     type OutStream<'a> = DelayedWriter<'a, &'a Mutex<StreamWrites>> where Self: 'a;
 
@@ -152,19 +154,15 @@ impl<W: ConsoleOutput> ConsoleOutput for &DelayedConsoleOutput<W> {
     fn err(&self) -> Self::OutStream<'_> { DelayedWriter { id_generator: &self.id_generator, writes: &self.err } }
 }
 
-impl<W> DelayedConsoleOutput<W>
+impl<W> Delayed<'_, W>
 where
     W: ConsoleOutput,
 {
-    pub fn new(inner: W) -> DelayedConsoleOutput<W> {
-        DelayedConsoleOutput {
-            inner,
-            id_generator: IdGenerator::default(),
-            out: Mutex::default(),
-            err: Mutex::default(),
-        }
+    pub fn new(inner: &W) -> Delayed<'_, W> {
+        Delayed { inner, id_generator: IdGenerator::default(), out: Mutex::default(), err: Mutex::default() }
     }
 
+    #[allow(clippy::similar_names)]
     fn flush_delayed_operations(&mut self) -> Result<(), io::Error> {
         let (out, err) = (self.inner.out(), self.inner.err());
         let (mut out, mut err) = (out.lock(), err.lock());
@@ -201,9 +199,9 @@ where
     }
 }
 
-impl<W> Drop for DelayedConsoleOutput<W>
+impl<W> Drop for Delayed<'_, W>
 where
     W: ConsoleOutput,
 {
-    fn drop(&mut self) { let _ = self.flush_delayed_operations(); }
+    fn drop(&mut self) { drop(self.flush_delayed_operations()); }
 }
