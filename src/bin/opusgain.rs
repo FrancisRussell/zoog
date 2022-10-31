@@ -219,6 +219,7 @@ struct Cli {
     /// unchanged regardless of the specified preset.
     clear: bool,
 }
+
 #[allow(clippy::too_many_lines)]
 fn main_impl() -> Result<(), AppError> {
     let interrupt_checker = CtrlCChecker::new()?;
