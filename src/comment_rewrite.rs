@@ -1,6 +1,6 @@
 use derivative::Derivative;
 
-use crate::header::{CommentList, DiscreteCommentList};
+use crate::header::{CommentHeader as CommentHeaderTrait, CommentList, DiscreteCommentList};
 use crate::header_rewriter::HeaderRewrite;
 use crate::opus::{CommentHeader, OpusHeader};
 use crate::Error;
