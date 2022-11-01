@@ -3,12 +3,9 @@
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate, clippy::uninlined_format_args, clippy::doc_markdown)]
 
 mod comment_header;
-mod comment_list;
 mod constants;
 mod decibels;
-mod discrete_comment_list;
 mod error;
-mod fixed_point_gain;
 mod opus_header;
 
 /// Functionality for escaping and unescaping values for command-line tools
@@ -30,6 +27,9 @@ pub mod volume_rewrite;
 /// Functionality for determining BS.1770 loudness of Ogg Opus streams
 pub mod volume_analyzer;
 
+/// Functionality for manipulating headers
+pub mod header;
+
 pub use constants::global::*;
 pub use decibels::*;
 pub use error::*;
@@ -37,9 +37,6 @@ pub use error::*;
 /// Types for manipulating headers of Ogg Opus streams
 pub mod opus {
     pub use crate::comment_header::*;
-    pub use crate::comment_list::*;
     pub use crate::constants::opus::*;
-    pub use crate::discrete_comment_list::*;
-    pub use crate::fixed_point_gain::*;
     pub use crate::opus_header::*;
 }

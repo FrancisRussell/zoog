@@ -5,9 +5,8 @@ use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
 use thiserror::Error;
 
-use crate::constants::opus::FIELD_NAME_TERMINATOR;
-use crate::opus::{parse_comment, CommentList, DiscreteCommentList};
-use crate::Error;
+use crate::header::{parse_comment, CommentList, DiscreteCommentList};
+use crate::{Error, FIELD_NAME_TERMINATOR};
 
 const COMMENT_MAGIC: &[u8] = b"OpusTags";
 

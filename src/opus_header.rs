@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use crate::opus::FixedPointGain;
+use crate::header::FixedPointGain;
 use crate::Error;
 
 const OPUS_MIN_HEADER_SIZE: usize = 19;

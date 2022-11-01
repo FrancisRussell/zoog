@@ -1,9 +1,8 @@
 use std::borrow::Cow;
 use std::io::{self, Write};
 
-use crate::constants::opus::FIELD_NAME_TERMINATOR;
-use crate::opus::FixedPointGain;
-use crate::{escaping, Error};
+use crate::header::FixedPointGain;
+use crate::{escaping, Error, FIELD_NAME_TERMINATOR};
 
 /// Provides functionality for manipulating comment lists
 pub trait CommentList {

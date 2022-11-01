@@ -1,8 +1,8 @@
 use derivative::Derivative;
 
-use crate::comment_list::CommentList;
+use crate::header::{CommentList, DiscreteCommentList};
 use crate::header_rewriter::HeaderRewrite;
-use crate::opus::{CommentHeader, DiscreteCommentList, OpusHeader};
+use crate::opus::{CommentHeader, OpusHeader};
 use crate::Error;
 
 /// Mode type for `CommentRewriter`

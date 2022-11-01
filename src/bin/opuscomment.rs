@@ -21,8 +21,8 @@ use ctrlc_handling::CtrlCChecker;
 use output_file::OutputFile;
 use thiserror::Error;
 use zoog::comment_rewrite::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
+use zoog::header::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
-use zoog::opus::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::{escaping, Error};
 
 const OGG_OPUS_EXTENSIONS: [&str; 3] = ["oga", "ogg", "opus"];

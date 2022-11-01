@@ -1,7 +1,8 @@
 use std::convert::{Into, TryFrom};
 
+use crate::header::{CommentList, FixedPointGain};
 use crate::header_rewriter::HeaderRewrite;
-use crate::opus::{CommentHeader, CommentList, FixedPointGain, OpusHeader, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use crate::opus::{CommentHeader, OpusHeader, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::{Decibels, Error, R128_LUFS};
 
 /// Represents a target gain for an audio stream
