@@ -2,11 +2,9 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate, clippy::uninlined_format_args, clippy::doc_markdown)]
 
-mod comment_header;
 mod constants;
 mod decibels;
 mod error;
-mod opus_header;
 
 /// Functionality for escaping and unescaping values for command-line tools
 pub mod escaping;
@@ -35,8 +33,4 @@ pub use decibels::*;
 pub use error::*;
 
 /// Types for manipulating headers of Ogg Opus streams
-pub mod opus {
-    pub use crate::comment_header::*;
-    pub use crate::constants::opus::*;
-    pub use crate::opus_header::*;
-}
+pub mod opus;
