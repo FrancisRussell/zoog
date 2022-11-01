@@ -12,9 +12,9 @@ pub struct CommentHeaderSpecifics {}
 impl header::CommentHeaderSpecifics for CommentHeaderSpecifics {
     fn get_magic() -> Vec<u8> { COMMENT_MAGIC.into() }
 
-    fn read_postfix<R: Read>(&mut self, _reader: R) -> Result<(), Error> { Ok(()) }
+    fn read_postfix<R: Read>(&mut self, _reader: &mut R) -> Result<(), Error> { Ok(()) }
 
-    fn write_postfix<W: Write>(&self, _writer: W) -> Result<(), Error> { Ok(()) }
+    fn write_postfix<W: Write>(&self, _writer: &mut W) -> Result<(), Error> { Ok(()) }
 }
 
 /// Manipulates and Ogg Opus header

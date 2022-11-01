@@ -14,10 +14,10 @@ pub trait CommentHeaderSpecifics: Default {
     fn get_magic() -> Vec<u8>;
 
     /// Reads any bytes which should be present after comments
-    fn read_postfix<R: Read>(&mut self, reader: R) -> Result<(), Error>;
+    fn read_postfix<R: Read>(&mut self, reader: &mut R) -> Result<(), Error>;
 
     /// Writes any bytes which should be present after comments
-    fn write_postfix<W: Write>(&self, writer: W) -> Result<(), Error>;
+    fn write_postfix<W: Write>(&self, writer: &mut W) -> Result<(), Error>;
 }
 
 /// Allows querying and modification of an Opus/Vorbis comment header. This type
