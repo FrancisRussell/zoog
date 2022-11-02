@@ -3,6 +3,7 @@ use derivative::Derivative;
 use ogg::Packet;
 use opus::{Channels, Decoder};
 
+use crate::header::IdHeader as _;
 use crate::opus::{CommentHeader, OpusHeader};
 use crate::{Decibels, Error};
 

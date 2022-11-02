@@ -27,7 +27,7 @@ mod tests {
     use rand::{Rng, SeedableRng};
 
     use super::*;
-    use crate::header::{CommentHeader as CommentHeaderTrait, CommentList as CommentListTrait};
+    use crate::header::{CommentHeader as _, CommentList as _};
 
     const MAX_STRING_LENGTH: usize = 1024;
     const MAX_COMMENTS: usize = 128;

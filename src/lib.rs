@@ -28,9 +28,9 @@ pub mod volume_analyzer;
 /// Functionality for manipulating headers
 pub mod header;
 
+/// Types for manipulating headers of Ogg Opus streams
+pub mod opus;
+
 pub use constants::global::*;
 pub use decibels::*;
 pub use error::*;
-
-/// Types for manipulating headers of Ogg Opus streams
-pub mod opus;

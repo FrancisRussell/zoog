@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use crate::header::FixedPointGain;
+use crate::header::{FixedPointGain, IdHeader};
 use crate::Error;
 
 const OPUS_MIN_HEADER_SIZE: usize = 19;
@@ -11,6 +11,29 @@ const OPUS_MAGIC: &[u8] = b"OpusHead";
 /// Allows querying and modification of an Opus identification header
 pub struct OpusHeader<'a> {
     data: &'a mut Vec<u8>,
+}
+
+impl IdHeader for OpusHeader<'_> {
+    fn num_output_channels(&self) -> usize {
+        let mut reader = Cursor::new(&self.data[9..10]);
+        let value = reader.read_u8().expect("Error reading output channel count");
+        value.into()
+    }
+
+    fn input_sample_rate(&self) -> Option<usize> {
+        let mut reader = Cursor::new(&self.data[12..16]);
+        let value = reader.read_u32::<LittleEndian>().expect("Error reading sample rate");
+        if value == 0 {
+            None
+        } else {
+            Some(value.try_into().expect("Could not convert sample rate to usize"))
+        }
+    }
+
+    fn output_sample_rate(&self) -> usize {
+        // RFC 7845, section 5.1
+        48000
+    }
 }
 
 impl<'a> OpusHeader<'a> {
@@ -46,13 +69,6 @@ impl<'a> OpusHeader<'a> {
         let gain = gain.checked_add(adjustment).ok_or(Error::GainOutOfBounds)?;
         self.set_output_gain(gain);
         Ok(())
-    }
-
-    /// The number of output channels
-    pub fn num_output_channels(&self) -> usize {
-        let mut reader = Cursor::new(&self.data[9..10]);
-        let value = reader.read_u8().expect("Error reading output channel count");
-        value.into()
     }
 }
 
