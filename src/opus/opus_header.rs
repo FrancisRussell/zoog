@@ -8,6 +8,9 @@ use crate::Error;
 const OPUS_MIN_HEADER_SIZE: usize = 19;
 const OPUS_MAGIC: &[u8] = b"OpusHead";
 
+/// The internal and preferred Opus sample rate (RFC 7845, section 5.1)
+const OPUS_DECODE_SAMPLE_RATE: usize = 48000;
+
 /// Allows querying and modification of an Opus identification header
 pub struct OpusHeader<'a> {
     data: &'a mut Vec<u8>,
@@ -30,10 +33,7 @@ impl IdHeader for OpusHeader<'_> {
         }
     }
 
-    fn output_sample_rate(&self) -> usize {
-        // RFC 7845, section 5.1
-        48000
-    }
+    fn output_sample_rate(&self) -> usize { OPUS_DECODE_SAMPLE_RATE }
 }
 
 impl<'a> OpusHeader<'a> {
