@@ -167,15 +167,21 @@ where
         }
 
         while let Some(packet) = self.packet_queue.pop_front() {
-            let packet_info = Self::packet_write_end_info(&packet);
-            let packet_serial = packet.stream_serial();
-            let packet_granule = packet.absgp_page();
-
-            self.packet_writer
-                .write_packet(packet.data, packet_serial, packet_info, packet_granule)
-                .map_err(Error::WriteError)?;
+            self.write_packet(packet)?;
         }
         Ok(SubmitResult::Good)
+    }
+
+    fn write_packet(&mut self, packet: Packet) -> Result<(), Error> {
+        // This is an attempt to help polymorphization by moving the writer dependent
+        // code into a separate function
+        let packet_info = Self::packet_write_end_info(&packet);
+        let packet_serial = packet.stream_serial();
+        let packet_granule = packet.absgp_page();
+
+        self.packet_writer
+            .write_packet(packet.data, packet_serial, packet_info, packet_granule)
+            .map_err(Error::WriteError)
     }
 
     fn packet_write_end_info(packet: &Packet) -> PacketWriteEndInfo {
