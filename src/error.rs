@@ -41,9 +41,9 @@ pub enum Error {
     #[error("Malformed comment header")]
     MalformedCommentHeader,
 
-    /// Missing Opus comment separator
-    #[error("Missing separator in Opus comment")]
-    MissingOpusCommentSeparator,
+    /// Missing comment separator
+    #[error("Missing separator in comment")]
+    MissingCommentSeparator,
 
     /// An invalid UTF-8 sequence was encountered
     #[error("UTF-8 encoding error")]
