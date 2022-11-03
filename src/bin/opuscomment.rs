@@ -20,7 +20,7 @@ use clap::Parser;
 use ctrlc_handling::CtrlCChecker;
 use output_file::OutputFile;
 use thiserror::Error;
-use zoog::comment_rewrite::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
+use zoog::comment_rewrite::{CommentHeaderRewrite, CommentHeaderSummary, CommentRewriterAction, CommentRewriterConfig};
 use zoog::header::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::{escaping, Error};
@@ -318,9 +318,11 @@ fn main_impl() -> Result<(), AppError> {
         let output_file = output_file.as_write();
         let mut output_file = BufWriter::new(output_file);
         let rewrite = CommentHeaderRewrite::new(rewriter_config);
+        let summarize = CommentHeaderSummary::default();
         let abort_on_unchanged = true;
         rewrite_stream_with_interrupt(
             rewrite,
+            summarize,
             &mut input_file,
             &mut output_file,
             abort_on_unchanged,

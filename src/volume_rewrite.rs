@@ -1,7 +1,7 @@
 use std::convert::{Into, TryFrom};
 
 use crate::header::{CommentList, FixedPointGain};
-use crate::header_rewriter::HeaderRewrite;
+use crate::header_rewriter::{HeaderRewrite, HeaderSummarize};
 use crate::opus::{CommentHeader, OpusHeader, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use crate::{Decibels, Error, R128_LUFS};
 
@@ -77,6 +77,24 @@ pub struct OpusGains {
     pub album_r128: Option<Decibels>,
 }
 
+/// Returns the gains from the codec headers
+#[derive(Debug, Default)]
+pub struct GainsSummary {}
+
+impl HeaderSummarize for GainsSummary {
+    type Error = Error;
+    type Summary = OpusGains;
+
+    fn summarize(&self, opus_header: &OpusHeader, comment_header: &CommentHeader) -> Result<OpusGains, Error> {
+        let gains = OpusGains {
+            output: opus_header.get_output_gain().into(),
+            track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).unwrap_or(None).map(Into::into),
+            album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).unwrap_or(None).map(Into::into),
+        };
+        Ok(gains)
+    }
+}
+
 /// Parameterization struct for `HeaderRewriter` to rewrite ouput gain and R128
 /// tags.
 #[derive(Debug)]
@@ -90,16 +108,6 @@ impl VolumeHeaderRewrite {
 
 impl HeaderRewrite for VolumeHeaderRewrite {
     type Error = Error;
-    type Summary = OpusGains;
-
-    fn summarize(&self, opus_header: &OpusHeader, comment_header: &CommentHeader) -> Result<OpusGains, Error> {
-        let gains = OpusGains {
-            output: opus_header.get_output_gain().into(),
-            track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).unwrap_or(None).map(Into::into),
-            album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).unwrap_or(None).map(Into::into),
-        };
-        Ok(gains)
-    }
 
     fn rewrite(&self, opus_header: &mut OpusHeader, comment_header: &mut CommentHeader) -> Result<(), Error> {
         let new_header_gain = match self.config.output_gain {

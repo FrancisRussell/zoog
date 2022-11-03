@@ -1,7 +1,7 @@
 use derivative::Derivative;
 
 use crate::header::{CommentHeader as _, CommentList, DiscreteCommentList};
-use crate::header_rewriter::HeaderRewrite;
+use crate::header_rewriter::{HeaderRewrite, HeaderSummarize};
 use crate::opus::{CommentHeader, OpusHeader};
 use crate::Error;
 
@@ -36,7 +36,11 @@ impl CommentHeaderRewrite<'_> {
     pub fn new(config: CommentRewriterConfig) -> CommentHeaderRewrite { CommentHeaderRewrite { config } }
 }
 
-impl HeaderRewrite for CommentHeaderRewrite<'_> {
+/// Summarizes codec headers by returning the comment list
+#[derive(Debug, Default)]
+pub struct CommentHeaderSummary {}
+
+impl HeaderSummarize for CommentHeaderSummary {
     type Error = Error;
     type Summary = DiscreteCommentList;
 
@@ -45,6 +49,10 @@ impl HeaderRewrite for CommentHeaderRewrite<'_> {
     ) -> Result<DiscreteCommentList, Error> {
         Ok(comment_header.to_discrete_comment_list())
     }
+}
+
+impl HeaderRewrite for CommentHeaderRewrite<'_> {
+    type Error = Error;
 
     fn rewrite(&self, _opus_header: &mut OpusHeader, comment_header: &mut CommentHeader) -> Result<(), Error> {
         match &self.config.action {

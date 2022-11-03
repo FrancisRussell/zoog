@@ -1,12 +1,13 @@
 use std::collections::VecDeque;
 use std::io::{Read, Seek, Write};
+use std::marker::PhantomData;
 
 use derivative::Derivative;
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use ogg::{Packet, PacketReader};
 
 use crate::interrupt::{Interrupt, Never};
-use crate::opus::{CommentHeader, OpusHeader};
+use crate::opus::{self, CommentHeader, OpusHeader};
 use crate::Error;
 
 /// The result of submitting a packet to a `HeaderRewriter`
@@ -31,19 +32,33 @@ enum State {
     Forwarding,
 }
 
-/// Trait for types used to parameterize a `HeaderRewriter`
-pub trait HeaderRewrite {
+pub enum CodecHeaders<'a> {
+    Opus(&'a opus::CommentHeader<'a>, &'a opus::OpusHeader<'a>),
+}
+
+pub enum CodecHeadersMut<'a> {
+    Opus(&'a mut opus::CommentHeader<'a>, &'a mut opus::OpusHeader<'a>),
+}
+
+/// Trait for types used to summarize codec headers
+pub trait HeaderSummarize {
     /// Type for summarizing header content which is reported back via
     /// `SubmitResult`
     type Summary;
 
-    /// Type for errors thrown during summarization or header update
+    /// Type for errors thrown during summarization
     type Error;
 
     /// Summarizes the content of a header to be reported back via
     /// `SubmitResult`
     fn summarize(&self, opus_header: &OpusHeader, comment_header: &CommentHeader)
         -> Result<Self::Summary, Self::Error>;
+}
+
+/// Trait for types used to parameterize a `HeaderRewriter`
+pub trait HeaderRewrite {
+    /// Type for errors thrown during header update
+    type Error;
 
     /// Rewrites the Opus and Opus comment headers
     fn rewrite(&self, opus_header: &mut OpusHeader, comment_header: &mut CommentHeader) -> Result<(), Self::Error>;
@@ -52,7 +67,7 @@ pub trait HeaderRewrite {
 /// Re-writes an Ogg Opus stream with modified headers
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct HeaderRewriter<'a, HR: HeaderRewrite, W: Write> {
+pub struct HeaderRewriter<'a, HR: HeaderRewrite, HS: HeaderSummarize, W: Write, E> {
     #[derivative(Debug = "ignore")]
     packet_writer: PacketWriter<'a, W>,
     #[derivative(Debug = "ignore")]
@@ -61,20 +76,29 @@ pub struct HeaderRewriter<'a, HR: HeaderRewrite, W: Write> {
     #[derivative(Debug = "ignore")]
     packet_queue: VecDeque<Packet>,
     header_rewrite: HR,
+    header_summarize: HS,
+    _error: PhantomData<E>,
 }
 
-impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
+impl<HR, HS, W, E> HeaderRewriter<'_, HR, HS, W, E>
+where
+    HR: HeaderRewrite<Error = E>,
+    HS: HeaderSummarize<Error = E>,
+    W: Write,
+{
     /// Constructs a new rewriter
     /// - `config` - the configuration for volume rewriting.
     /// - `packet_writer` - the Ogg stream writer that the rewritten packets
     ///   will be sent to.
-    pub fn new(rewrite: HR, packet_writer: PacketWriter<W>) -> HeaderRewriter<HR, W> {
+    pub fn new(rewrite: HR, summarize: HS, packet_writer: PacketWriter<W>) -> HeaderRewriter<HR, HS, W, E> {
         HeaderRewriter {
             packet_writer,
             header_packet: None,
             state: State::AwaitingHeader,
             packet_queue: VecDeque::new(),
             header_rewrite: rewrite,
+            header_summarize: summarize,
+            _error: PhantomData,
         }
     }
 
@@ -83,7 +107,7 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
     /// `HeadersUnchanged` is returned, the supplied stream did not need
     /// any alterations. In this case, the partial output should be discarded
     /// and no further packets submitted.
-    pub fn submit(&mut self, mut packet: Packet) -> Result<SubmitResult<HR::Summary>, HR::Error>
+    pub fn submit(&mut self, mut packet: Packet) -> Result<SubmitResult<HS::Summary>, E>
     where
         HR::Error: From<Error>,
     {
@@ -109,9 +133,9 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
                         Ok(None) => return Err(Error::MissingCommentHeader.into()),
                         Err(e) => return Err(e.into()),
                     };
-                    let summary_before = self.header_rewrite.summarize(&opus_header, &comment_header)?;
+                    let summary_before = self.header_summarize.summarize(&opus_header, &comment_header)?;
                     self.header_rewrite.rewrite(&mut opus_header, &mut comment_header)?;
-                    let summary_after = self.header_rewrite.summarize(&opus_header, &comment_header)?;
+                    let summary_after = self.header_summarize.summarize(&opus_header, &comment_header)?;
 
                     // We have decoded both of these already, so these should never fail
                     let opus_header_orig = OpusHeader::try_parse(&mut opus_header_packet_data_orig)
@@ -172,19 +196,20 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
 /// immediately if it is detected that no headers were modified, otherwise it
 /// will continue to rewrite the stream until the input stream is exhausted, an
 /// error occurs or the interrupt condition is set.
-pub fn rewrite_stream_with_interrupt<HR, R, W, I>(
-    rewrite: HR, input: R, mut output: W, abort_on_unchanged: bool, interrupt: &I,
-) -> Result<SubmitResult<HR::Summary>, HR::Error>
+pub fn rewrite_stream_with_interrupt<HR, HS, R, W, I, E>(
+    rewrite: HR, summarize: HS, input: R, mut output: W, abort_on_unchanged: bool, interrupt: &I,
+) -> Result<SubmitResult<HS::Summary>, E>
 where
-    HR::Error: From<Error>,
+    HR: HeaderRewrite<Error = E>,
+    HS: HeaderSummarize<Error = E>,
     R: Read + Seek,
     W: Write,
-    HR: HeaderRewrite,
     I: Interrupt,
+    E: From<Error>,
 {
     let mut ogg_reader = PacketReader::new(input);
     let ogg_writer = PacketWriter::new(&mut output);
-    let mut rewriter = HeaderRewriter::new(rewrite, ogg_writer);
+    let mut rewriter = HeaderRewriter::new(rewrite, summarize, ogg_writer);
     let mut result = SubmitResult::Good;
     loop {
         if interrupt.is_set() {
@@ -222,14 +247,15 @@ where
 
 /// Identical to `rewrite_stream_with_interrupt` except the rewrite loop cannot
 /// be interrupted.
-pub fn rewrite_stream<HR, R, W>(
-    rewrite: HR, input: R, output: W, abort_on_unchanged: bool,
-) -> Result<SubmitResult<HR::Summary>, HR::Error>
+pub fn rewrite_stream<HR, HS, R, W, E>(
+    rewrite: HR, summarize: HS, input: R, output: W, abort_on_unchanged: bool,
+) -> Result<SubmitResult<HS::Summary>, E>
 where
-    HR::Error: From<Error>,
+    HR: HeaderRewrite<Error = E>,
+    HS: HeaderSummarize<Error = E>,
     R: Read + Seek,
     W: Write,
-    HR: HeaderRewrite,
+    E: From<Error>,
 {
-    rewrite_stream_with_interrupt(rewrite, input, output, abort_on_unchanged, &Never::default())
+    rewrite_stream_with_interrupt(rewrite, summarize, input, output, abort_on_unchanged, &Never::default())
 }
