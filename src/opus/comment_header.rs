@@ -7,14 +7,27 @@ const COMMENT_MAGIC: &[u8] = b"OpusTags";
 
 /// Opus-specific comment header logic
 #[derive(Debug, Default, PartialEq)]
-pub struct CommentHeaderSpecifics {}
+pub struct CommentHeaderSpecifics {
+    suffix_data: Vec<u8>,
+}
 
 impl header::CommentHeaderSpecifics for CommentHeaderSpecifics {
     fn get_magic() -> Vec<u8> { COMMENT_MAGIC.into() }
 
-    fn read_suffix<R: Read>(&mut self, _reader: &mut R) -> Result<(), Error> { Ok(()) }
+    fn read_suffix<R: Read>(&mut self, reader: &mut R) -> Result<(), Error> {
+        // If the LSB of the first byte following the comments is set, we preserve
+        // this data as suggested by the spec, otherwise we discard it.
+        let mut buffer = [0u8];
+        if reader.read(&mut buffer).map_err(Error::ReadError)? == 1 && (buffer[0] & 1) != 0 {
+            self.suffix_data.extend(&buffer);
+            reader.read_to_end(&mut self.suffix_data).map_err(Error::ReadError)?;
+        }
+        Ok(())
+    }
 
-    fn write_suffix<W: Write>(&self, _writer: &mut W) -> Result<(), Error> { Ok(()) }
+    fn write_suffix<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write_all(&self.suffix_data).map_err(Error::WriteError)
+    }
 }
 
 /// Manipulates and Ogg Opus header

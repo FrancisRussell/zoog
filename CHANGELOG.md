@@ -7,6 +7,7 @@
 * Bump Rust edition to 2021.
 * Use clippy in pedantic mode for library and executables.
 * Some code refactoring to make clippy happier.
+* Preserve additional binary data in Opus comment header as suggested by the spec.
 
 ## 0.6.0
 

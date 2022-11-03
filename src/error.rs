@@ -29,6 +29,10 @@ pub enum Error {
     #[error("Ogg decoding error: `{0}`")]
     OggDecode(OggReadError),
 
+    /// A read error from a file
+    #[error("Error reading from file: `{0}`")]
+    ReadError(std::io::Error),
+
     /// A write error to a file
     #[error("Error writing to file: `{0}`")]
     WriteError(std::io::Error),
