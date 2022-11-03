@@ -109,6 +109,10 @@ pub enum Error {
     #[error("The operation was interrupted")]
     Interrupted,
 
+    /// Unsupported codec version
+    #[error("Version {1} of codec {0} is not supported")]
+    UnsupportedCodecVersion(Codec, u64),
+
     /// Unsupported codec
     #[error("The codec {0} was not supported for this operation")]
     UnsupportedCodec(Codec),

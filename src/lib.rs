@@ -32,6 +32,9 @@ pub mod header;
 /// Types for manipulating headers of Ogg Opus streams
 pub mod opus;
 
+/// Types for manipulating headers of Ogg Vorbis streams
+pub mod vorbis;
+
 pub use codec::*;
 pub use constants::global::*;
 pub use decibels::*;

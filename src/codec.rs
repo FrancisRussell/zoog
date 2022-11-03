@@ -4,12 +4,14 @@ use std::fmt::{self, Display, Formatter};
 #[derive(Debug, Clone, Copy)]
 pub enum Codec {
     Opus,
+    Vorbis,
 }
 
 impl Display for Codec {
     fn fmt(&self, formatter: &mut Formatter<'_>) -> Result<(), fmt::Error> {
         let name = match self {
             Codec::Opus => "Opus",
+            Codec::Vorbis => "Vorbis",
         };
         write!(formatter, "{}", name)
     }
