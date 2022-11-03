@@ -148,11 +148,7 @@ impl VolumeAnalyzer {
             }
             State::AwaitingComments => {
                 // Check comment header is valid
-                match CommentHeader::try_parse(&mut packet.data) {
-                    Ok(Some(_)) => (),
-                    Ok(None) => return Err(Error::MissingCommentHeader),
-                    Err(e) => return Err(e),
-                }
+                CommentHeader::try_parse(&mut packet.data)?;
                 self.state = State::Analyzing;
             }
             State::Analyzing => {

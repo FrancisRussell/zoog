@@ -189,12 +189,7 @@ where
                     let opus_header =
                         OpusHeader::try_parse(&mut opus_header_packet.data)?.ok_or(Error::MissingOpusStream)?;
                     // Parse comment header
-                    let comment_header = match CommentHeader::try_parse(&mut packet.data) {
-                        Ok(Some(header)) => header,
-                        Ok(None) => return Err(Error::MissingCommentHeader.into()),
-                        Err(e) => return Err(e.into()),
-                    };
-
+                    let comment_header = CommentHeader::try_parse(&mut packet.data)?;
                     let mut headers = CodecHeaders::Opus(opus_header, comment_header);
                     let summary_before = self.header_summarize.summarize(&headers)?;
                     self.header_rewrite.rewrite(&mut headers)?;
@@ -205,8 +200,7 @@ where
                         .expect("Opus header unexpectedly invalid")
                         .expect("Unexpectedly failed to find Opus header");
                     let comment_header_orig = CommentHeader::try_parse(&mut comment_header_data_orig)
-                        .expect("Unexpectedly failed to decode comment header")
-                        .expect("Comment header unexpectedly missing");
+                        .expect("Unexpectedly failed to decode comment header");
 
                     let orig_headers = CodecHeaders::Opus(opus_header_orig, comment_header_orig);
 

@@ -78,19 +78,16 @@ where
     }
 
     /// Attempts to parse the supplied `Vec` as an Opus comment header. An error
-    /// is returned if the header is believed to be corrupt, otherwise an
-    /// `Option` is returned containing either the parsed header or `None`
-    /// if the comment magic string was not found. This enables
-    /// distinguishing between a corrupted comment header and a packet which
-    /// does not appear to be a comment header.
-    pub fn try_parse(data: &'a mut Vec<u8>) -> Result<Option<CommentHeaderGeneric<'a, S>>, Error>
+    /// is returned if the header is believed to be corrupt, otherwise the
+    /// parsed header is returned.
+    pub fn try_parse(data: &'a mut Vec<u8>) -> Result<CommentHeaderGeneric<'a, S>, Error>
     where
         S: Default,
     {
         let magic = S::get_magic();
         let identical = data.iter().take(magic.len()).eq(magic.iter());
         if !identical {
-            return Ok(None);
+            return Err(Error::MalformedCommentHeader);
         }
         let mut reader = Cursor::new(&data[magic.len()..]);
         let vendor_len = Self::read_length(&mut reader)?;
@@ -110,7 +107,7 @@ where
         let mut specifics = S::default();
         specifics.read_postfix(&mut reader)?;
         let result = CommentHeaderGeneric { data, vendor, user_comments, specifics };
-        Ok(Some(result))
+        Ok(result)
     }
 
     fn commit(&mut self) -> Result<(), CommitError> {
