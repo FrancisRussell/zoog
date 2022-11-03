@@ -8,7 +8,7 @@ use crate::header::{parse_comment, CommentList, DiscreteCommentList};
 use crate::{header, Error, FIELD_NAME_TERMINATOR};
 
 /// Implementation-specific details of comment headers (Opus versus Vorbis)
-pub trait CommentHeaderSpecifics: Default {
+pub trait CommentHeaderSpecifics {
     /// Return the magic signature which should be present at the start of the
     /// header
     fn get_magic() -> Vec<u8>;
@@ -65,7 +65,10 @@ where
 
     /// Constructs an empty `CommentHeader`. The comment data will be placed in
     /// the supplied `Vec`. Any existing content will be discarded.
-    pub fn empty(data: &'a mut Vec<u8>) -> CommentHeaderGeneric<'a, S> {
+    pub fn empty(data: &'a mut Vec<u8>) -> CommentHeaderGeneric<'a, S>
+    where
+        S: Default,
+    {
         CommentHeaderGeneric {
             data,
             vendor: String::new(),
@@ -80,7 +83,10 @@ where
     /// if the comment magic string was not found. This enables
     /// distinguishing between a corrupted comment header and a packet which
     /// does not appear to be a comment header.
-    pub fn try_parse(data: &'a mut Vec<u8>) -> Result<Option<CommentHeaderGeneric<'a, S>>, Error> {
+    pub fn try_parse(data: &'a mut Vec<u8>) -> Result<Option<CommentHeaderGeneric<'a, S>>, Error>
+    where
+        S: Default,
+    {
         let magic = S::get_magic();
         let identical = data.iter().take(magic.len()).eq(magic.iter());
         if !identical {
@@ -168,9 +174,9 @@ where
 
 impl<'a, S> PartialEq for CommentHeaderGeneric<'a, S>
 where
-    S: CommentHeaderSpecifics,
+    S: CommentHeaderSpecifics + PartialEq,
 {
     fn eq(&self, other: &CommentHeaderGeneric<'a, S>) -> bool {
-        self.vendor == other.vendor && self.user_comments == other.user_comments
+        self.vendor == other.vendor && self.user_comments == other.user_comments && self.specifics == other.specifics
     }
 }

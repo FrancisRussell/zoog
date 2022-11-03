@@ -6,7 +6,7 @@ use crate::Error;
 const COMMENT_MAGIC: &[u8] = b"OpusTags";
 
 /// Opus-specific comment header logic
-#[derive(Debug, Default)]
+#[derive(Debug, Default, PartialEq)]
 pub struct CommentHeaderSpecifics {}
 
 impl header::CommentHeaderSpecifics for CommentHeaderSpecifics {
