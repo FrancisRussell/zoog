@@ -37,7 +37,11 @@ pub enum Error {
     #[error("Not an Opus stream")]
     MissingOpusStream,
 
-    /// The Opus comment header was invalid
+    /// The codec identification header was invalid
+    #[error("Malformed identification header")]
+    MalformedIdentificationHeader,
+
+    /// The comment header was invalid
     #[error("Malformed comment header")]
     MalformedCommentHeader,
 

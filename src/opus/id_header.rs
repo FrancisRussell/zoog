@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use crate::header::{self, FixedPointGain};
+use crate::header::{self, FixedPointGain, IdHeader as _};
 use crate::Error;
 
 const OPUS_MIN_HEADER_SIZE: usize = 19;
@@ -47,7 +47,11 @@ impl<'a> IdHeader<'a> {
         if !identical {
             return Ok(None);
         }
-        Ok(Some(IdHeader { data }))
+        let result = IdHeader { data };
+        if result.num_output_channels() == 0 {
+            return Err(Error::MalformedIdentificationHeader);
+        }
+        Ok(Some(result))
     }
 
     /// The current output gain set in the header
