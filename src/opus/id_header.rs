@@ -3,7 +3,7 @@ use std::io::Cursor;
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
 use crate::header::{self, FixedPointGain, IdHeader as _};
-use crate::Error;
+use crate::{Codec, Error};
 
 const OPUS_MIN_HEADER_SIZE: usize = 19;
 const OPUS_MAGIC: &[u8] = b"OpusHead";
@@ -48,6 +48,9 @@ impl<'a> IdHeader<'a> {
             return Ok(None);
         }
         let result = IdHeader { data };
+        if result.version() != 1 {
+            return Err(Error::UnsupportedCodecVersion(Codec::Opus, result.version() as u64));
+        }
         if result.num_output_channels() == 0 {
             return Err(Error::MalformedIdentificationHeader);
         }
@@ -74,6 +77,13 @@ impl<'a> IdHeader<'a> {
         let gain = gain.checked_add(adjustment).ok_or(Error::GainOutOfBounds)?;
         self.set_output_gain(gain);
         Ok(())
+    }
+
+    /// Gets the Opus encapsulation version
+    pub fn version(&self) -> u8 {
+        let mut reader = Cursor::new(&self.data[8..9]);
+        let value = reader.read_u8().expect("Error reading output channel count");
+        value.into()
     }
 }
 
