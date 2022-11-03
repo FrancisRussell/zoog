@@ -4,7 +4,7 @@ use ogg::Packet;
 use opus::{Channels, Decoder};
 
 use crate::header::IdHeader as _;
-use crate::opus::{CommentHeader, OpusHeader};
+use crate::opus::{CommentHeader as OpusCommentHeader, IdHeader as OpusIdHeader};
 use crate::{Decibels, Error};
 
 // Specified in RFC6716
@@ -140,7 +140,7 @@ impl VolumeAnalyzer {
     pub fn submit(&mut self, mut packet: Packet) -> Result<(), Error> {
         match self.state {
             State::AwaitingHeader => {
-                let header = OpusHeader::try_parse(&mut packet.data)?.ok_or(Error::MissingOpusStream)?;
+                let header = OpusIdHeader::try_parse(&mut packet.data)?.ok_or(Error::MissingOpusStream)?;
                 let channel_count = header.num_output_channels();
                 let sample_rate = header.output_sample_rate();
                 self.decode_state = Some(DecodeState::new(channel_count, sample_rate)?);
@@ -148,7 +148,7 @@ impl VolumeAnalyzer {
             }
             State::AwaitingComments => {
                 // Check comment header is valid
-                CommentHeader::try_parse(&mut packet.data)?;
+                OpusCommentHeader::try_parse(&mut packet.data)?;
                 self.state = State::Analyzing;
             }
             State::Analyzing => {

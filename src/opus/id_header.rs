@@ -2,7 +2,7 @@ use std::io::Cursor;
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use crate::header::{FixedPointGain, IdHeader};
+use crate::header::{self, FixedPointGain};
 use crate::Error;
 
 const OPUS_MIN_HEADER_SIZE: usize = 19;
@@ -13,11 +13,11 @@ const OPUS_DECODE_SAMPLE_RATE: usize = 48000;
 
 /// Allows querying and modification of an Opus identification header
 #[derive(Debug)]
-pub struct OpusHeader<'a> {
+pub struct IdHeader<'a> {
     data: &'a mut Vec<u8>,
 }
 
-impl IdHeader for OpusHeader<'_> {
+impl header::IdHeader for IdHeader<'_> {
     fn num_output_channels(&self) -> usize {
         let mut reader = Cursor::new(&self.data[9..10]);
         let value = reader.read_u8().expect("Error reading output channel count");
@@ -37,9 +37,9 @@ impl IdHeader for OpusHeader<'_> {
     fn output_sample_rate(&self) -> usize { OPUS_DECODE_SAMPLE_RATE }
 }
 
-impl<'a> OpusHeader<'a> {
+impl<'a> IdHeader<'a> {
     /// Attempts to parse the supplied `Vec` as an Opus header
-    pub fn try_parse(data: &'a mut Vec<u8>) -> Result<Option<OpusHeader<'a>>, Error> {
+    pub fn try_parse(data: &'a mut Vec<u8>) -> Result<Option<IdHeader<'a>>, Error> {
         if data.len() < OPUS_MIN_HEADER_SIZE {
             return Ok(None);
         }
@@ -47,7 +47,7 @@ impl<'a> OpusHeader<'a> {
         if !identical {
             return Ok(None);
         }
-        Ok(Some(OpusHeader { data }))
+        Ok(Some(IdHeader { data }))
     }
 
     /// The current output gain set in the header
@@ -73,6 +73,6 @@ impl<'a> OpusHeader<'a> {
     }
 }
 
-impl<'a> PartialEq for OpusHeader<'a> {
-    fn eq(&self, other: &OpusHeader) -> bool { self.data == other.data }
+impl<'a> PartialEq for IdHeader<'a> {
+    fn eq(&self, other: &IdHeader) -> bool { self.data == other.data }
 }

@@ -7,8 +7,7 @@ use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use ogg::{Packet, PacketReader};
 
 use crate::interrupt::{Interrupt, Never};
-use crate::opus::{self, CommentHeader, OpusHeader};
-use crate::{header, Codec, Error};
+use crate::{header, opus, Codec, Error};
 
 /// The result of submitting a packet to a `HeaderRewriter`
 #[derive(Debug)]
@@ -35,7 +34,7 @@ enum State {
 /// Enumeration of ID and comment headers for all supported codecs
 #[derive(Debug, PartialEq)]
 pub enum CodecHeaders<'a> {
-    Opus(opus::OpusHeader<'a>, opus::CommentHeader<'a>),
+    Opus(opus::IdHeader<'a>, opus::CommentHeader<'a>),
 }
 
 impl CodecHeaders<'_> {
@@ -187,19 +186,19 @@ where
 
                     // Parse Opus header
                     let opus_header =
-                        OpusHeader::try_parse(&mut opus_header_packet.data)?.ok_or(Error::MissingOpusStream)?;
+                        opus::IdHeader::try_parse(&mut opus_header_packet.data)?.ok_or(Error::MissingOpusStream)?;
                     // Parse comment header
-                    let comment_header = CommentHeader::try_parse(&mut packet.data)?;
+                    let comment_header = opus::CommentHeader::try_parse(&mut packet.data)?;
                     let mut headers = CodecHeaders::Opus(opus_header, comment_header);
                     let summary_before = self.header_summarize.summarize(&headers)?;
                     self.header_rewrite.rewrite(&mut headers)?;
                     let summary_after = self.header_summarize.summarize(&headers)?;
 
                     // We have decoded both of these already, so these should never fail
-                    let opus_header_orig = OpusHeader::try_parse(&mut opus_header_packet_data_orig)
+                    let opus_header_orig = opus::IdHeader::try_parse(&mut opus_header_packet_data_orig)
                         .expect("Opus header unexpectedly invalid")
                         .expect("Unexpectedly failed to find Opus header");
-                    let comment_header_orig = CommentHeader::try_parse(&mut comment_header_data_orig)
+                    let comment_header_orig = opus::CommentHeader::try_parse(&mut comment_header_data_orig)
                         .expect("Unexpectedly failed to decode comment header");
 
                     let orig_headers = CodecHeaders::Opus(opus_header_orig, comment_header_orig);
