@@ -14,10 +14,10 @@ pub trait CommentHeaderSpecifics {
     fn get_magic() -> Vec<u8>;
 
     /// Reads any bytes which should be present after comments
-    fn read_postfix<R: Read>(&mut self, reader: &mut R) -> Result<(), Error>;
+    fn read_suffix<R: Read>(&mut self, reader: &mut R) -> Result<(), Error>;
 
     /// Writes any bytes which should be present after comments
-    fn write_postfix<W: Write>(&self, writer: &mut W) -> Result<(), Error>;
+    fn write_suffix<W: Write>(&self, writer: &mut W) -> Result<(), Error>;
 }
 
 /// Allows querying and modification of an Opus/Vorbis comment header. This type
@@ -105,7 +105,7 @@ where
             user_comments.push(key, value)?;
         }
         let mut specifics = S::default();
-        specifics.read_postfix(&mut reader)?;
+        specifics.read_suffix(&mut reader)?;
         let result = CommentHeaderGeneric { data, vendor, user_comments, specifics };
         Ok(result)
     }
@@ -128,7 +128,7 @@ where
             data.push(FIELD_NAME_TERMINATOR);
             data.extend(v);
         }
-        self.specifics.write_postfix(data).expect("Error writing comment postfix data");
+        self.specifics.write_suffix(data).expect("Error writing comment postfix data");
         Ok(())
     }
 }
