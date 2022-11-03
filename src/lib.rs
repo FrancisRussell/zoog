@@ -2,6 +2,7 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate, clippy::uninlined_format_args, clippy::doc_markdown)]
 
+mod codec;
 mod constants;
 mod decibels;
 mod error;
@@ -31,6 +32,7 @@ pub mod header;
 /// Types for manipulating headers of Ogg Opus streams
 pub mod opus;
 
+pub use codec::*;
 pub use constants::global::*;
 pub use decibels::*;
 pub use error::*;

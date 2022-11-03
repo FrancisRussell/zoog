@@ -1,8 +1,7 @@
 use derivative::Derivative;
 
-use crate::header::{CommentHeader as _, CommentList, DiscreteCommentList};
-use crate::header_rewriter::{HeaderRewrite, HeaderSummarize};
-use crate::opus::{CommentHeader, OpusHeader};
+use crate::header::{self, CommentList, DiscreteCommentList};
+use crate::header_rewriter::{HeaderRewriteGeneric, HeaderSummarizeGeneric};
 use crate::Error;
 
 /// Mode type for `CommentRewriter`
@@ -40,21 +39,27 @@ impl CommentHeaderRewrite<'_> {
 #[derive(Debug, Default)]
 pub struct CommentHeaderSummary {}
 
-impl HeaderSummarize for CommentHeaderSummary {
+impl HeaderSummarizeGeneric for CommentHeaderSummary {
     type Error = Error;
     type Summary = DiscreteCommentList;
 
-    fn summarize(
-        &self, _opus_header: &OpusHeader, comment_header: &CommentHeader,
-    ) -> Result<DiscreteCommentList, Error> {
+    fn summarize<I, C>(&self, _id_header: &I, comment_header: &C) -> Result<DiscreteCommentList, Error>
+    where
+        I: header::IdHeader,
+        C: header::CommentHeader,
+    {
         Ok(comment_header.to_discrete_comment_list())
     }
 }
 
-impl HeaderRewrite for CommentHeaderRewrite<'_> {
+impl HeaderRewriteGeneric for CommentHeaderRewrite<'_> {
     type Error = Error;
 
-    fn rewrite(&self, _opus_header: &mut OpusHeader, comment_header: &mut CommentHeader) -> Result<(), Error> {
+    fn rewrite<I, C>(&self, _idheader: &mut I, comment_header: &mut C) -> Result<(), Error>
+    where
+        I: header::IdHeader,
+        C: header::CommentHeader,
+    {
         match &self.config.action {
             CommentRewriterAction::NoChange => {}
             CommentRewriterAction::Replace(tags) => {

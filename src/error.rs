@@ -4,7 +4,7 @@ use ogg::reading::OggReadError;
 use tempfile::PersistError;
 use thiserror::Error;
 
-use crate::escaping;
+use crate::{escaping, Codec};
 
 /// The Zoog error type
 #[derive(Debug, Error)]
@@ -104,4 +104,8 @@ pub enum Error {
     /// An interrupt was detected
     #[error("The operation was interrupted")]
     Interrupted,
+
+    /// Unsupported codec
+    #[error("The codec {0} was not supported for this operation")]
+    UnsupportedCodec(Codec),
 }

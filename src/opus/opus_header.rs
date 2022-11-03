@@ -12,6 +12,7 @@ const OPUS_MAGIC: &[u8] = b"OpusHead";
 const OPUS_DECODE_SAMPLE_RATE: usize = 48000;
 
 /// Allows querying and modification of an Opus identification header
+#[derive(Debug)]
 pub struct OpusHeader<'a> {
     data: &'a mut Vec<u8>,
 }

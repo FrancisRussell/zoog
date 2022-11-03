@@ -8,7 +8,7 @@ use ogg::{Packet, PacketReader};
 
 use crate::interrupt::{Interrupt, Never};
 use crate::opus::{self, CommentHeader, OpusHeader};
-use crate::Error;
+use crate::{header, Codec, Error};
 
 /// The result of submitting a packet to a `HeaderRewriter`
 #[derive(Debug)]
@@ -32,12 +32,18 @@ enum State {
     Forwarding,
 }
 
+/// Enumeration of ID and comment headers for all supported codecs
+#[derive(Debug, PartialEq)]
 pub enum CodecHeaders<'a> {
-    Opus(&'a opus::CommentHeader<'a>, &'a opus::OpusHeader<'a>),
+    Opus(opus::OpusHeader<'a>, opus::CommentHeader<'a>),
 }
 
-pub enum CodecHeadersMut<'a> {
-    Opus(&'a mut opus::CommentHeader<'a>, &'a mut opus::OpusHeader<'a>),
+impl CodecHeaders<'_> {
+    pub fn codec(&self) -> Codec {
+        match self {
+            CodecHeaders::Opus(_, _) => Codec::Opus,
+        }
+    }
 }
 
 /// Trait for types used to summarize codec headers
@@ -51,17 +57,72 @@ pub trait HeaderSummarize {
 
     /// Summarizes the content of a header to be reported back via
     /// `SubmitResult`
-    fn summarize(&self, opus_header: &OpusHeader, comment_header: &CommentHeader)
-        -> Result<Self::Summary, Self::Error>;
+    fn summarize(&self, headers: &CodecHeaders) -> Result<Self::Summary, Self::Error>;
 }
 
-/// Trait for types used to parameterize a `HeaderRewriter`
+/// Trait for implementing `HeaderSummarize` when headers of different
+/// codecs can be treated equivalently.
+pub trait HeaderSummarizeGeneric {
+    /// Type for summarizing header content which is reported back via
+    /// `SubmitResult`
+    type Summary;
+
+    /// Type for errors thrown during summarization
+    type Error;
+
+    /// Summarizes the content of a header to be reported back via
+    /// `SubmitResult`
+    fn summarize<I: header::IdHeader, C: header::CommentHeader>(
+        &self, id_header: &I, comment_header: &C,
+    ) -> Result<Self::Summary, Self::Error>;
+}
+
+impl<T> HeaderSummarize for T
+where
+    T: HeaderSummarizeGeneric,
+{
+    type Error = T::Error;
+    type Summary = T::Summary;
+
+    fn summarize(&self, headers: &CodecHeaders) -> Result<Self::Summary, Self::Error> {
+        match headers {
+            CodecHeaders::Opus(id, comment) => HeaderSummarizeGeneric::summarize(self, id, comment),
+        }
+    }
+}
+
+/// Trait for codec header rewriting
 pub trait HeaderRewrite {
     /// Type for errors thrown during header update
     type Error;
 
     /// Rewrites the Opus and Opus comment headers
-    fn rewrite(&self, opus_header: &mut OpusHeader, comment_header: &mut CommentHeader) -> Result<(), Self::Error>;
+    fn rewrite(&self, headers: &mut CodecHeaders) -> Result<(), Self::Error>;
+}
+
+/// Trait for implementing `HeaderRewrite` when different codecs can be treated
+/// equivalently
+pub trait HeaderRewriteGeneric {
+    /// Type for errors thrown during header update
+    type Error;
+
+    /// Rewrites ID and comment headers
+    fn rewrite<I: header::IdHeader, C: header::CommentHeader>(
+        &self, id_header: &mut I, comment_header: &mut C,
+    ) -> Result<(), Self::Error>;
+}
+
+impl<T> HeaderRewrite for T
+where
+    T: HeaderRewriteGeneric,
+{
+    type Error = T::Error;
+
+    fn rewrite(&self, headers: &mut CodecHeaders) -> Result<(), Self::Error> {
+        match headers {
+            CodecHeaders::Opus(id, comment) => HeaderRewriteGeneric::rewrite(self, id, comment),
+        }
+    }
 }
 
 /// Re-writes an Ogg Opus stream with modified headers
@@ -125,17 +186,19 @@ where
                     let mut comment_header_data_orig = packet.data.clone();
 
                     // Parse Opus header
-                    let mut opus_header =
+                    let opus_header =
                         OpusHeader::try_parse(&mut opus_header_packet.data)?.ok_or(Error::MissingOpusStream)?;
                     // Parse comment header
-                    let mut comment_header = match CommentHeader::try_parse(&mut packet.data) {
+                    let comment_header = match CommentHeader::try_parse(&mut packet.data) {
                         Ok(Some(header)) => header,
                         Ok(None) => return Err(Error::MissingCommentHeader.into()),
                         Err(e) => return Err(e.into()),
                     };
-                    let summary_before = self.header_summarize.summarize(&opus_header, &comment_header)?;
-                    self.header_rewrite.rewrite(&mut opus_header, &mut comment_header)?;
-                    let summary_after = self.header_summarize.summarize(&opus_header, &comment_header)?;
+
+                    let mut headers = CodecHeaders::Opus(opus_header, comment_header);
+                    let summary_before = self.header_summarize.summarize(&headers)?;
+                    self.header_rewrite.rewrite(&mut headers)?;
+                    let summary_after = self.header_summarize.summarize(&headers)?;
 
                     // We have decoded both of these already, so these should never fail
                     let opus_header_orig = OpusHeader::try_parse(&mut opus_header_packet_data_orig)
@@ -145,10 +208,12 @@ where
                         .expect("Unexpectedly failed to decode comment header")
                         .expect("Comment header unexpectedly missing");
 
+                    let orig_headers = CodecHeaders::Opus(opus_header_orig, comment_header_orig);
+
                     // We compare headers rather than the values of the `OpusGains` structs because
                     // using the latter glosses over issues such as duplicate or invalid gain tags
                     // which we will fix if present.
-                    let changed = (opus_header != opus_header_orig) || (comment_header != comment_header_orig);
+                    let changed = headers != orig_headers;
                     (summary_before, summary_after, changed)
                 };
                 self.packet_queue.push_back(opus_header_packet);
