@@ -8,6 +8,8 @@
 * Use clippy in pedantic mode for library and executables.
 * Some code refactoring to make clippy happier.
 * Preserve additional binary data in Opus comment header as suggested by the spec.
+* Significant refactoring for multiple codec support.
+* Add `opuscomment` support for Ogg Vorbis and rename to `zoogcomment`.
 
 ## 0.6.0
 
