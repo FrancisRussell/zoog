@@ -35,6 +35,8 @@ pub type CommentHeader = CommentHeaderGeneric<CommentHeaderSpecifics>;
 
 #[cfg(test)]
 mod tests {
+    use std::borrow::Cow;
+
     use rand::distributions::{Standard, Uniform};
     use rand::rngs::SmallRng;
     use rand::{Rng, SeedableRng};
@@ -66,8 +68,8 @@ mod tests {
         result
     }
 
-    fn create_random_header<'a, 'b, R: Rng>(engine: &'b mut R, data: &'a mut Vec<u8>) -> CommentHeader<'a> {
-        let mut header = CommentHeader::empty(data);
+    fn create_random_header<R: Rng>(engine: &mut R) -> CommentHeader {
+        let mut header = CommentHeader::empty();
         header.set_vendor(&random_string(engine, false));
         let num_comments_dist = Uniform::new_inclusive(0, MAX_COMMENTS);
         let num_comments = engine.sample(&num_comments_dist);
@@ -80,29 +82,15 @@ mod tests {
     }
 
     #[test]
-    fn drop_does_commit() {
-        let mut rng = SmallRng::seed_from_u64(24745);
-        let mut header_data = Vec::new();
-        {
-            create_random_header(&mut rng, &mut header_data);
-        }
-        assert_ne!(header_data.len(), 0);
-    }
-
-    #[test]
-    fn parse_and_commit_is_identity() {
+    fn parse_and_encode_is_identity() {
         let mut rng = SmallRng::seed_from_u64(19489);
         for _ in 0..NUM_IDENTITY_TESTS {
-            let mut header_data = Vec::new();
-            {
-                create_random_header(&mut rng, &mut header_data);
-            }
-            let header_data_original = header_data.clone();
-            {
-                CommentHeader::try_parse(&mut header_data)
-                    .expect("Error parsing generated header")
-                    .expect("Previously generated header was not recognised");
-            }
+            let header_data_original =
+                create_random_header(&mut rng).into_vec().expect("Failed to encode comment header");
+            let header_data = CommentHeader::try_parse(Cow::from(&header_data_original))
+                .expect("Previously generated header was not recognised")
+                .into_vec()
+                .expect("Failed to encode comment header");
             assert_eq!(header_data_original, header_data);
         }
     }
@@ -112,13 +100,13 @@ mod tests {
         let mut header: Vec<u8> = COMMENT_MAGIC.iter().cloned().collect();
         let last_byte = header.last_mut().unwrap();
         *header.last_mut().unwrap() = last_byte.wrapping_add(1);
-        assert!(CommentHeader::try_parse(&mut header).unwrap().is_none());
+        assert!(CommentHeader::try_parse(Cow::from(header)).is_err());
     }
 
     #[test]
     fn truncated_header() {
-        let mut header: Vec<u8> = COMMENT_MAGIC.iter().cloned().collect();
-        match CommentHeader::try_parse(&mut header) {
+        let header: Vec<u8> = COMMENT_MAGIC.iter().cloned().collect();
+        match CommentHeader::try_parse(Cow::from(header)) {
             Err(Error::MalformedCommentHeader) => {}
             _ => assert!(false, "Wrong error for malformed header"),
         };
