@@ -95,8 +95,7 @@ impl HeaderSummarize for GainsSummary {
                 };
                 Ok(gains)
             }
-            #[allow(unreachable_patterns)]
-            _ => Err(Error::UnsupportedCodec(headers.codec())),
+            CodecHeaders::Vorbis(_, _) => Err(Error::UnsupportedCodec(headers.codec())),
         }
     }
 }
@@ -148,8 +147,7 @@ impl HeaderRewrite for VolumeHeaderRewrite {
                 }
                 Ok(())
             }
-            #[allow(unreachable_patterns)]
-            _ => Err(Error::UnsupportedCodec(headers.codec())),
+            CodecHeaders::Vorbis(_, _) => Err(Error::UnsupportedCodec(headers.codec())),
         }
     }
 }

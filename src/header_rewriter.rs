@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::io::{Read, Seek, Write};
 use std::marker::PhantomData;
@@ -7,7 +8,7 @@ use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use ogg::{Packet, PacketReader};
 
 use crate::interrupt::{Interrupt, Never};
-use crate::{header, opus, Codec, Error};
+use crate::{header, opus, vorbis, Codec, Error};
 
 /// The result of submitting a packet to a `HeaderRewriter`
 #[derive(Debug)]
@@ -32,16 +33,26 @@ enum State {
 }
 
 /// Enumeration of ID and comment headers for all supported codecs
-#[derive(Debug, PartialEq)]
-pub enum CodecHeaders<'a> {
-    Opus(opus::IdHeader<'a>, opus::CommentHeader<'a>),
+#[derive(Clone, Debug, PartialEq)]
+pub enum CodecHeaders {
+    Opus(opus::IdHeader, opus::CommentHeader),
+    Vorbis(vorbis::IdHeader, vorbis::CommentHeader),
 }
 
-impl CodecHeaders<'_> {
+impl CodecHeaders {
     pub fn codec(&self) -> Codec {
         match self {
             CodecHeaders::Opus(_, _) => Codec::Opus,
+            CodecHeaders::Vorbis(_, _) => Codec::Vorbis,
         }
+    }
+
+    pub fn into_data(self) -> Result<(Vec<u8>, Vec<u8>), Error> {
+        let result = match self {
+            CodecHeaders::Opus(i, c) => (i.into_vec(), c.into_vec()?),
+            CodecHeaders::Vorbis(i, c) => (i.into_vec(), c.into_vec()?),
+        };
+        Ok(result)
     }
 }
 
@@ -86,6 +97,7 @@ where
     fn summarize(&self, headers: &CodecHeaders) -> Result<Self::Summary, Self::Error> {
         match headers {
             CodecHeaders::Opus(id, comment) => HeaderSummarizeGeneric::summarize(self, id, comment),
+            CodecHeaders::Vorbis(id, comment) => HeaderSummarizeGeneric::summarize(self, id, comment),
         }
     }
 }
@@ -120,6 +132,7 @@ where
     fn rewrite(&self, headers: &mut CodecHeaders) -> Result<(), Self::Error> {
         match headers {
             CodecHeaders::Opus(id, comment) => HeaderRewriteGeneric::rewrite(self, id, comment),
+            CodecHeaders::Vorbis(id, comment) => HeaderRewriteGeneric::rewrite(self, id, comment),
         }
     }
 }
@@ -162,6 +175,18 @@ where
         }
     }
 
+    fn parse_codec_headers(identification: Cow<[u8]>, comment: Cow<[u8]>) -> Result<CodecHeaders, Error> {
+        if let Some(opus_header) = opus::IdHeader::try_parse(Cow::from(identification.as_ref()))? {
+            let comment_header = opus::CommentHeader::try_parse(comment)?;
+            return Ok(CodecHeaders::Opus(opus_header, comment_header));
+        }
+        if let Some(vorbis_header) = vorbis::IdHeader::try_parse(identification)? {
+            let comment_header = vorbis::CommentHeader::try_parse(comment)?;
+            return Ok(CodecHeaders::Vorbis(vorbis_header, comment_header));
+        }
+        Err(Error::UnknownCodec)
+    }
+
     /// Submits a new packet to the rewriter. If `Ready` is returned, another
     /// packet from the same stream should continue to be submitted. If
     /// `HeadersUnchanged` is returned, the supplied stream did not need
@@ -178,38 +203,24 @@ where
             }
             State::AwaitingComments => {
                 // Parse Opus header
-                let mut opus_header_packet = self.header_packet.take().expect("Missing header packet");
+                let mut id_header_packet = self.header_packet.take().expect("Missing header packet");
                 let (summary_before, summary_after, changed) = {
-                    // Create copies of Opus and comment header to check if they have changed
-                    let mut opus_header_packet_data_orig = opus_header_packet.data.clone();
-                    let mut comment_header_data_orig = packet.data.clone();
-
-                    // Parse Opus header
-                    let opus_header =
-                        opus::IdHeader::try_parse(&mut opus_header_packet.data)?.ok_or(Error::MissingOpusStream)?;
-                    // Parse comment header
-                    let comment_header = opus::CommentHeader::try_parse(&mut packet.data)?;
-                    let mut headers = CodecHeaders::Opus(opus_header, comment_header);
+                    // Parse headers
+                    let original_headers =
+                        Self::parse_codec_headers(Cow::from(&id_header_packet.data), Cow::from(&packet.data))?;
+                    let mut headers = original_headers.clone();
                     let summary_before = self.header_summarize.summarize(&headers)?;
                     self.header_rewrite.rewrite(&mut headers)?;
                     let summary_after = self.header_summarize.summarize(&headers)?;
 
-                    // We have decoded both of these already, so these should never fail
-                    let opus_header_orig = opus::IdHeader::try_parse(&mut opus_header_packet_data_orig)
-                        .expect("Opus header unexpectedly invalid")
-                        .expect("Unexpectedly failed to find Opus header");
-                    let comment_header_orig = opus::CommentHeader::try_parse(&mut comment_header_data_orig)
-                        .expect("Unexpectedly failed to decode comment header");
-
-                    let orig_headers = CodecHeaders::Opus(opus_header_orig, comment_header_orig);
-
                     // We compare headers rather than the values of the `OpusGains` structs because
                     // using the latter glosses over issues such as duplicate or invalid gain tags
                     // which we will fix if present.
-                    let changed = headers != orig_headers;
+                    let changed = headers != original_headers;
+                    (id_header_packet.data, packet.data) = headers.into_data()?;
                     (summary_before, summary_after, changed)
                 };
-                self.packet_queue.push_back(opus_header_packet);
+                self.packet_queue.push_back(id_header_packet);
                 self.packet_queue.push_back(packet);
                 self.state = State::Forwarding;
 

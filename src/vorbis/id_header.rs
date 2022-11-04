@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io::Cursor;
 
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -9,12 +10,12 @@ const VORBIS_MIN_HEADER_SIZE: usize = 30;
 const VORBIS_MAGIC: &[u8] = b"\x01vorbis";
 
 /// Allows querying and modification of a Vorbis identification header
-#[derive(Debug)]
-pub struct IdHeader<'a> {
-    data: &'a mut Vec<u8>,
+#[derive(Clone, Debug)]
+pub struct IdHeader {
+    data: Vec<u8>,
 }
 
-impl header::IdHeader for IdHeader<'_> {
+impl header::IdHeader for IdHeader {
     fn num_output_channels(&self) -> usize {
         let mut reader = Cursor::new(&self.data[11..12]);
         let value = reader.read_u8().expect("Error reading output channel count");
@@ -30,9 +31,9 @@ impl header::IdHeader for IdHeader<'_> {
     }
 }
 
-impl<'a> IdHeader<'a> {
+impl IdHeader {
     /// Attempts to parse the supplied `Vec` as an Vorbis header
-    pub fn try_parse(data: &'a mut Vec<u8>) -> Result<Option<IdHeader<'a>>, Error> {
+    pub fn try_parse(data: Cow<[u8]>) -> Result<Option<IdHeader>, Error> {
         if data.len() < VORBIS_MIN_HEADER_SIZE {
             return Ok(None);
         }
@@ -40,9 +41,9 @@ impl<'a> IdHeader<'a> {
         if !identical {
             return Ok(None);
         }
-        let result = IdHeader { data };
+        let result = IdHeader { data: data.into_owned() };
         if result.version() != 0 {
-            return Err(Error::UnsupportedCodecVersion(Codec::Vorbis, result.version() as u64));
+            return Err(Error::UnsupportedCodecVersion(Codec::Vorbis, u64::from(result.version())));
         }
         let mut invalid = false;
         invalid &= result.num_output_channels() == 0;
@@ -60,8 +61,11 @@ impl<'a> IdHeader<'a> {
         let mut reader = Cursor::new(&self.data[7..11]);
         reader.read_u32::<LittleEndian>().expect("Error reading version")
     }
+
+    /// Converts the header into data
+    pub fn into_vec(self) -> Vec<u8> { self.data }
 }
 
-impl<'a> PartialEq for IdHeader<'a> {
+impl PartialEq for IdHeader {
     fn eq(&self, other: &IdHeader) -> bool { self.data == other.data }
 }

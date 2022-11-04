@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use bs1770::{ChannelLoudnessMeter, Power, Windows100ms};
 use derivative::Derivative;
 use ogg::Packet;
@@ -137,10 +139,10 @@ impl Default for VolumeAnalyzer {
 
 impl VolumeAnalyzer {
     /// Submits a new Ogg packet to the analyzer
-    pub fn submit(&mut self, mut packet: Packet) -> Result<(), Error> {
+    pub fn submit(&mut self, packet: Packet) -> Result<(), Error> {
         match self.state {
             State::AwaitingHeader => {
-                let header = OpusIdHeader::try_parse(&mut packet.data)?.ok_or(Error::MissingOpusStream)?;
+                let header = OpusIdHeader::try_parse(Cow::from(packet.data))?.ok_or(Error::MissingOpusStream)?;
                 let channel_count = header.num_output_channels();
                 let sample_rate = header.output_sample_rate();
                 self.decode_state = Some(DecodeState::new(channel_count, sample_rate)?);
@@ -148,7 +150,7 @@ impl VolumeAnalyzer {
             }
             State::AwaitingComments => {
                 // Check comment header is valid
-                OpusCommentHeader::try_parse(&mut packet.data)?;
+                OpusCommentHeader::try_parse(Cow::from(packet.data))?;
                 self.state = State::Analyzing;
             }
             State::Analyzing => {

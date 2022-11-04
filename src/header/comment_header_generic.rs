@@ -1,8 +1,8 @@
+use std::borrow::Cow;
 use std::io::{Cursor, Read, Write};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 use derivative::Derivative;
-use thiserror::Error;
 
 use crate::header::{parse_comment, CommentList, DiscreteCommentList};
 use crate::{header, Error, FIELD_NAME_TERMINATOR};
@@ -24,36 +24,28 @@ pub trait CommentHeaderSpecifics {
 /// is parameterized by a type implementing `CommentHeaderSpecifics` which
 /// encodes format-specific logic.
 #[derive(Derivative)]
-#[derivative(Debug)]
-pub struct CommentHeaderGeneric<'a, S>
+#[derivative(Clone, Debug)]
+pub struct CommentHeaderGeneric<S>
 where
-    S: CommentHeaderSpecifics,
+    S: CommentHeaderSpecifics + Clone,
 {
-    #[derivative(Debug = "ignore")]
-    data: &'a mut Vec<u8>,
     vendor: String,
     user_comments: DiscreteCommentList,
     specifics: S,
 }
 
-#[derive(Debug, Error)]
-enum CommitError {
-    #[error("Value unrepresentable in comment header")]
-    ValueTooLarge,
-}
-
-impl<S> header::CommentHeader for CommentHeaderGeneric<'_, S>
+impl<S> header::CommentHeader for CommentHeaderGeneric<S>
 where
-    S: CommentHeaderSpecifics,
+    S: CommentHeaderSpecifics + Clone,
 {
     fn set_vendor(&mut self, vendor: &str) { self.vendor = vendor.into(); }
 
     fn to_discrete_comment_list(&self) -> DiscreteCommentList { self.user_comments.clone() }
 }
 
-impl<'a, S> CommentHeaderGeneric<'a, S>
+impl<S> CommentHeaderGeneric<S>
 where
-    S: CommentHeaderSpecifics,
+    S: CommentHeaderSpecifics + Clone,
 {
     fn read_length<R: Read>(mut reader: R) -> Result<u32, Error> {
         reader.read_u32::<LittleEndian>().map_err(|_| Error::MalformedCommentHeader)
@@ -65,12 +57,11 @@ where
 
     /// Constructs an empty `CommentHeader`. The comment data will be placed in
     /// the supplied `Vec`. Any existing content will be discarded.
-    pub fn empty(data: &'a mut Vec<u8>) -> CommentHeaderGeneric<'a, S>
+    pub fn empty() -> CommentHeaderGeneric<S>
     where
         S: Default,
     {
         CommentHeaderGeneric {
-            data,
             vendor: String::new(),
             user_comments: DiscreteCommentList::default(),
             specifics: Default::default(),
@@ -80,7 +71,7 @@ where
     /// Attempts to parse the supplied `Vec` as an Opus comment header. An error
     /// is returned if the header is believed to be corrupt, otherwise the
     /// parsed header is returned.
-    pub fn try_parse(data: &'a mut Vec<u8>) -> Result<CommentHeaderGeneric<'a, S>, Error>
+    pub fn try_parse(data: Cow<[u8]>) -> Result<CommentHeaderGeneric<S>, Error>
     where
         S: Default,
     {
@@ -106,36 +97,36 @@ where
         }
         let mut specifics = S::default();
         specifics.read_suffix(&mut reader)?;
-        let result = CommentHeaderGeneric { data, vendor, user_comments, specifics };
+        let result = CommentHeaderGeneric { vendor, user_comments, specifics };
         Ok(result)
     }
 
-    fn commit(&mut self) -> Result<(), CommitError> {
-        let data = &mut *self.data;
-        data.clear();
+    pub fn into_vec(self) -> Result<Vec<u8>, Error> {
+        let mut data = Vec::new();
         data.extend(S::get_magic());
         let vendor = self.vendor.as_bytes();
-        let vendor_len = vendor.len().try_into().map_err(|_| CommitError::ValueTooLarge)?;
+        let vendor_len = vendor.len().try_into().map_err(|_| Error::UnrepresentableValueInCommentHeader)?;
         data.write_u32::<LittleEndian>(vendor_len).expect("Error writing vendor length");
         data.extend(vendor);
-        let user_comments_len = self.user_comments.len().try_into().map_err(|_| CommitError::ValueTooLarge)?;
+        let user_comments_len =
+            self.user_comments.len().try_into().map_err(|_| Error::UnrepresentableValueInCommentHeader)?;
         data.write_u32::<LittleEndian>(user_comments_len).expect("Error writing user comment count");
         for (k, v) in self.user_comments.iter().map(|(k, v)| (k.as_bytes(), v.as_bytes())) {
             let comment_len = k.len() + v.len() + 1;
-            let comment_len = comment_len.try_into().map_err(|_| CommitError::ValueTooLarge)?;
+            let comment_len = comment_len.try_into().map_err(|_| Error::UnrepresentableValueInCommentHeader)?;
             data.write_u32::<LittleEndian>(comment_len).expect("Error writing user comment length");
             data.extend(k);
             data.push(FIELD_NAME_TERMINATOR);
             data.extend(v);
         }
-        self.specifics.write_suffix(data).expect("Error writing comment postfix data");
-        Ok(())
+        self.specifics.write_suffix(&mut data).expect("Error writing comment postfix data");
+        Ok(data)
     }
 }
 
-impl<'a, S> CommentList for CommentHeaderGeneric<'a, S>
+impl<S> CommentList for CommentHeaderGeneric<S>
 where
-    S: CommentHeaderSpecifics,
+    S: CommentHeaderSpecifics + Clone,
 {
     type Iter<'b> = <DiscreteCommentList as CommentList>::Iter<'b> where Self: 'b;
 
@@ -158,22 +149,11 @@ where
     fn retain<F: FnMut(&str, &str) -> bool>(&mut self, f: F) { self.user_comments.retain(f) }
 }
 
-impl<'a, S> Drop for CommentHeaderGeneric<'a, S>
+impl<S> PartialEq for CommentHeaderGeneric<S>
 where
-    S: CommentHeaderSpecifics,
+    S: CommentHeaderSpecifics + PartialEq + Clone,
 {
-    fn drop(&mut self) {
-        if let Err(e) = self.commit() {
-            panic!("Failed to commit changes to CommentHeader: {}", e);
-        }
-    }
-}
-
-impl<'a, S> PartialEq for CommentHeaderGeneric<'a, S>
-where
-    S: CommentHeaderSpecifics + PartialEq,
-{
-    fn eq(&self, other: &CommentHeaderGeneric<'a, S>) -> bool {
+    fn eq(&self, other: &CommentHeaderGeneric<S>) -> bool {
         self.vendor == other.vendor && self.user_comments == other.user_comments && self.specifics == other.specifics
     }
 }

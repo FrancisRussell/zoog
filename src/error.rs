@@ -41,6 +41,10 @@ pub enum Error {
     #[error("Not an Opus stream")]
     MissingOpusStream,
 
+    /// The stream was not of a recognised codec
+    #[error("Unknown codec")]
+    UnknownCodec,
+
     /// The codec identification header was invalid
     #[error("Malformed identification header")]
     MalformedIdentificationHeader,
@@ -116,4 +120,8 @@ pub enum Error {
     /// Unsupported codec
     #[error("The codec {0} was not supported for this operation")]
     UnsupportedCodec(Codec),
+
+    /// Unrepresentable value in comment header
+    #[error("A value could not be represented in a comment header")]
+    UnrepresentableValueInCommentHeader,
 }
