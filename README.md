@@ -316,3 +316,9 @@ This was done when functionality to support Ogg Vorbis files was also added to
 Please see LICENSE. Unless you have a source you can easily reconstruct your Opus files
 from, the author recommends making a backup of any files you intend to modify first, and
 running `opusinfo` afterwards on any processed files.
+
+## References
+
+1. [RFC 7845 - Ogg Encapsulation for the Opus Audio Codec](https://www.rfc-editor.org/rfc/rfc7845.txt)
+2. [Vorbis I Specification](https://www.xiph.org/vorbis/doc/Vorbis_I_spec.html)
+3. [Ogg Vorbis identification header](https://wiki.xiph.org/OggVorbis)
