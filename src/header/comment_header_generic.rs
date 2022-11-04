@@ -24,7 +24,7 @@ pub trait CommentHeaderSpecifics {
 /// is parameterized by a type implementing `CommentHeaderSpecifics` which
 /// encodes format-specific logic.
 #[derive(Derivative)]
-#[derivative(Clone, Debug)]
+#[derivative(Clone, Debug, PartialEq)]
 pub struct CommentHeaderGeneric<S>
 where
     S: CommentHeaderSpecifics + Clone,
@@ -148,13 +148,4 @@ where
     fn iter(&self) -> Self::Iter<'_> { self.user_comments.iter() }
 
     fn retain<F: FnMut(&str, &str) -> bool>(&mut self, f: F) { self.user_comments.retain(f) }
-}
-
-impl<S> PartialEq for CommentHeaderGeneric<S>
-where
-    S: CommentHeaderSpecifics + PartialEq + Clone,
-{
-    fn eq(&self, other: &CommentHeaderGeneric<S>) -> bool {
-        self.vendor == other.vendor && self.user_comments == other.user_comments && self.specifics == other.specifics
-    }
 }

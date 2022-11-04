@@ -10,7 +10,7 @@ const VORBIS_MIN_HEADER_SIZE: usize = 30;
 const VORBIS_MAGIC: &[u8] = b"\x01vorbis";
 
 /// Allows querying and modification of a Vorbis identification header
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct IdHeader {
     data: Vec<u8>,
 }
@@ -65,8 +65,4 @@ impl IdHeader {
 
     /// Converts the header into data
     pub fn into_vec(self) -> Vec<u8> { self.data }
-}
-
-impl PartialEq for IdHeader {
-    fn eq(&self, other: &IdHeader) -> bool { self.data == other.data }
 }
