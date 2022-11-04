@@ -3,10 +3,11 @@
 [![Zoog crate](https://img.shields.io/crates/v/zoog)](https://crates.io/crates/zoog)
 [![Zoog documentation](https://docs.rs/zoog/badge.svg)](https://docs.rs/zoog)
 
-Zoog is a Rust library that consists of functionality that can be used
-to determine the loudness of an Ogg Opus file and also to rewrite that
-file with new internal gain information as well as loudness-related comment
-tags. It also has functionality for purely manipulating comment tags.
+Zoog is a Rust library that consists of functionality that can be used to
+determine the loudness of an Ogg Opus file and also to rewrite that file with
+new internal gain information as well as loudness-related comment tags. It also
+has functionality for purely manipulating comment tags of both Ogg Opus and Ogg
+Vorbis files.
 
 Zoog currently contains two tools, `opusgain` and `zoogcomment`. `opusgain` can
 be used to:
