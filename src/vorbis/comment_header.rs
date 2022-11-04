@@ -8,9 +8,9 @@ const FRAMING_BYTE: u8 = 1;
 
 /// Vorbis-specific comment header logic
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct CommentHeaderSpecifics {}
+pub struct Specifics {}
 
-impl header::CommentHeaderSpecifics for CommentHeaderSpecifics {
+impl header::CommentHeaderSpecifics for Specifics {
     fn get_magic() -> Vec<u8> { COMMENT_MAGIC.into() }
 
     fn read_suffix<R: Read>(&mut self, reader: &mut R) -> Result<(), Error> {
@@ -29,4 +29,4 @@ impl header::CommentHeaderSpecifics for CommentHeaderSpecifics {
 }
 
 /// Manipulates an Ogg Vorbis comment header
-pub type CommentHeader = CommentHeaderGeneric<CommentHeaderSpecifics>;
+pub type CommentHeader = CommentHeaderGeneric<Specifics>;

@@ -7,11 +7,11 @@ const COMMENT_MAGIC: &[u8] = b"OpusTags";
 
 /// Opus-specific comment header logic
 #[derive(Clone, Debug, Default, PartialEq)]
-pub struct CommentHeaderSpecifics {
+pub struct Specifics {
     suffix_data: Vec<u8>,
 }
 
-impl header::CommentHeaderSpecifics for CommentHeaderSpecifics {
+impl header::CommentHeaderSpecifics for Specifics {
     fn get_magic() -> Vec<u8> { COMMENT_MAGIC.into() }
 
     fn read_suffix<R: Read>(&mut self, reader: &mut R) -> Result<(), Error> {
@@ -31,7 +31,7 @@ impl header::CommentHeaderSpecifics for CommentHeaderSpecifics {
 }
 
 /// Manipulates an Ogg Opus comment header
-pub type CommentHeader = CommentHeaderGeneric<CommentHeaderSpecifics>;
+pub type CommentHeader = CommentHeaderGeneric<Specifics>;
 
 #[cfg(test)]
 mod tests {
