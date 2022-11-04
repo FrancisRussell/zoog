@@ -40,7 +40,8 @@ impl header::IdHeader for IdHeader {
 
 impl IdHeader {
     /// Attempts to parse the supplied `Vec` as an Opus header
-    pub fn try_parse(data: Cow<[u8]>) -> Result<Option<IdHeader>, Error> {
+    pub fn try_parse<'a, D: Into<Cow<'a, [u8]>>>(data: D) -> Result<Option<IdHeader>, Error> {
+        let data = data.into();
         if data.len() < OPUS_MIN_HEADER_SIZE {
             return Ok(None);
         }

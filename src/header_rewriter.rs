@@ -175,7 +175,13 @@ where
         }
     }
 
-    fn parse_codec_headers(identification: Cow<[u8]>, comment: Cow<[u8]>) -> Result<CodecHeaders, Error> {
+    fn parse_codec_headers<'a, I, C>(identification: I, comment: C) -> Result<CodecHeaders, Error>
+    where
+        I: Into<Cow<'a, [u8]>>,
+        C: Into<Cow<'a, [u8]>>,
+    {
+        let identification = identification.into();
+        let comment = comment.into();
         if let Some(opus_header) = opus::IdHeader::try_parse(Cow::from(identification.as_ref()))? {
             let comment_header = opus::CommentHeader::try_parse(comment)?;
             return Ok(CodecHeaders::Opus(opus_header, comment_header));
@@ -206,8 +212,7 @@ where
                 let mut id_header_packet = self.header_packet.take().expect("Missing header packet");
                 let (summary_before, summary_after, changed) = {
                     // Parse headers
-                    let original_headers =
-                        Self::parse_codec_headers(Cow::from(&id_header_packet.data), Cow::from(&packet.data))?;
+                    let original_headers = Self::parse_codec_headers(&id_header_packet.data, &packet.data)?;
                     let mut headers = original_headers.clone();
                     let summary_before = self.header_summarize.summarize(&headers)?;
                     self.header_rewrite.rewrite(&mut headers)?;

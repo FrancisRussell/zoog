@@ -35,8 +35,6 @@ pub type CommentHeader = CommentHeaderGeneric<CommentHeaderSpecifics>;
 
 #[cfg(test)]
 mod tests {
-    use std::borrow::Cow;
-
     use rand::distributions::{Standard, Uniform};
     use rand::rngs::SmallRng;
     use rand::{Rng, SeedableRng};
@@ -87,7 +85,7 @@ mod tests {
         for _ in 0..NUM_IDENTITY_TESTS {
             let header_data_original =
                 create_random_header(&mut rng).into_vec().expect("Failed to encode comment header");
-            let header_data = CommentHeader::try_parse(Cow::from(&header_data_original))
+            let header_data = CommentHeader::try_parse(&header_data_original)
                 .expect("Previously generated header was not recognised")
                 .into_vec()
                 .expect("Failed to encode comment header");
@@ -100,13 +98,13 @@ mod tests {
         let mut header: Vec<u8> = COMMENT_MAGIC.iter().cloned().collect();
         let last_byte = header.last_mut().unwrap();
         *header.last_mut().unwrap() = last_byte.wrapping_add(1);
-        assert!(CommentHeader::try_parse(Cow::from(header)).is_err());
+        assert!(CommentHeader::try_parse(header).is_err());
     }
 
     #[test]
     fn truncated_header() {
         let header: Vec<u8> = COMMENT_MAGIC.iter().cloned().collect();
-        match CommentHeader::try_parse(Cow::from(header)) {
+        match CommentHeader::try_parse(header) {
             Err(Error::MalformedCommentHeader) => {}
             _ => assert!(false, "Wrong error for malformed header"),
         };
