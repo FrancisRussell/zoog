@@ -138,18 +138,44 @@ where
 }
 
 #[cfg(test)]
-pub(crate) mod test {
+mod tests {
     use rand::distributions::{Standard, Uniform};
     use rand::rngs::SmallRng;
     use rand::{Rng, SeedableRng};
 
     use super::*;
+    use crate::header::CommentHeader as _;
 
     const MAX_STRING_LENGTH: usize = 1024;
     const MAX_COMMENTS: usize = 128;
     const NUM_IDENTITY_TESTS: usize = 256;
+    const TEST_MAGIC: &[u8] = b"zoogheader";
+    const TEST_SUFFIX: &[u8] = b"zoogsuffix";
 
-    pub(crate) fn random_string<R: Rng>(engine: &mut R, is_key: bool) -> String {
+    #[derive(Clone, Debug, Default)]
+    struct TestSpecifics {}
+
+    impl CommentHeaderSpecifics for TestSpecifics {
+        fn get_magic() -> Vec<u8> { TEST_MAGIC.into() }
+
+        fn read_suffix<R: Read>(&mut self, reader: &mut R) -> Result<(), Error> {
+            let mut suffix = Vec::new();
+            reader.read_to_end(&mut suffix).map_err(Error::ReadError)?;
+            if suffix != TEST_SUFFIX {
+                Err(Error::MalformedCommentHeader)
+            } else {
+                Ok(())
+            }
+        }
+
+        fn write_suffix<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+            writer.write_all(TEST_SUFFIX).map_err(Error::WriteError)
+        }
+    }
+
+    type CommentHeaderTest = CommentHeaderGeneric<TestSpecifics>;
+
+    fn random_string<R: Rng>(engine: &mut R, is_key: bool) -> String {
         let min_len = if is_key { 1 } else { 0 };
         let len_distr = Uniform::new_inclusive(min_len, MAX_STRING_LENGTH);
         let len = engine.sample(len_distr);
@@ -169,8 +195,8 @@ pub(crate) mod test {
         result
     }
 
-    pub(crate) fn create_random_header<H: header::CommentHeader + Default, R: Rng>(engine: &mut R) -> H {
-        let mut header = H::default();
+    fn create_random_header<R: Rng>(engine: &mut R) -> CommentHeaderTest {
+        let mut header = CommentHeaderTest::default();
         header.set_vendor(&random_string(engine, false));
         let num_comments_dist = Uniform::new_inclusive(0, MAX_COMMENTS);
         let num_comments = engine.sample(&num_comments_dist);
@@ -182,15 +208,16 @@ pub(crate) mod test {
         header
     }
 
-    pub(crate) fn parse_and_encode_is_identity<S: CommentHeaderSpecifics + Default + Clone>() {
+    #[test]
+    fn parse_and_encode_is_identity() {
         let mut rng = SmallRng::seed_from_u64(19489);
         for _ in 0..NUM_IDENTITY_TESTS {
             let header_data_original = {
-                let header: CommentHeaderGeneric<S> = create_random_header(&mut rng);
+                let header = create_random_header(&mut rng);
                 header.into_vec().expect("Failed to encode comment header")
             };
             let header_data = {
-                let header: CommentHeaderGeneric<S> = CommentHeaderGeneric::try_parse(&header_data_original)
+                let header = CommentHeaderTest::try_parse(&header_data_original)
                     .expect("Previously generated header was not recognised");
                 header.into_vec().expect("Failed to encode comment header")
             };
@@ -198,22 +225,18 @@ pub(crate) mod test {
         }
     }
 
-    pub(crate) fn not_comment_header<S>(magic: &[u8])
-    where
-        S: CommentHeaderSpecifics + Default + Clone,
-    {
-        let mut header: Vec<u8> = magic.iter().cloned().collect();
+    #[test]
+    fn not_comment_header() {
+        let mut header: Vec<u8> = TEST_MAGIC.iter().cloned().collect();
         let last_byte = header.last_mut().unwrap();
         *header.last_mut().unwrap() = last_byte.wrapping_add(1);
-        assert!(CommentHeaderGeneric::<S>::try_parse(header).is_err());
+        assert!(CommentHeaderTest::try_parse(header).is_err());
     }
 
-    pub(crate) fn truncated_header<S>(magic: &[u8])
-    where
-        S: CommentHeaderSpecifics + Default + Clone,
-    {
-        let header: Vec<u8> = magic.iter().cloned().collect();
-        match CommentHeaderGeneric::<S>::try_parse(header) {
+    #[test]
+    fn truncated_header() {
+        let header: Vec<u8> = TEST_MAGIC.iter().cloned().collect();
+        match CommentHeaderTest::try_parse(header) {
             Err(Error::MalformedCommentHeader) => {}
             _ => assert!(false, "Wrong error for malformed header"),
         };

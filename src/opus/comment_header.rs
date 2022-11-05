@@ -35,15 +35,4 @@ pub type CommentHeader = CommentHeaderGeneric<Specifics>;
 
 #[cfg(test)]
 mod tests {
-    use super::*;
-    use crate::header::test::{self as header_test};
-
-    #[test]
-    fn parse_and_encode_is_identity() { header_test::parse_and_encode_is_identity::<Specifics>() }
-
-    #[test]
-    fn not_comment_header() { header_test::not_comment_header::<Specifics>(COMMENT_MAGIC) }
-
-    #[test]
-    fn truncated_header() { header_test::truncated_header::<Specifics>(COMMENT_MAGIC); }
 }
