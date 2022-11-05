@@ -34,5 +34,4 @@ impl header::CommentHeaderSpecifics for Specifics {
 pub type CommentHeader = CommentHeaderGeneric<Specifics>;
 
 #[cfg(test)]
-mod tests {
-}
+mod tests {}

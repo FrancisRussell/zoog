@@ -33,4 +33,39 @@ pub type CommentHeader = CommentHeaderGeneric<Specifics>;
 
 #[cfg(test)]
 mod tests {
+    use std::io::Cursor;
+
+    use super::*;
+    use crate::header::CommentHeaderSpecifics as _;
+
+    #[test]
+    fn default_outputs_framing_bit() -> Result<(), Error> {
+        let specifics = Specifics::default();
+        let mut suffix = Vec::new();
+        specifics.write_suffix(&mut suffix)?;
+        assert!(suffix.len() > 0);
+        assert!((suffix[0] & 1) != 0);
+        Ok(())
+    }
+
+    #[test]
+    fn missing_framing_byte() {
+        let mut specifics = Specifics::default();
+        let mut reader = Cursor::new(&[]);
+        assert!(specifics.read_suffix(&mut reader).is_err());
+    }
+
+    #[test]
+    fn missing_framing_bit() {
+        let mut specifics = Specifics::default();
+        let mut reader = Cursor::new(&[0xFE]);
+        assert!(specifics.read_suffix(&mut reader).is_err());
+    }
+
+    #[test]
+    fn present_framing_bit() {
+        let mut specifics = Specifics::default();
+        let mut reader = Cursor::new(&[0x1]);
+        assert!(specifics.read_suffix(&mut reader).is_ok());
+    }
 }
