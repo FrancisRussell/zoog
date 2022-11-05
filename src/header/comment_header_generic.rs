@@ -141,15 +141,12 @@ where
 
 #[cfg(test)]
 mod tests {
-    use rand::distributions::{Standard, Uniform};
     use rand::rngs::SmallRng;
-    use rand::{Rng, SeedableRng};
+    use rand::SeedableRng;
 
     use super::*;
-    use crate::header::CommentHeader as _;
+    use crate::header::test_utils::create_random_header;
 
-    const MAX_STRING_LENGTH: usize = 1024;
-    const MAX_COMMENTS: usize = 128;
     const NUM_IDENTITY_TESTS: usize = 256;
     const TEST_MAGIC: &[u8] = b"zoogheader";
     const TEST_SUFFIX: &[u8] = b"zoogsuffix";
@@ -177,45 +174,12 @@ mod tests {
 
     type CommentHeaderTest = CommentHeaderGeneric<TestSpecifics>;
 
-    fn random_string<R: Rng>(engine: &mut R, is_key: bool) -> String {
-        let min_len = if is_key { 1 } else { 0 };
-        let len_distr = Uniform::new_inclusive(min_len, MAX_STRING_LENGTH);
-        let len = engine.sample(len_distr);
-        let mut result = String::new();
-        result.reserve(len);
-        if is_key {
-            let valid_chars: Vec<char> = (' '..='<').chain('>'..='}').collect();
-            let char_index_dist = Uniform::new(0, valid_chars.len());
-            for _ in 0..len {
-                result.push(valid_chars[engine.sample(char_index_dist)]);
-            }
-        } else {
-            for c in engine.sample_iter(&Standard).take(len) {
-                result.push(c);
-            }
-        }
-        result
-    }
-
-    fn create_random_header<R: Rng>(engine: &mut R) -> CommentHeaderTest {
-        let mut header = CommentHeaderTest::default();
-        header.set_vendor(&random_string(engine, false));
-        let num_comments_dist = Uniform::new_inclusive(0, MAX_COMMENTS);
-        let num_comments = engine.sample(&num_comments_dist);
-        for _ in 0..num_comments {
-            let key = random_string(engine, true);
-            let value = random_string(engine, false);
-            header.push(key.as_str(), value.as_str()).expect("Unable to add comment");
-        }
-        header
-    }
-
     #[test]
     fn parse_and_encode_is_identity() {
         let mut rng = SmallRng::seed_from_u64(19489);
         for _ in 0..NUM_IDENTITY_TESTS {
             let header_data_original = {
-                let header = create_random_header(&mut rng);
+                let header: CommentHeaderTest = create_random_header(&mut rng);
                 header.into_vec().expect("Failed to encode comment header")
             };
             let header_data = {

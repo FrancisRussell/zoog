@@ -34,4 +34,50 @@ impl header::CommentHeaderSpecifics for Specifics {
 pub type CommentHeader = CommentHeaderGeneric<Specifics>;
 
 #[cfg(test)]
-mod tests {}
+mod tests {
+    use rand::distributions::{Distribution, Uniform};
+    use rand::rngs::SmallRng;
+    use rand::SeedableRng;
+
+    use super::*;
+    use crate::header::test_utils::create_random_header;
+
+    #[test]
+    fn padding_is_discarded() -> Result<(), Error> {
+        let mut rng = SmallRng::seed_from_u64(57128);
+        let header: CommentHeader = create_random_header(&mut rng);
+        let original_data = header.into_vec()?;
+        let padding_size = 1024;
+        let padded_data: Vec<u8> =
+            original_data.iter().copied().chain(std::iter::repeat(0xFE).take(padding_size)).collect();
+        assert!(original_data.len() < padded_data.len());
+        let processed_data = {
+            let header = CommentHeader::try_parse(&padded_data)?;
+            header.into_vec()?
+        };
+        assert_eq!(original_data, processed_data);
+        Ok(())
+    }
+
+    #[test]
+    fn experimental_data_is_preserved() -> Result<(), Error> {
+        let mut rng = SmallRng::seed_from_u64(73295);
+        let header: CommentHeader = create_random_header(&mut rng);
+        let original_data = header.into_vec()?;
+        let experimental_data_size = 1024;
+        let experimental_data_dist = Uniform::new_inclusive(0u8, 0xFFu8);
+        let padded_data: Vec<u8> = original_data
+            .iter()
+            .copied()
+            .chain(std::iter::once(0x1))
+            .chain(experimental_data_dist.sample_iter(&mut rng).take(experimental_data_size))
+            .collect();
+        assert!(original_data.len() < padded_data.len());
+        let processed_data = {
+            let header = CommentHeader::try_parse(&padded_data)?;
+            header.into_vec()?
+        };
+        assert_eq!(padded_data, processed_data);
+        Ok(())
+    }
+}
