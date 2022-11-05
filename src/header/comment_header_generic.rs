@@ -40,6 +40,8 @@ where
 {
     fn set_vendor(&mut self, vendor: &str) { self.vendor = vendor.into(); }
 
+    fn get_vendor(&self) -> &str { self.vendor.as_str() }
+
     fn to_discrete_comment_list(&self) -> DiscreteCommentList { self.user_comments.clone() }
 }
 

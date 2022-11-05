@@ -6,4 +6,7 @@ pub trait CommentHeader: CommentList {
 
     /// Returns the comments in the header as a `DiscreteCommentList`.
     fn to_discrete_comment_list(&self) -> DiscreteCommentList;
+
+    /// Gets the vendor field.
+    fn get_vendor(&self) -> &str;
 }
