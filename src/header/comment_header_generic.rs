@@ -25,19 +25,13 @@ pub trait CommentHeaderSpecifics {
 /// encodes format-specific logic.
 #[derive(Derivative)]
 #[derivative(Clone, Debug, Default, PartialEq)]
-pub struct CommentHeaderGeneric<S>
-where
-    S: CommentHeaderSpecifics + Clone,
-{
+pub struct CommentHeaderGeneric<S> {
     vendor: String,
     user_comments: DiscreteCommentList,
     specifics: S,
 }
 
-impl<S> header::CommentHeader for CommentHeaderGeneric<S>
-where
-    S: CommentHeaderSpecifics + Clone + Default,
-{
+impl<S: CommentHeaderSpecifics + Default> header::CommentHeader for CommentHeaderGeneric<S> {
     fn try_parse(data: &[u8]) -> Result<CommentHeaderGeneric<S>, Error> {
         let magic = S::get_magic();
         let identical = data.iter().take(magic.len()).eq(magic.iter());
@@ -94,10 +88,7 @@ where
     fn to_discrete_comment_list(&self) -> DiscreteCommentList { self.user_comments.clone() }
 }
 
-impl<S> CommentHeaderGeneric<S>
-where
-    S: CommentHeaderSpecifics + Clone,
-{
+impl<S> CommentHeaderGeneric<S> {
     fn read_length<R: Read>(mut reader: R) -> Result<u32, Error> {
         reader.read_u32::<LittleEndian>().map_err(|_| Error::MalformedCommentHeader)
     }
@@ -107,10 +98,7 @@ where
     }
 }
 
-impl<S> CommentList for CommentHeaderGeneric<S>
-where
-    S: CommentHeaderSpecifics + Clone,
-{
+impl<S: CommentHeaderSpecifics> CommentList for CommentHeaderGeneric<S> {
     type Iter<'b> = <DiscreteCommentList as CommentList>::Iter<'b> where Self: 'b;
 
     fn len(&self) -> usize { self.user_comments.len() }
