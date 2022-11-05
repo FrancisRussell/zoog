@@ -6,6 +6,7 @@ use derivative::Derivative;
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use ogg::{Packet, PacketReader};
 
+use crate::header::{CommentHeader as _, IdHeader as _};
 use crate::interrupt::{Interrupt, Never};
 use crate::{header, opus, vorbis, Codec, Error};
 

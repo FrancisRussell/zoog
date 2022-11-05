@@ -2,7 +2,7 @@ use std::io::{Cursor, Write};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
 
-use crate::header::{self, FixedPointGain, IdHeader as _};
+use crate::header::{self, FixedPointGain};
 use crate::{Codec, Error};
 
 const OPUS_MIN_HEADER_SIZE: usize = 19;
@@ -18,6 +18,30 @@ pub struct IdHeader {
 }
 
 impl header::IdHeader for IdHeader {
+    fn try_parse(data: &[u8]) -> Result<Option<IdHeader>, Error> {
+        if data.len() < OPUS_MIN_HEADER_SIZE {
+            return Ok(None);
+        }
+        let identical = data.iter().take(OPUS_MAGIC.len()).eq(OPUS_MAGIC.iter());
+        if !identical {
+            return Ok(None);
+        }
+        let result = IdHeader { data: data.to_vec() };
+        if result.version() != 1 {
+            return Err(Error::UnsupportedCodecVersion(Codec::Opus, u64::from(result.version())));
+        }
+        if result.num_output_channels() == 0 {
+            return Err(Error::MalformedIdentificationHeader);
+        }
+        Ok(Some(result))
+    }
+
+    fn into_vec(self) -> Vec<u8> { self.data }
+
+    fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write_all(&self.data).map_err(Error::WriteError)
+    }
+
     fn num_output_channels(&self) -> usize {
         let mut reader = Cursor::new(&self.data[9..10]);
         let value = reader.read_u8().expect("Error reading output channel count");
@@ -38,25 +62,6 @@ impl header::IdHeader for IdHeader {
 }
 
 impl IdHeader {
-    /// Attempts to parse the supplied `Vec` as an Opus header
-    pub fn try_parse(data: &[u8]) -> Result<Option<IdHeader>, Error> {
-        if data.len() < OPUS_MIN_HEADER_SIZE {
-            return Ok(None);
-        }
-        let identical = data.iter().take(OPUS_MAGIC.len()).eq(OPUS_MAGIC.iter());
-        if !identical {
-            return Ok(None);
-        }
-        let result = IdHeader { data: data.to_vec() };
-        if result.version() != 1 {
-            return Err(Error::UnsupportedCodecVersion(Codec::Opus, u64::from(result.version())));
-        }
-        if result.num_output_channels() == 0 {
-            return Err(Error::MalformedIdentificationHeader);
-        }
-        Ok(Some(result))
-    }
-
     /// The current output gain set in the header
     pub fn get_output_gain(&self) -> FixedPointGain {
         let mut reader = Cursor::new(&self.data[16..18]);
@@ -83,13 +88,5 @@ impl IdHeader {
     pub fn version(&self) -> u8 {
         let mut reader = Cursor::new(&self.data[8..9]);
         reader.read_u8().expect("Error reading output channel count")
-    }
-
-    /// Converts the header into its binary representation
-    pub fn into_vec(self) -> Vec<u8> { self.data }
-
-    /// Writes the serialized representation of the header
-    pub fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
-        writer.write_all(&self.data).map_err(Error::WriteError)
     }
 }

@@ -36,34 +36,9 @@ where
 
 impl<S> header::CommentHeader for CommentHeaderGeneric<S>
 where
-    S: CommentHeaderSpecifics + Clone,
+    S: CommentHeaderSpecifics + Clone + Default,
 {
-    fn set_vendor(&mut self, vendor: &str) { self.vendor = vendor.into(); }
-
-    fn get_vendor(&self) -> &str { self.vendor.as_str() }
-
-    fn to_discrete_comment_list(&self) -> DiscreteCommentList { self.user_comments.clone() }
-}
-
-impl<S> CommentHeaderGeneric<S>
-where
-    S: CommentHeaderSpecifics + Clone,
-{
-    fn read_length<R: Read>(mut reader: R) -> Result<u32, Error> {
-        reader.read_u32::<LittleEndian>().map_err(|_| Error::MalformedCommentHeader)
-    }
-
-    fn read_exact<R: Read>(mut reader: R, data: &mut [u8]) -> Result<(), Error> {
-        reader.read_exact(data).map_err(|_| Error::MalformedCommentHeader)
-    }
-
-    /// Attempts to parse the supplied slice as an Opus comment header. An error
-    /// is returned if the header is believed to be corrupt, otherwise the
-    /// parsed header is returned.
-    pub fn try_parse(data: &[u8]) -> Result<CommentHeaderGeneric<S>, Error>
-    where
-        S: Default,
-    {
+    fn try_parse(data: &[u8]) -> Result<CommentHeaderGeneric<S>, Error> {
         let magic = S::get_magic();
         let identical = data.iter().take(magic.len()).eq(magic.iter());
         if !identical {
@@ -90,7 +65,7 @@ where
         Ok(result)
     }
 
-    pub fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+    fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         writer.write_all(&S::get_magic()).map_err(Error::WriteError)?;
         let vendor = self.vendor.as_bytes();
         let vendor_len = vendor.len().try_into().map_err(|_| Error::UnrepresentableValueInCommentHeader)?;
@@ -110,6 +85,25 @@ where
         }
         self.specifics.write_suffix(writer)?;
         Ok(())
+    }
+
+    fn set_vendor(&mut self, vendor: &str) { self.vendor = vendor.into(); }
+
+    fn get_vendor(&self) -> &str { self.vendor.as_str() }
+
+    fn to_discrete_comment_list(&self) -> DiscreteCommentList { self.user_comments.clone() }
+}
+
+impl<S> CommentHeaderGeneric<S>
+where
+    S: CommentHeaderSpecifics + Clone,
+{
+    fn read_length<R: Read>(mut reader: R) -> Result<u32, Error> {
+        reader.read_u32::<LittleEndian>().map_err(|_| Error::MalformedCommentHeader)
+    }
+
+    fn read_exact<R: Read>(mut reader: R, data: &mut [u8]) -> Result<(), Error> {
+        reader.read_exact(data).map_err(|_| Error::MalformedCommentHeader)
     }
 }
 
