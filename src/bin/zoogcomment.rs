@@ -25,7 +25,7 @@ use zoog::header::{parse_comment, validate_comment_field_name, CommentList, Disc
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::{escaping, Error};
 
-const OGG_OPUS_EXTENSIONS: [&str; 3] = ["oga", "ogg", "opus"];
+const OGG_OPUS_EXTENSIONS: [&str; 7] = ["ogg", "ogv", "oga", "ogx", "ogm", "spx", "opus"];
 const STANDARD_STREAM_NAME: &str = "-";
 
 #[derive(Debug, Error)]
@@ -189,7 +189,7 @@ fn validate_comment_filename(path: &Path) -> Result<(), AppError> {
         ext.make_ascii_lowercase();
         if OGG_OPUS_EXTENSIONS.iter().any(|e| ext == *e) {
             eprintln!(
-                "Based on file extension {:?} looks like it might be an Opus file. Refusing to use it for tags.",
+                "Based on the file extension {:?} looks like it might be a media file. Refusing to use it for tags.",
                 path
             );
             return Err(AppError::SilentExit);
