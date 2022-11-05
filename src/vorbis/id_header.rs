@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::io::{Cursor, Write};
 
 use byteorder::{LittleEndian, ReadBytesExt};
@@ -33,8 +32,7 @@ impl header::IdHeader for IdHeader {
 
 impl IdHeader {
     /// Attempts to parse the supplied `Vec` as an Vorbis header
-    pub fn try_parse<'a, D: Into<Cow<'a, [u8]>>>(data: D) -> Result<Option<IdHeader>, Error> {
-        let data = data.into();
+    pub fn try_parse(data: &[u8]) -> Result<Option<IdHeader>, Error> {
         if data.len() < VORBIS_MIN_HEADER_SIZE {
             return Ok(None);
         }
@@ -42,7 +40,7 @@ impl IdHeader {
         if !identical {
             return Ok(None);
         }
-        let result = IdHeader { data: data.into_owned() };
+        let result = IdHeader { data: data.to_vec() };
         if result.version() != 0 {
             return Err(Error::UnsupportedCodecVersion(Codec::Vorbis, u64::from(result.version())));
         }

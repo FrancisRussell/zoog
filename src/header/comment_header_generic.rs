@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::io::{Cursor, Read, Write};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -57,14 +56,13 @@ where
         reader.read_exact(data).map_err(|_| Error::MalformedCommentHeader)
     }
 
-    /// Attempts to parse the supplied `Vec` as an Opus comment header. An error
+    /// Attempts to parse the supplied slice as an Opus comment header. An error
     /// is returned if the header is believed to be corrupt, otherwise the
     /// parsed header is returned.
-    pub fn try_parse<'a, D: Into<Cow<'a, [u8]>>>(data: D) -> Result<CommentHeaderGeneric<S>, Error>
+    pub fn try_parse(data: &[u8]) -> Result<CommentHeaderGeneric<S>, Error>
     where
         S: Default,
     {
-        let data = data.into();
         let magic = S::get_magic();
         let identical = data.iter().take(magic.len()).eq(magic.iter());
         if !identical {

@@ -137,10 +137,11 @@ impl Default for VolumeAnalyzer {
 
 impl VolumeAnalyzer {
     /// Submits a new Ogg packet to the analyzer
+    #[allow(clippy::needless_pass_by_value)]
     pub fn submit(&mut self, packet: Packet) -> Result<(), Error> {
         match self.state {
             State::AwaitingHeader => {
-                let header = OpusIdHeader::try_parse(packet.data)?.ok_or(Error::MissingOpusStream)?;
+                let header = OpusIdHeader::try_parse(&packet.data)?.ok_or(Error::MissingOpusStream)?;
                 let channel_count = header.num_output_channels();
                 let sample_rate = header.output_sample_rate();
                 self.decode_state = Some(DecodeState::new(channel_count, sample_rate)?);
@@ -148,7 +149,7 @@ impl VolumeAnalyzer {
             }
             State::AwaitingComments => {
                 // Check comment header is valid
-                OpusCommentHeader::try_parse(packet.data)?;
+                OpusCommentHeader::try_parse(&packet.data)?;
                 self.state = State::Analyzing;
             }
             State::Analyzing => {

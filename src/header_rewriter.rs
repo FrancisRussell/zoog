@@ -1,4 +1,3 @@
-use std::borrow::Cow;
 use std::collections::VecDeque;
 use std::io::{Read, Seek, Write};
 use std::marker::PhantomData;
@@ -181,14 +180,8 @@ where
         }
     }
 
-    fn parse_codec_headers<'a, I, C>(identification: I, comment: C) -> Result<CodecHeaders, Error>
-    where
-        I: Into<Cow<'a, [u8]>>,
-        C: Into<Cow<'a, [u8]>>,
-    {
-        let identification = identification.into();
-        let comment = comment.into();
-        if let Some(opus_header) = opus::IdHeader::try_parse(Cow::from(identification.as_ref()))? {
+    fn parse_codec_headers(identification: &[u8], comment: &[u8]) -> Result<CodecHeaders, Error> {
+        if let Some(opus_header) = opus::IdHeader::try_parse(identification)? {
             let comment_header = opus::CommentHeader::try_parse(comment)?;
             return Ok(CodecHeaders::Opus(opus_header, comment_header));
         }
