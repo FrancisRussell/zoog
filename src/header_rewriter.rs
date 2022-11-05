@@ -47,12 +47,18 @@ impl CodecHeaders {
         }
     }
 
-    pub fn into_data(self) -> Result<(Vec<u8>, Vec<u8>), Error> {
-        let result = match self {
-            CodecHeaders::Opus(i, c) => (i.into_vec(), c.into_vec()?),
-            CodecHeaders::Vorbis(i, c) => (i.into_vec(), c.into_vec()?),
-        };
-        Ok(result)
+    pub fn serialize_id_header<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        match self {
+            CodecHeaders::Opus(i, _) => i.serialize_into(writer),
+            CodecHeaders::Vorbis(i, _) => i.serialize_into(writer),
+        }
+    }
+
+    pub fn serialize_comment_header<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        match self {
+            CodecHeaders::Opus(_, c) => c.serialize_into(writer),
+            CodecHeaders::Vorbis(_, c) => c.serialize_into(writer),
+        }
     }
 }
 
@@ -222,7 +228,12 @@ where
                     // using the latter glosses over issues such as duplicate or invalid gain tags
                     // which we will fix if present.
                     let changed = headers != original_headers;
-                    (id_header_packet.data, packet.data) = headers.into_data()?;
+                    // Update ID header
+                    id_header_packet.data.clear();
+                    headers.serialize_id_header(&mut id_header_packet.data)?;
+                    // Update comment header
+                    packet.data.clear();
+                    headers.serialize_comment_header(&mut packet.data)?;
                     (summary_before, summary_after, changed)
                 };
                 self.packet_queue.push_back(id_header_packet);

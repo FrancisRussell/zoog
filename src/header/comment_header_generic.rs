@@ -91,26 +91,26 @@ where
         Ok(result)
     }
 
-    pub fn into_vec(self) -> Result<Vec<u8>, Error> {
-        let mut data = Vec::new();
-        data.extend(S::get_magic());
+    pub fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write_all(&S::get_magic()).map_err(Error::WriteError)?;
         let vendor = self.vendor.as_bytes();
         let vendor_len = vendor.len().try_into().map_err(|_| Error::UnrepresentableValueInCommentHeader)?;
-        data.write_u32::<LittleEndian>(vendor_len).expect("Error writing vendor length");
-        data.extend(vendor);
+        writer.write_u32::<LittleEndian>(vendor_len).map_err(Error::WriteError)?;
+        writer.write_all(vendor).map_err(Error::WriteError)?;
         let user_comments_len =
             self.user_comments.len().try_into().map_err(|_| Error::UnrepresentableValueInCommentHeader)?;
-        data.write_u32::<LittleEndian>(user_comments_len).expect("Error writing user comment count");
+        writer.write_u32::<LittleEndian>(user_comments_len).map_err(Error::WriteError)?;
+        let field_name_terminator = [FIELD_NAME_TERMINATOR];
         for (k, v) in self.user_comments.iter().map(|(k, v)| (k.as_bytes(), v.as_bytes())) {
             let comment_len = k.len() + v.len() + 1;
             let comment_len = comment_len.try_into().map_err(|_| Error::UnrepresentableValueInCommentHeader)?;
-            data.write_u32::<LittleEndian>(comment_len).expect("Error writing user comment length");
-            data.extend(k);
-            data.push(FIELD_NAME_TERMINATOR);
-            data.extend(v);
+            writer.write_u32::<LittleEndian>(comment_len).map_err(Error::WriteError)?;
+            writer.write_all(k).map_err(Error::WriteError)?;
+            writer.write_all(&field_name_terminator).map_err(Error::WriteError)?;
+            writer.write_all(v).map_err(Error::WriteError)?;
         }
-        self.specifics.write_suffix(&mut data).expect("Error writing comment postfix data");
-        Ok(data)
+        self.specifics.write_suffix(writer)?;
+        Ok(())
     }
 }
 

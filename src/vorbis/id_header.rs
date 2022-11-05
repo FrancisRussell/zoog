@@ -1,5 +1,5 @@
 use std::borrow::Cow;
-use std::io::Cursor;
+use std::io::{Cursor, Write};
 
 use byteorder::{LittleEndian, ReadBytesExt};
 
@@ -65,4 +65,9 @@ impl IdHeader {
 
     /// Converts the header into data
     pub fn into_vec(self) -> Vec<u8> { self.data }
+
+    /// Writes the serialized representation of the header
+    pub fn serialize_into<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        writer.write_all(&self.data).map_err(Error::WriteError)
+    }
 }
