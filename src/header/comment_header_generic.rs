@@ -24,7 +24,7 @@ pub trait CommentHeaderSpecifics {
 /// is parameterized by a type implementing `CommentHeaderSpecifics` which
 /// encodes format-specific logic.
 #[derive(Derivative)]
-#[derivative(Clone, Debug, PartialEq)]
+#[derivative(Clone, Debug, Default, PartialEq)]
 pub struct CommentHeaderGeneric<S>
 where
     S: CommentHeaderSpecifics + Clone,
@@ -53,19 +53,6 @@ where
 
     fn read_exact<R: Read>(mut reader: R, data: &mut [u8]) -> Result<(), Error> {
         reader.read_exact(data).map_err(|_| Error::MalformedCommentHeader)
-    }
-
-    /// Constructs an empty `CommentHeader`. The comment data will be placed in
-    /// the supplied `Vec`. Any existing content will be discarded.
-    pub fn empty() -> CommentHeaderGeneric<S>
-    where
-        S: Default,
-    {
-        CommentHeaderGeneric {
-            vendor: String::new(),
-            user_comments: DiscreteCommentList::default(),
-            specifics: Default::default(),
-        }
     }
 
     /// Attempts to parse the supplied `Vec` as an Opus comment header. An error
@@ -148,4 +135,87 @@ where
     fn iter(&self) -> Self::Iter<'_> { self.user_comments.iter() }
 
     fn retain<F: FnMut(&str, &str) -> bool>(&mut self, f: F) { self.user_comments.retain(f) }
+}
+
+#[cfg(test)]
+pub(crate) mod test {
+    use rand::distributions::{Standard, Uniform};
+    use rand::rngs::SmallRng;
+    use rand::{Rng, SeedableRng};
+
+    use super::*;
+
+    const MAX_STRING_LENGTH: usize = 1024;
+    const MAX_COMMENTS: usize = 128;
+    const NUM_IDENTITY_TESTS: usize = 256;
+
+    pub(crate) fn random_string<R: Rng>(engine: &mut R, is_key: bool) -> String {
+        let min_len = if is_key { 1 } else { 0 };
+        let len_distr = Uniform::new_inclusive(min_len, MAX_STRING_LENGTH);
+        let len = engine.sample(len_distr);
+        let mut result = String::new();
+        result.reserve(len);
+        if is_key {
+            let valid_chars: Vec<char> = (' '..='<').chain('>'..='}').collect();
+            let char_index_dist = Uniform::new(0, valid_chars.len());
+            for _ in 0..len {
+                result.push(valid_chars[engine.sample(char_index_dist)]);
+            }
+        } else {
+            for c in engine.sample_iter(&Standard).take(len) {
+                result.push(c);
+            }
+        }
+        result
+    }
+
+    pub(crate) fn create_random_header<H: header::CommentHeader + Default, R: Rng>(engine: &mut R) -> H {
+        let mut header = H::default();
+        header.set_vendor(&random_string(engine, false));
+        let num_comments_dist = Uniform::new_inclusive(0, MAX_COMMENTS);
+        let num_comments = engine.sample(&num_comments_dist);
+        for _ in 0..num_comments {
+            let key = random_string(engine, true);
+            let value = random_string(engine, false);
+            header.push(key.as_str(), value.as_str()).expect("Unable to add comment");
+        }
+        header
+    }
+
+    pub(crate) fn parse_and_encode_is_identity<S: CommentHeaderSpecifics + Default + Clone>() {
+        let mut rng = SmallRng::seed_from_u64(19489);
+        for _ in 0..NUM_IDENTITY_TESTS {
+            let header_data_original = {
+                let header: CommentHeaderGeneric<S> = create_random_header(&mut rng);
+                header.into_vec().expect("Failed to encode comment header")
+            };
+            let header_data = {
+                let header: CommentHeaderGeneric<S> = CommentHeaderGeneric::try_parse(&header_data_original)
+                    .expect("Previously generated header was not recognised");
+                header.into_vec().expect("Failed to encode comment header")
+            };
+            assert_eq!(header_data_original, header_data);
+        }
+    }
+
+    pub(crate) fn not_comment_header<S>(magic: &[u8])
+    where
+        S: CommentHeaderSpecifics + Default + Clone,
+    {
+        let mut header: Vec<u8> = magic.iter().cloned().collect();
+        let last_byte = header.last_mut().unwrap();
+        *header.last_mut().unwrap() = last_byte.wrapping_add(1);
+        assert!(CommentHeaderGeneric::<S>::try_parse(header).is_err());
+    }
+
+    pub(crate) fn truncated_header<S>(magic: &[u8])
+    where
+        S: CommentHeaderSpecifics + Default + Clone,
+    {
+        let header: Vec<u8> = magic.iter().cloned().collect();
+        match CommentHeaderGeneric::<S>::try_parse(header) {
+            Err(Error::MalformedCommentHeader) => {}
+            _ => assert!(false, "Wrong error for malformed header"),
+        };
+    }
 }
