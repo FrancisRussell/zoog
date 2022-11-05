@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io::{Cursor, Read, Write};
 
 use byteorder::{LittleEndian, ReadBytesExt, WriteBytesExt};
@@ -10,7 +11,7 @@ use crate::{header, Error, FIELD_NAME_TERMINATOR};
 pub trait CommentHeaderSpecifics {
     /// Return the magic signature which should be present at the start of the
     /// header
-    fn get_magic() -> Vec<u8>;
+    fn get_magic() -> Cow<'static, [u8]>;
 
     /// Reads any bytes which should be present after comments
     fn read_suffix<R: Read>(&mut self, reader: &mut R) -> Result<(), Error>;

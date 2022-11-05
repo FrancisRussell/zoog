@@ -1,3 +1,4 @@
+use std::borrow::Cow;
 use std::io::{Read, Write};
 
 use crate::header::{self, CommentHeaderGeneric};
@@ -12,7 +13,7 @@ pub struct Specifics {
 }
 
 impl header::CommentHeaderSpecifics for Specifics {
-    fn get_magic() -> Vec<u8> { COMMENT_MAGIC.into() }
+    fn get_magic() -> Cow<'static, [u8]> { COMMENT_MAGIC.into() }
 
     fn read_suffix<R: Read>(&mut self, reader: &mut R) -> Result<(), Error> {
         // If the LSB of the first byte following the comments is set, we preserve
