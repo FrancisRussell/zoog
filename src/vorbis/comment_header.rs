@@ -44,7 +44,7 @@ mod tests {
         let specifics = Specifics::default();
         let mut suffix = Vec::new();
         specifics.write_suffix(&mut suffix)?;
-        assert!(suffix.len() > 0);
+        assert!(!suffix.is_empty());
         assert!((suffix[0] & 1) != 0);
         Ok(())
     }

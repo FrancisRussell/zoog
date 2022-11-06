@@ -142,10 +142,10 @@ mod tests {
         fn read_suffix<R: Read>(&mut self, reader: &mut R) -> Result<(), Error> {
             let mut suffix = Vec::new();
             reader.read_to_end(&mut suffix).map_err(Error::ReadError)?;
-            if suffix != TEST_SUFFIX {
-                Err(Error::MalformedCommentHeader)
-            } else {
+            if suffix == TEST_SUFFIX {
                 Ok(())
+            } else {
+                Err(Error::MalformedCommentHeader)
             }
         }
 
@@ -175,7 +175,7 @@ mod tests {
 
     #[test]
     fn not_comment_header() {
-        let mut header: Vec<u8> = TEST_MAGIC.iter().cloned().collect();
+        let mut header = TEST_MAGIC.to_vec();
         let last_byte = header.last_mut().unwrap();
         *header.last_mut().unwrap() = last_byte.wrapping_add(1);
         assert!(CommentHeaderTest::try_parse(&header).is_err());
@@ -183,10 +183,10 @@ mod tests {
 
     #[test]
     fn truncated_header() {
-        let header: Vec<u8> = TEST_MAGIC.iter().cloned().collect();
+        let header = TEST_MAGIC.to_vec();
         match CommentHeaderTest::try_parse(&header) {
             Err(Error::MalformedCommentHeader) => {}
-            _ => assert!(false, "Wrong error for malformed header"),
+            _ => panic!("Wrong error for malformed header"),
         };
     }
 }
