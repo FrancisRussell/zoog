@@ -41,20 +41,21 @@ mod tests {
     use rand::SeedableRng;
 
     use super::*;
-    use crate::header::test_utils::create_random_header;
+    use crate::header::test_utils::{comment_header_as_vec, create_random_header};
+    use crate::header::CommentHeader as _;
 
     #[test]
     fn padding_is_discarded() -> Result<(), Error> {
         let mut rng = SmallRng::seed_from_u64(57128);
         let header: CommentHeader = create_random_header(&mut rng);
-        let original_data = header.into_vec()?;
+        let original_data = comment_header_as_vec(&header)?;
         let padding_size = 1024;
         let padded_data: Vec<u8> =
             original_data.iter().copied().chain(std::iter::repeat(0xFE).take(padding_size)).collect();
         assert!(original_data.len() < padded_data.len());
         let processed_data = {
             let header = CommentHeader::try_parse(&padded_data)?;
-            header.into_vec()?
+            comment_header_as_vec(&header)?
         };
         assert_eq!(original_data, processed_data);
         Ok(())
@@ -64,7 +65,7 @@ mod tests {
     fn experimental_data_is_preserved() -> Result<(), Error> {
         let mut rng = SmallRng::seed_from_u64(73295);
         let header: CommentHeader = create_random_header(&mut rng);
-        let original_data = header.into_vec()?;
+        let original_data = comment_header_as_vec(&header)?;
         let experimental_data_size = 1024;
         let experimental_data_dist = Uniform::new_inclusive(0u8, 0xFFu8);
         let padded_data: Vec<u8> = original_data
@@ -76,7 +77,7 @@ mod tests {
         assert!(original_data.len() < padded_data.len());
         let processed_data = {
             let header = CommentHeader::try_parse(&padded_data)?;
-            header.into_vec()?
+            comment_header_as_vec(&header)?
         };
         assert_eq!(padded_data, processed_data);
         Ok(())

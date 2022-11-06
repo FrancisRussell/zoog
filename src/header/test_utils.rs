@@ -1,7 +1,7 @@
 use rand::distributions::{Standard, Uniform};
 use rand::Rng;
 
-use crate::header;
+use crate::{header, Error};
 
 const MAX_STRING_LENGTH: usize = 1024;
 const MAX_COMMENTS: usize = 128;
@@ -37,4 +37,10 @@ pub(crate) fn create_random_header<H: header::CommentHeader + Default, R: Rng>(e
         header.push(key.as_str(), value.as_str()).expect("Unable to add comment");
     }
     header
+}
+
+pub(crate) fn comment_header_as_vec<C: header::CommentHeader>(c: &C) -> Result<Vec<u8>, Error> {
+    let mut serialized = Vec::new();
+    c.serialize_into(&mut serialized)?;
+    Ok(serialized)
 }

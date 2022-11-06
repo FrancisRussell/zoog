@@ -126,7 +126,8 @@ mod tests {
     use rand::SeedableRng;
 
     use super::*;
-    use crate::header::test_utils::create_random_header;
+    use crate::header::test_utils::{comment_header_as_vec, create_random_header};
+    use crate::header::CommentHeader as _;
 
     const NUM_IDENTITY_TESTS: usize = 256;
     const TEST_MAGIC: &[u8] = b"zoogheader";
@@ -136,7 +137,7 @@ mod tests {
     struct TestSpecifics {}
 
     impl CommentHeaderSpecifics for TestSpecifics {
-        fn get_magic() -> Vec<u8> { TEST_MAGIC.into() }
+        fn get_magic() -> Cow<'static, [u8]> { TEST_MAGIC.into() }
 
         fn read_suffix<R: Read>(&mut self, reader: &mut R) -> Result<(), Error> {
             let mut suffix = Vec::new();
@@ -161,12 +162,12 @@ mod tests {
         for _ in 0..NUM_IDENTITY_TESTS {
             let header_data_original = {
                 let header: CommentHeaderTest = create_random_header(&mut rng);
-                header.into_vec().expect("Failed to encode comment header")
+                comment_header_as_vec(&header).expect("Failed to encode comment header")
             };
             let header_data = {
                 let header = CommentHeaderTest::try_parse(&header_data_original)
                     .expect("Previously generated header was not recognised");
-                header.into_vec().expect("Failed to encode comment header")
+                comment_header_as_vec(&header).expect("Failed to encode comment header")
             };
             assert_eq!(header_data_original, header_data);
         }
@@ -177,13 +178,13 @@ mod tests {
         let mut header: Vec<u8> = TEST_MAGIC.iter().cloned().collect();
         let last_byte = header.last_mut().unwrap();
         *header.last_mut().unwrap() = last_byte.wrapping_add(1);
-        assert!(CommentHeaderTest::try_parse(header).is_err());
+        assert!(CommentHeaderTest::try_parse(&header).is_err());
     }
 
     #[test]
     fn truncated_header() {
         let header: Vec<u8> = TEST_MAGIC.iter().cloned().collect();
-        match CommentHeaderTest::try_parse(header) {
+        match CommentHeaderTest::try_parse(&header) {
             Err(Error::MalformedCommentHeader) => {}
             _ => assert!(false, "Wrong error for malformed header"),
         };
