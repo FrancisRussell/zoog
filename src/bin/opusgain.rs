@@ -165,19 +165,29 @@ where
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
 enum Preset {
+    /// ReplayGain (normalize to -18 LUFS)
     #[clap(name = "rg")]
     ReplayGain,
+
+    /// EBU R 128 (normalize -23 LUFS)
     #[clap(name = "r128")]
     R128,
+
+    /// original source volume (set output gain to 0dB)
     #[clap(name = "original")]
     ZeroGain,
+
+    /// leave the output gain unchanged
     #[clap(name = "no-change")]
     NoChange,
 }
 
 #[derive(Copy, Clone, Debug, ValueEnum)]
 enum OutputGainSetting {
+    /// Use album volume in album mode and track volume otherwise
     Auto,
+
+    /// Use track volume even in album mode
     Track,
 }
 
@@ -189,16 +199,12 @@ struct Cli {
     album: bool,
 
     #[clap(value_enum, short, long, default_value_t = Preset::ReplayGain)]
-    /// Adjusts the output gain so that the loudness is that specified by
-    /// ReplayGain (rg), EBU R 128 (r128), the original source (original) or
-    /// leaves the output gain unchanged (no-change).
+    /// Choices for modifying the output gain value
     preset: Preset,
 
     #[clap(value_enum, short, long, default_value_t = OutputGainSetting::Auto)]
-    /// When "auto" is specified, each track's output gain is chosen to be
-    /// per-track or per-album dependent on whether album mode is enabled.
-    /// When "track" is specified, each file's output gain will be
-    /// track-specific, even in album mode.
+    /// When modifying the output gain to target a particular LUFS, what volume
+    /// should be used
     output_gain_mode: OutputGainSetting,
 
     #[clap(required(true))]
