@@ -3,12 +3,9 @@ use derivative::Derivative;
 use ogg::Packet;
 use opus::{Channels, Decoder};
 
-use crate::opus::{CommentHeader, OpusHeader};
-use crate::{Decibels, Error};
-
-// Opus uses this internally so we decode to this regardless of the input file
-// sampling rate
-const OPUS_DECODE_SAMPLE_RATE: usize = 48000;
+use crate::header::{CommentHeader as _, IdHeader as _};
+use crate::opus::{CommentHeader as OpusCommentHeader, IdHeader as OpusIdHeader};
+use crate::{Codec, Decibels, Error};
 
 // Specified in RFC6716
 const OPUS_MAX_PACKET_DURATION_MS: usize = 120;
@@ -116,7 +113,7 @@ impl DecodeState {
     }
 }
 
-/// Determines the volume in LUFS of one or more Ogg Opus files
+/// Determines the BS.1770 loudness in LUFS of one or more Ogg Opus files
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct VolumeAnalyzer {
@@ -140,22 +137,19 @@ impl Default for VolumeAnalyzer {
 
 impl VolumeAnalyzer {
     /// Submits a new Ogg packet to the analyzer
-    pub fn submit(&mut self, mut packet: Packet) -> Result<(), Error> {
+    #[allow(clippy::needless_pass_by_value)]
+    pub fn submit(&mut self, packet: Packet) -> Result<(), Error> {
         match self.state {
             State::AwaitingHeader => {
-                let header = OpusHeader::try_parse(&mut packet.data)?.ok_or(Error::MissingOpusStream)?;
+                let header = OpusIdHeader::try_parse(&packet.data)?.ok_or(Error::MissingStream(Codec::Opus))?;
                 let channel_count = header.num_output_channels();
-                let sample_rate = OPUS_DECODE_SAMPLE_RATE;
+                let sample_rate = header.output_sample_rate();
                 self.decode_state = Some(DecodeState::new(channel_count, sample_rate)?);
                 self.state = State::AwaitingComments;
             }
             State::AwaitingComments => {
                 // Check comment header is valid
-                match CommentHeader::try_parse(&mut packet.data) {
-                    Ok(Some(_)) => (),
-                    Ok(None) => return Err(Error::MissingCommentHeader),
-                    Err(e) => return Err(e),
-                }
+                OpusCommentHeader::try_parse(&packet.data)?;
                 self.state = State::Analyzing;
             }
             State::Analyzing => {

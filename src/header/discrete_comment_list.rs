@@ -1,6 +1,6 @@
 use std::sync::Arc;
 
-use crate::opus::{validate_comment_field_name, CommentList};
+use crate::header::{validate_comment_field_name, CommentList};
 use crate::Error;
 
 /// Stand-alone representation of an Ogg Opus comment list

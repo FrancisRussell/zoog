@@ -27,9 +27,10 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use thiserror::Error;
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
-use zoog::opus::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
-use zoog::volume_analyzer::VolumeAnalyzer;
-use zoog::volume_rewrite::{OpusGains, OutputGainMode, VolumeHeaderRewrite, VolumeRewriterConfig, VolumeTarget};
+use zoog::opus::{VolumeAnalyzer, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
+use zoog::volume_rewrite::{
+    GainsSummary, OpusGains, OutputGainMode, VolumeHeaderRewrite, VolumeRewriterConfig, VolumeTarget,
+};
 use zoog::{Decibels, Error, R128_LUFS, REPLAY_GAIN_LUFS};
 
 #[derive(Debug, Error)]
@@ -329,9 +330,11 @@ fn main_impl() -> Result<(), AppError> {
                     let output_file = output_file.as_write();
                     let mut output_file = BufWriter::new(output_file);
                     let rewrite = VolumeHeaderRewrite::new(rewriter_config);
+                    let summarize = GainsSummary::default();
                     let abort_on_unchanged = true;
                     rewrite_stream_with_interrupt(
                         rewrite,
+                        summarize,
                         &mut input_file,
                         &mut output_file,
                         abort_on_unchanged,

@@ -20,12 +20,12 @@ use clap::Parser;
 use ctrlc_handling::CtrlCChecker;
 use output_file::OutputFile;
 use thiserror::Error;
-use zoog::comment_rewrite::{CommentHeaderRewrite, CommentRewriterAction, CommentRewriterConfig};
+use zoog::comment_rewrite::{CommentHeaderRewrite, CommentHeaderSummary, CommentRewriterAction, CommentRewriterConfig};
+use zoog::header::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
-use zoog::opus::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::{escaping, Error};
 
-const OGG_OPUS_EXTENSIONS: [&str; 3] = ["oga", "ogg", "opus"];
+const OGG_OPUS_EXTENSIONS: [&str; 7] = ["ogg", "ogv", "oga", "ogx", "ogm", "spx", "opus"];
 const STANDARD_STREAM_NAME: &str = "-";
 
 #[derive(Debug, Error)]
@@ -56,7 +56,7 @@ fn main() {
 
 #[derive(Debug, Parser)]
 #[allow(clippy::struct_excessive_bools)]
-#[clap(author, version, about = "List or edit comments in Ogg Opus files.")]
+#[clap(author, version, about = "List or edit comments in Ogg Opus and Ogg Vorbis files.")]
 struct Cli {
     #[clap(short, long, action, conflicts_with = "replace", conflicts_with = "modify")]
     /// List comments in the Ogg Opus file
@@ -189,7 +189,7 @@ fn validate_comment_filename(path: &Path) -> Result<(), AppError> {
         ext.make_ascii_lowercase();
         if OGG_OPUS_EXTENSIONS.iter().any(|e| ext == *e) {
             eprintln!(
-                "Based on file extension {:?} looks like it might be an Opus file. Refusing to use it for tags.",
+                "Based on the file extension {:?} looks like it might be a media file. Refusing to use it for tags.",
                 path
             );
             return Err(AppError::SilentExit);
@@ -318,9 +318,11 @@ fn main_impl() -> Result<(), AppError> {
         let output_file = output_file.as_write();
         let mut output_file = BufWriter::new(output_file);
         let rewrite = CommentHeaderRewrite::new(rewriter_config);
+        let summarize = CommentHeaderSummary::default();
         let abort_on_unchanged = true;
         rewrite_stream_with_interrupt(
             rewrite,
+            summarize,
             &mut input_file,
             &mut output_file,
             abort_on_unchanged,
@@ -370,53 +372,53 @@ mod tests {
 
     #[test]
     fn cli_modes_conflict() {
-        let result = Cli::try_parse_from(["opuscomment", "--replace", "--list", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--replace", "--list", "input.ogg"]);
         assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
 
-        let result = Cli::try_parse_from(["opuscomment", "--replace", "--modify", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--replace", "--modify", "input.ogg"]);
         assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
 
-        let result = Cli::try_parse_from(["opuscomment", "--modify", "--list", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--modify", "--list", "input.ogg"]);
         assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
     }
 
     #[test]
     fn cli_list_mode() {
-        let result = Cli::try_parse_from(["opuscomment", "--list", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--list", "input.ogg"]);
         assert!(result.is_ok());
 
-        let result = Cli::try_parse_from(["opuscomment", "--list", "input.ogg", "output.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--list", "input.ogg", "output.ogg"]);
         assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
 
-        let result = Cli::try_parse_from(["opuscomment", "--list", "-O", "output.tags", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--list", "-O", "output.tags", "input.ogg"]);
         assert!(result.is_ok());
 
-        let result = Cli::try_parse_from(["opuscomment", "--list", "-I", "input.tags", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--list", "-I", "input.tags", "input.ogg"]);
         assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
 
-        let result = Cli::try_parse_from(["opuscomment", "--list", "-d", "TAG=VALUE", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--list", "-d", "TAG=VALUE", "input.ogg"]);
         assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
 
-        let result = Cli::try_parse_from(["opuscomment", "--list", "-t", "TAG=VALUE", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--list", "-t", "TAG=VALUE", "input.ogg"]);
         assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
     }
 
     #[test]
     fn cli_modify_mode() {
-        let result = Cli::try_parse_from(["opuscomment", "--modify", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--modify", "input.ogg"]);
         assert!(result.is_ok());
 
-        let result = Cli::try_parse_from(["opuscomment", "--modify", "-I", "input.tags", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--modify", "-I", "input.tags", "input.ogg"]);
         assert!(result.is_ok());
 
-        let result = Cli::try_parse_from(["opuscomment", "--modify", "-I", "input.tags", "input.ogg", "output.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--modify", "-I", "input.tags", "input.ogg", "output.ogg"]);
         assert!(result.is_ok());
 
-        let result = Cli::try_parse_from(["opuscomment", "--modify", "-O", "output.tags", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--modify", "-O", "output.tags", "input.ogg"]);
         assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
 
         let result = Cli::try_parse_from([
-            "opuscomment",
+            "zoogcomment",
             "--modify",
             "-I",
             "input.tags",
@@ -431,17 +433,17 @@ mod tests {
 
     #[test]
     fn cli_replace_mode() {
-        let result = Cli::try_parse_from(["opuscomment", "--replace", "input.ogg", "output.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--replace", "input.ogg", "output.ogg"]);
         assert!(result.is_ok());
 
         let result =
-            Cli::try_parse_from(["opuscomment", "--replace", "-I", "input.tags", "-t", "TAG=VALUE", "input.ogg"]);
+            Cli::try_parse_from(["zoogcomment", "--replace", "-I", "input.tags", "-t", "TAG=VALUE", "input.ogg"]);
         assert!(result.is_ok());
 
-        let result = Cli::try_parse_from(["opuscomment", "--replace", "-O", "output.tags", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--replace", "-O", "output.tags", "input.ogg"]);
         assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
 
-        let result = Cli::try_parse_from(["opuscomment", "--replace", "-d", "TAG=VALUE", "input.ogg"]);
+        let result = Cli::try_parse_from(["zoogcomment", "--replace", "-d", "TAG=VALUE", "input.ogg"]);
         assert_eq!(result.unwrap_err().kind(), ErrorKind::ArgumentConflict);
     }
 }
