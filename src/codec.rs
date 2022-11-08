@@ -3,10 +3,10 @@ use std::fmt::{self, Display, Formatter};
 /// Known audio codecs
 #[derive(Debug, Clone, Copy)]
 pub enum Codec {
-    /// Ogg Opus
+    /// Opus
     Opus,
 
-    /// Ogg Vorbis
+    /// Vorbis
     Vorbis,
 }
 
