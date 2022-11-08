@@ -27,8 +27,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use thiserror::Error;
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
-use zoog::opus::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
-use zoog::volume_analyzer::VolumeAnalyzer;
+use zoog::opus::{VolumeAnalyzer, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use zoog::volume_rewrite::{
     GainsSummary, OpusGains, OutputGainMode, VolumeHeaderRewrite, VolumeRewriterConfig, VolumeTarget,
 };

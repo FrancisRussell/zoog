@@ -23,9 +23,6 @@ pub mod interrupt;
 /// volume tags
 pub mod volume_rewrite;
 
-/// Functionality for determining BS.1770 loudness of Ogg Opus streams
-pub mod volume_analyzer;
-
 /// Functionality for manipulating headers
 pub mod header;
 

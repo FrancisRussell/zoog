@@ -113,7 +113,7 @@ impl DecodeState {
     }
 }
 
-/// Determines the volume in LUFS of one or more Ogg Opus files
+/// Determines the BS.1770 loudness in LUFS of one or more Ogg Opus files
 #[derive(Derivative)]
 #[derivative(Debug)]
 pub struct VolumeAnalyzer {
