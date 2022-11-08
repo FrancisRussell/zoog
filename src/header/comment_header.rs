@@ -3,6 +3,7 @@ use std::io::Write;
 use crate::header::{CommentList, DiscreteCommentList};
 use crate::Error;
 
+/// Trait for codec comment headers
 pub trait CommentHeader: CommentList {
     /// Attempts to parse the supplied slice as a comment header. An error
     /// is returned if the header is believed to be corrupt, otherwise the

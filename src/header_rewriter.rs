@@ -35,11 +35,15 @@ enum State {
 /// Enumeration of ID and comment headers for all supported codecs
 #[derive(Clone, Debug, PartialEq)]
 pub enum CodecHeaders {
+    /// Ogg Opus headers
     Opus(opus::IdHeader, opus::CommentHeader),
+
+    /// Ogg Vorbis headers
     Vorbis(vorbis::IdHeader, vorbis::CommentHeader),
 }
 
 impl CodecHeaders {
+    /// Which codec are the headers for
     pub fn codec(&self) -> Codec {
         match self {
             CodecHeaders::Opus(_, _) => Codec::Opus,
@@ -47,6 +51,7 @@ impl CodecHeaders {
         }
     }
 
+    /// Serializes the identification header into a `Write`
     pub fn serialize_id_header<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         match self {
             CodecHeaders::Opus(i, _) => i.serialize_into(writer),
@@ -54,6 +59,7 @@ impl CodecHeaders {
         }
     }
 
+    /// Serializes the comment header into a `Write`
     pub fn serialize_comment_header<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
         match self {
             CodecHeaders::Opus(_, c) => c.serialize_into(writer),
