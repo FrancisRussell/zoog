@@ -5,7 +5,7 @@ use opus::{Channels, Decoder};
 
 use crate::header::{CommentHeader as _, IdHeader as _};
 use crate::opus::{CommentHeader as OpusCommentHeader, IdHeader as OpusIdHeader};
-use crate::{Decibels, Error};
+use crate::{Codec, Decibels, Error};
 
 // Specified in RFC6716
 const OPUS_MAX_PACKET_DURATION_MS: usize = 120;
@@ -141,7 +141,7 @@ impl VolumeAnalyzer {
     pub fn submit(&mut self, packet: Packet) -> Result<(), Error> {
         match self.state {
             State::AwaitingHeader => {
-                let header = OpusIdHeader::try_parse(&packet.data)?.ok_or(Error::MissingOpusStream)?;
+                let header = OpusIdHeader::try_parse(&packet.data)?.ok_or(Error::MissingStream(Codec::Opus))?;
                 let channel_count = header.num_output_channels();
                 let sample_rate = header.output_sample_rate();
                 self.decode_state = Some(DecodeState::new(channel_count, sample_rate)?);

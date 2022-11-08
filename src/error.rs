@@ -37,9 +37,9 @@ pub enum Error {
     #[error("Error writing to file: `{0}`")]
     WriteError(std::io::Error),
 
-    /// The stream was not an Opus stream
-    #[error("Not an Opus stream")]
-    MissingOpusStream,
+    /// The stream was not of the expected codec
+    #[error("Not a stream of type {0}")]
+    MissingStream(Codec),
 
     /// The stream was not of a recognised codec
     #[error("Unknown codec")]
