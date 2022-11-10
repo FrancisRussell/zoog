@@ -1,13 +1,14 @@
 use std::collections::VecDeque;
 use std::io::{Read, Seek, Write};
+use std::marker::PhantomData;
 
 use derivative::Derivative;
 use ogg::writing::{PacketWriteEndInfo, PacketWriter};
 use ogg::{Packet, PacketReader};
 
+use crate::header::{CommentHeader as _, IdHeader as _};
 use crate::interrupt::{Interrupt, Never};
-use crate::opus::{CommentHeader, OpusHeader};
-use crate::Error;
+use crate::{header, opus, vorbis, Codec, Error};
 
 /// The result of submitting a packet to a `HeaderRewriter`
 #[derive(Debug)]
@@ -15,43 +16,143 @@ pub enum SubmitResult<S> {
     /// Packet was accepted
     Good,
 
-    /// The stream is already normalized so there is no need to rewrite it. The
-    /// existing gains are returned.
+    /// A rewrite was applied to the stream headers and no changes were made.
+    /// A summary of the headers is returned.
     HeadersUnchanged(S),
 
-    /// The gains of the stream will be changed from `from` to `to`.
+    /// The stream headers were changed. Summaries of the headers before and
+    /// after rewriting are returned.
     HeadersChanged { from: S, to: S },
 }
 
 #[derive(Clone, Copy, Debug)]
 enum State {
     AwaitingHeader,
-    AwaitingComments,
+    AwaitingComments { serial: u32 },
     Forwarding,
 }
 
-/// Trait for types used to parameterize a `HeaderRewriter`
-pub trait HeaderRewrite {
+/// Enumeration of ID and comment headers for all supported codecs
+#[derive(Clone, Debug, PartialEq)]
+pub enum CodecHeaders {
+    /// Ogg Opus headers
+    Opus(opus::IdHeader, opus::CommentHeader),
+
+    /// Ogg Vorbis headers
+    Vorbis(vorbis::IdHeader, vorbis::CommentHeader),
+}
+
+impl CodecHeaders {
+    /// Which codec are the headers for
+    pub fn codec(&self) -> Codec {
+        match self {
+            CodecHeaders::Opus(_, _) => Codec::Opus,
+            CodecHeaders::Vorbis(_, _) => Codec::Vorbis,
+        }
+    }
+
+    /// Serializes the identification header into a `Write`
+    pub fn serialize_id_header<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        match self {
+            CodecHeaders::Opus(i, _) => i.serialize_into(writer),
+            CodecHeaders::Vorbis(i, _) => i.serialize_into(writer),
+        }
+    }
+
+    /// Serializes the comment header into a `Write`
+    pub fn serialize_comment_header<W: Write>(&self, writer: &mut W) -> Result<(), Error> {
+        match self {
+            CodecHeaders::Opus(_, c) => c.serialize_into(writer),
+            CodecHeaders::Vorbis(_, c) => c.serialize_into(writer),
+        }
+    }
+}
+
+/// Trait for types used to summarize codec headers
+pub trait HeaderSummarize {
     /// Type for summarizing header content which is reported back via
     /// `SubmitResult`
     type Summary;
 
-    /// Type for errors thrown during summarization or header update
+    /// Type for errors thrown during summarization
     type Error;
 
     /// Summarizes the content of a header to be reported back via
     /// `SubmitResult`
-    fn summarize(&self, opus_header: &OpusHeader, comment_header: &CommentHeader)
-        -> Result<Self::Summary, Self::Error>;
-
-    /// Rewrites the Opus and Opus comment headers
-    fn rewrite(&self, opus_header: &mut OpusHeader, comment_header: &mut CommentHeader) -> Result<(), Self::Error>;
+    fn summarize(&self, headers: &CodecHeaders) -> Result<Self::Summary, Self::Error>;
 }
 
-/// Re-writes an Ogg Opus stream with new output gain and comment gain values
+/// Trait for implementing `HeaderSummarize` when headers of different
+/// codecs can be treated equivalently.
+pub trait HeaderSummarizeGeneric {
+    /// Type for summarizing header content which is reported back via
+    /// `SubmitResult`
+    type Summary;
+
+    /// Type for errors thrown during summarization
+    type Error;
+
+    /// Summarizes the content of a header to be reported back via
+    /// `SubmitResult`
+    fn summarize<I: header::IdHeader, C: header::CommentHeader>(
+        &self, id_header: &I, comment_header: &C,
+    ) -> Result<Self::Summary, Self::Error>;
+}
+
+impl<T> HeaderSummarize for T
+where
+    T: HeaderSummarizeGeneric,
+{
+    type Error = T::Error;
+    type Summary = T::Summary;
+
+    fn summarize(&self, headers: &CodecHeaders) -> Result<Self::Summary, Self::Error> {
+        match headers {
+            CodecHeaders::Opus(id, comment) => HeaderSummarizeGeneric::summarize(self, id, comment),
+            CodecHeaders::Vorbis(id, comment) => HeaderSummarizeGeneric::summarize(self, id, comment),
+        }
+    }
+}
+
+/// Trait for codec header rewriting
+pub trait HeaderRewrite {
+    /// Type for errors thrown during header update
+    type Error;
+
+    /// Rewrites the Opus and Opus comment headers
+    fn rewrite(&self, headers: &mut CodecHeaders) -> Result<(), Self::Error>;
+}
+
+/// Trait for implementing `HeaderRewrite` when different codecs can be treated
+/// equivalently
+pub trait HeaderRewriteGeneric {
+    /// Type for errors thrown during header update
+    type Error;
+
+    /// Rewrites ID and comment headers
+    fn rewrite<I: header::IdHeader, C: header::CommentHeader>(
+        &self, id_header: &mut I, comment_header: &mut C,
+    ) -> Result<(), Self::Error>;
+}
+
+impl<T> HeaderRewrite for T
+where
+    T: HeaderRewriteGeneric,
+{
+    type Error = T::Error;
+
+    fn rewrite(&self, headers: &mut CodecHeaders) -> Result<(), Self::Error> {
+        match headers {
+            CodecHeaders::Opus(id, comment) => HeaderRewriteGeneric::rewrite(self, id, comment),
+            CodecHeaders::Vorbis(id, comment) => HeaderRewriteGeneric::rewrite(self, id, comment),
+        }
+    }
+}
+
+/// Re-writes an Ogg Opus stream with modified headers
 #[derive(Derivative)]
 #[derivative(Debug)]
-pub struct HeaderRewriter<'a, HR: HeaderRewrite, W: Write> {
+pub struct HeaderRewriter<'a, HR: HeaderRewrite, HS: HeaderSummarize, W: Write, E> {
     #[derivative(Debug = "ignore")]
     packet_writer: PacketWriter<'a, W>,
     #[derivative(Debug = "ignore")]
@@ -60,21 +161,42 @@ pub struct HeaderRewriter<'a, HR: HeaderRewrite, W: Write> {
     #[derivative(Debug = "ignore")]
     packet_queue: VecDeque<Packet>,
     header_rewrite: HR,
+    header_summarize: HS,
+    _error: PhantomData<E>,
 }
 
-impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
+impl<HR, HS, W, E> HeaderRewriter<'_, HR, HS, W, E>
+where
+    HR: HeaderRewrite<Error = E>,
+    HS: HeaderSummarize<Error = E>,
+    W: Write,
+{
     /// Constructs a new rewriter
     /// - `config` - the configuration for volume rewriting.
     /// - `packet_writer` - the Ogg stream writer that the rewritten packets
     ///   will be sent to.
-    pub fn new(rewrite: HR, packet_writer: PacketWriter<W>) -> HeaderRewriter<HR, W> {
+    pub fn new(rewrite: HR, summarize: HS, packet_writer: PacketWriter<W>) -> HeaderRewriter<HR, HS, W, E> {
         HeaderRewriter {
             packet_writer,
             header_packet: None,
             state: State::AwaitingHeader,
             packet_queue: VecDeque::new(),
             header_rewrite: rewrite,
+            header_summarize: summarize,
+            _error: PhantomData,
         }
+    }
+
+    fn parse_codec_headers(identification: &[u8], comment: &[u8]) -> Result<CodecHeaders, Error> {
+        if let Some(opus_header) = opus::IdHeader::try_parse(identification)? {
+            let comment_header = opus::CommentHeader::try_parse(comment)?;
+            return Ok(CodecHeaders::Opus(opus_header, comment_header));
+        }
+        if let Some(vorbis_header) = vorbis::IdHeader::try_parse(identification)? {
+            let comment_header = vorbis::CommentHeader::try_parse(comment)?;
+            return Ok(CodecHeaders::Vorbis(vorbis_header, comment_header));
+        }
+        Err(Error::UnknownCodec)
     }
 
     /// Submits a new packet to the rewriter. If `Ready` is returned, another
@@ -82,51 +204,40 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
     /// `HeadersUnchanged` is returned, the supplied stream did not need
     /// any alterations. In this case, the partial output should be discarded
     /// and no further packets submitted.
-    pub fn submit(&mut self, mut packet: Packet) -> Result<SubmitResult<HR::Summary>, HR::Error>
+    pub fn submit(&mut self, mut packet: Packet) -> Result<SubmitResult<HS::Summary>, E>
     where
         HR::Error: From<Error>,
     {
+        let packet_serial = packet.stream_serial();
         match self.state {
             State::AwaitingHeader => {
                 self.header_packet = Some(packet);
-                self.state = State::AwaitingComments;
+                self.state = State::AwaitingComments { serial: packet_serial };
             }
-            State::AwaitingComments => {
+            State::AwaitingComments { serial } if serial == packet_serial => {
                 // Parse Opus header
-                let mut opus_header_packet = self.header_packet.take().expect("Missing header packet");
+                let mut id_header_packet = self.header_packet.take().expect("Missing header packet");
                 let (summary_before, summary_after, changed) = {
-                    // Create copies of Opus and comment header to check if they have changed
-                    let mut opus_header_packet_data_orig = opus_header_packet.data.clone();
-                    let mut comment_header_data_orig = packet.data.clone();
-
-                    // Parse Opus header
-                    let mut opus_header =
-                        OpusHeader::try_parse(&mut opus_header_packet.data)?.ok_or(Error::MissingOpusStream)?;
-                    // Parse comment header
-                    let mut comment_header = match CommentHeader::try_parse(&mut packet.data) {
-                        Ok(Some(header)) => header,
-                        Ok(None) => return Err(Error::MissingCommentHeader.into()),
-                        Err(e) => return Err(e.into()),
-                    };
-                    let summary_before = self.header_rewrite.summarize(&opus_header, &comment_header)?;
-                    self.header_rewrite.rewrite(&mut opus_header, &mut comment_header)?;
-                    let summary_after = self.header_rewrite.summarize(&opus_header, &comment_header)?;
-
-                    // We have decoded both of these already, so these should never fail
-                    let opus_header_orig = OpusHeader::try_parse(&mut opus_header_packet_data_orig)
-                        .expect("Opus header unexpectedly invalid")
-                        .expect("Unexpectedly failed to find Opus header");
-                    let comment_header_orig = CommentHeader::try_parse(&mut comment_header_data_orig)
-                        .expect("Unexpectedly failed to decode comment header")
-                        .expect("Comment header unexpectedly missing");
+                    // Parse headers
+                    let original_headers = Self::parse_codec_headers(&id_header_packet.data, &packet.data)?;
+                    let mut headers = original_headers.clone();
+                    let summary_before = self.header_summarize.summarize(&headers)?;
+                    self.header_rewrite.rewrite(&mut headers)?;
+                    let summary_after = self.header_summarize.summarize(&headers)?;
 
                     // We compare headers rather than the values of the `OpusGains` structs because
                     // using the latter glosses over issues such as duplicate or invalid gain tags
                     // which we will fix if present.
-                    let changed = (opus_header != opus_header_orig) || (comment_header != comment_header_orig);
+                    let changed = headers != original_headers;
+                    // Update ID header
+                    id_header_packet.data.clear();
+                    headers.serialize_id_header(&mut id_header_packet.data)?;
+                    // Update comment header
+                    packet.data.clear();
+                    headers.serialize_comment_header(&mut packet.data)?;
                     (summary_before, summary_after, changed)
                 };
-                self.packet_queue.push_back(opus_header_packet);
+                self.packet_queue.push_back(id_header_packet);
                 self.packet_queue.push_back(packet);
                 self.state = State::Forwarding;
 
@@ -136,21 +247,27 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
                     SubmitResult::HeadersUnchanged(summary_before)
                 });
             }
-            State::Forwarding => {
+            State::AwaitingComments { .. } | State::Forwarding => {
                 self.packet_queue.push_back(packet);
             }
         }
 
         while let Some(packet) = self.packet_queue.pop_front() {
-            let packet_info = Self::packet_write_end_info(&packet);
-            let packet_serial = packet.stream_serial();
-            let packet_granule = packet.absgp_page();
-
-            self.packet_writer
-                .write_packet(packet.data, packet_serial, packet_info, packet_granule)
-                .map_err(Error::WriteError)?;
+            self.write_packet(packet)?;
         }
         Ok(SubmitResult::Good)
+    }
+
+    fn write_packet(&mut self, packet: Packet) -> Result<(), Error> {
+        // This is an attempt to help polymorphization by moving the writer dependent
+        // code into a separate function
+        let packet_info = Self::packet_write_end_info(&packet);
+        let packet_serial = packet.stream_serial();
+        let packet_granule = packet.absgp_page();
+
+        self.packet_writer
+            .write_packet(packet.data, packet_serial, packet_info, packet_granule)
+            .map_err(Error::WriteError)
     }
 
     fn packet_write_end_info(packet: &Packet) -> PacketWriteEndInfo {
@@ -171,19 +288,20 @@ impl<HR: HeaderRewrite, W: Write> HeaderRewriter<'_, HR, W> {
 /// immediately if it is detected that no headers were modified, otherwise it
 /// will continue to rewrite the stream until the input stream is exhausted, an
 /// error occurs or the interrupt condition is set.
-pub fn rewrite_stream_with_interrupt<HR, R, W, I>(
-    rewrite: HR, input: R, mut output: W, abort_on_unchanged: bool, interrupt: I,
-) -> Result<SubmitResult<HR::Summary>, HR::Error>
+pub fn rewrite_stream_with_interrupt<HR, HS, R, W, I, E>(
+    rewrite: HR, summarize: HS, input: R, mut output: W, abort_on_unchanged: bool, interrupt: &I,
+) -> Result<SubmitResult<HS::Summary>, E>
 where
-    HR::Error: From<Error>,
+    HR: HeaderRewrite<Error = E>,
+    HS: HeaderSummarize<Error = E>,
     R: Read + Seek,
     W: Write,
-    HR: HeaderRewrite,
     I: Interrupt,
+    E: From<Error>,
 {
     let mut ogg_reader = PacketReader::new(input);
     let ogg_writer = PacketWriter::new(&mut output);
-    let mut rewriter = HeaderRewriter::new(rewrite, ogg_writer);
+    let mut rewriter = HeaderRewriter::new(rewrite, summarize, ogg_writer);
     let mut result = SubmitResult::Good;
     loop {
         if interrupt.is_set() {
@@ -209,9 +327,8 @@ where
                     Ok(r @ SubmitResult::HeadersUnchanged(_)) => {
                         if abort_on_unchanged {
                             break Ok(r);
-                        } else {
-                            result = r;
                         }
+                        result = r;
                     }
                     Err(_) => break submit_result,
                 }
@@ -222,14 +339,15 @@ where
 
 /// Identical to `rewrite_stream_with_interrupt` except the rewrite loop cannot
 /// be interrupted.
-pub fn rewrite_stream<HR, R, W>(
-    rewrite: HR, input: R, output: W, abort_on_unchanged: bool,
-) -> Result<SubmitResult<HR::Summary>, HR::Error>
+pub fn rewrite_stream<HR, HS, R, W, E>(
+    rewrite: HR, summarize: HS, input: R, output: W, abort_on_unchanged: bool,
+) -> Result<SubmitResult<HS::Summary>, E>
 where
-    HR::Error: From<Error>,
+    HR: HeaderRewrite<Error = E>,
+    HS: HeaderSummarize<Error = E>,
     R: Read + Seek,
     W: Write,
-    HR: HeaderRewrite,
+    E: From<Error>,
 {
-    rewrite_stream_with_interrupt(rewrite, input, output, abort_on_unchanged, Never::default())
+    rewrite_stream_with_interrupt(rewrite, summarize, input, output, abort_on_unchanged, &Never::default())
 }

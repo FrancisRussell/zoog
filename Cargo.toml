@@ -1,14 +1,14 @@
 [package]
 name = "zoog"
-version = "0.6.0"
+version = "0.7.0"
 authors = ["Francis Russell <francis@unchartedbackwaters.co.uk>"]
-edition = "2018"
+edition = "2021"
 homepage = "https://github.com/FrancisRussell/zoog"
 readme = "README.md"
 repository = "https://github.com/FrancisRussell/zoog.git"
 license = "BSD-3-Clause"
-keywords = ["ogg", "opus", "normalization"]
-description = "Tools for modifying Ogg Opus comment tags, R128 tags and output gain"
+keywords = ["ogg", "opus", "vorbis", "normalization"]
+description = "Tools for modifying Ogg Opus output gain and R128 tags and Ogg Opus/Vorbis comment tags"
 
 [dependencies]
 audiopus_sys = { version = "0.2.2", features = ["static"] }

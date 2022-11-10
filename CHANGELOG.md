@@ -1,5 +1,17 @@
 # Changelog
 
+## 0.7.0
+
+* Add `--dry-run` option to `opuscomment`.
+* Move `DiscreteCommentList` iterator into submodule.
+* Bump Rust edition to 2021.
+* Use clippy in pedantic mode for library and executables.
+* Some code refactoring to make clippy happier.
+* Preserve additional binary data in Opus comment header as suggested by the spec.
+* Significant refactoring for multiple codec support.
+* Add `opuscomment` support for Ogg Vorbis and rename to `zoogcomment`.
+* Handle pre-skip when analyzing volume of Ogg Opus streams.
+
 ## 0.6.0
 
 * Add support for interrupting a stream rewrite.

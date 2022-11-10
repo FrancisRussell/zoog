@@ -49,10 +49,10 @@ where
 
 /// Escapes a string slice using `vorbiscomment`-style escaping
 pub fn escape_str(value: &str) -> Cow<str> {
-    if !value.contains(ESCAPED_CHARS) {
-        value.into()
-    } else {
+    if value.contains(ESCAPED_CHARS) {
         EscapingIterator::new(value.chars()).collect()
+    } else {
+        value.into()
     }
 }
 
@@ -105,7 +105,7 @@ mod tests {
 
     fn is_safe(value: &str) -> bool {
         // Escaped strings may still contain the escape character so we don't include it
-        !value.contains(&['\0', '\n', '\r'])
+        !value.contains(['\0', '\n', '\r'])
     }
 
     #[test]
@@ -126,7 +126,7 @@ mod tests {
     #[test]
     fn escape_special() {
         let original = "\0\n\r\\";
-        assert!(!is_safe(&original));
+        assert!(!is_safe(original));
 
         let escaped = escape_str(original);
         assert!(is_safe(&escaped));
@@ -142,7 +142,7 @@ mod tests {
     fn escaping_special_by_char() {
         // Pick up bugs in detecting if strings need to be escaped by testing each
         // escaped character individually
-        for c in ESCAPED_CHARS.iter() {
+        for c in &ESCAPED_CHARS {
             let original = c.to_string();
 
             let escaped = escape_str(&original);

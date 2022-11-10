@@ -3,12 +3,13 @@
 [![Zoog crate](https://img.shields.io/crates/v/zoog)](https://crates.io/crates/zoog)
 [![Zoog documentation](https://docs.rs/zoog/badge.svg)](https://docs.rs/zoog)
 
-Zoog is a Rust library that consists of functionality that can be used
-to determine the loudness of an Ogg Opus file and also to rewrite that
-file with new internal gain information as well as loudness-related comment
-tags. It also has functionality for purely manipulating comment tags.
+Zoog is a Rust library that consists of functionality that can be used to
+determine the loudness of an Ogg Opus file and also to rewrite that file with
+new internal gain information as well as loudness-related comment tags. It also
+has functionality for purely manipulating comment tags of both Ogg Opus and Ogg
+Vorbis files.
 
-Zoog currently contains two tools, `opusgain` and `opuscomment`. `opusgain` can
+Zoog currently contains two tools, `opusgain` and `zoogcomment`. `opusgain` can
 be used to:
 
 * set the output gain value located in the Opus binary header inside Opus files
@@ -22,14 +23,14 @@ what volume to play an Opus-encoded audio file at.
 
 It is intended to solve the "Opus plays too quietly" problem.
 
-`opuscomment` can be used to list, replace or modify the comment tags of Ogg
-Opus files. Its usage is roughly based on that of `vorbiscomment` though many
-options have different naming for improved clarity.
+`zoogcomment` can be used to list, replace or modify the comment tags of Ogg
+Opus and Ogg Vorbis files. Its usage is roughly based on that of
+`vorbiscomment` though many options have different naming for improved clarity.
 
 Although `zoog` exposes a library, its API is unstable and this package is
 released on [crates.io](https://crates.io/) primarily to allow access to the
-`opusgain` tool.  The API is documented however, and the reading the source may
-prove useful to anyone else wishing to work with Ogg Opus files.
+command-line tools. The API is documented however, and the reading the source
+may prove useful to anyone else wishing to work with Ogg Opus files.
 
 ## `opusgain`
 
@@ -69,7 +70,7 @@ The following options are available (run `opusgain --help` for usage):
   * `r128`: Set the output gain in the Opus binary header to the value that
     ensures playback will occur at -23 LUFS, which should match the loudness of
     files produced by `opusenc` from FLAC files which contained ReplayGain
-    information.
+    information. This is the gain level intended by the Opus authors.
 
   * `no-change`: Do not change the output gain in the Opus binary header.
 
@@ -109,15 +110,17 @@ The following options are available (run `opusgain --help` for usage):
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
 
+Sequentially multiplexed or "chained" Ogg Opus streams are not supported.
+
 `opusgain` supports Unix shell style wildcards under Windows, where wildcards
 must be handled by the application rather than expanded by the shell.
 
-## `opuscomment`
+## `zoogcomment`
 
-`opuscomment` can be used to delete, append, replace and list the comments
-located in an Ogg Opus file.
+`zoogcomment` can be used to delete, append, replace and list the comments
+located in an Ogg Opus or Ogg Vorbis file.
 
-The following options are available (run `opuscomment --help` for usage):
+The following options are available (run `zoogcomment --help` for usage):
 
 * `-l, --list`: List all tags in the file in `NAME=VALUE` format. This will be to
   standard output unless `-O` is specified.
@@ -154,7 +157,10 @@ The following options are available (run `opuscomment --help` for usage):
   line. If `-` is specified for the file name, tags will be written to standard
   output.
 
-`opuscomment` only has knowledge of UTF-8. Usage on systems where UTF-8 is not
+* `-n, --dry-run`: Displays the same output that `zoogcomment` would otherwise
+  produce, but does not make any changes to the filesystem.
+
+`zoogcomment` only has knowledge of UTF-8. Usage on systems where UTF-8 is not
 the character encoding scheme in use may encounter issues.
 
 ## Build Instructions 
@@ -185,7 +191,7 @@ At the command line, simply run
 $ cargo install zoog
 ```
 
-`opusgain` and `opuscomment` should now be available in the path.
+`opusgain` and `zoogcomment` should now be available in the path.
 
 ## Releases
 
@@ -213,7 +219,7 @@ of the output gain was to eliminate the need for an album gain tag, however
 ### The problem
 
 When encoding an Opus stream using `opusenc` from a FLAC stream which has
-embedded ReplayGain tags, the resulting Opus stream will have the output-gain
+embedded ReplayGain tags, the resulting Opus stream will have the output gain
 field set in the Opus header. The gain value will be chosen using [EBU R
 128](https://en.wikipedia.org/wiki/EBU_R_128) with a loudness value of -23
 [LUFS](https://en.wikipedia.org/wiki/LKFS), which is 5 dB quieter than
@@ -246,43 +252,30 @@ BS.1770](https://en.wikipedia.org/wiki/LKFS). This is the standard used by [EBU
 R 128](https://en.wikipedia.org/wiki/EBU_R_128) for measuring loudness and the
 one intended for use when calculating Opus `R128` tags.
 
-### What happened to the `zoog` program?
+### What's with the name `zoog`?
 
-It was deprecated and removed from the repository.
+`zoog` stands for "Zero Opus Output Gain" and was the name of the original tool
+in this project. It served a similar purpose to `opusgain` but used the existing
+`R128` tags to determine file volume rather than decoding audio directly.
 
-### What did `zoog` do?
+Depending on how an Ogg Opus file has been created and modified, album
+normalization can occur via either the output gain value present in the Opus
+binary header, or via the presence of an `R128_ALBUM_GAIN` tag.
+Problematically, it is not possible to reliably distingish between an Ogg Opus
+file that has not been album normalized and one that has been via the output
+gain value.
 
-`zoog` modified the internal gain values of Opus files and applied the inverse
-gain delta to the any `R128` tags present in the file.  Like `opusgain`, this
-enabled targeting Opus-encoded tracks to a particular loudness level on players
-that did not support `R128` tags whilst maintaining the same loudness value for
-players that used them.
+The inability to reliably detect if a file has been album normalized meant that
+`zoog` did not know if it needed to introduce an `R128_ALBUM_GAIN` tag when
+changing the output gain in order to preserve album gain. Ogg Opus players face
+a similar dilemma if they wish to play a track at album volume, but no
+`R128_ALBUM_GAIN` tag is present.
 
-### Why was `zoog` deprecated?
-
-`zoog` did not decode audio in order to determine loudness. Instead it relied
-upon existing `R128` tags. This was problematic because lack of an
-`R128_ALBUM_GAIN` tag does not indicate a track is not album normalized - it
-might still have been album normalized via the internal gain header (as done by
-`opusenc` when encoding from FLAC files containing ReplayGain tags). Such files
-are problematic for players in general if they wish to play tracks at an
-album-normalized volume because it's not obvious how to tell if tracks have
-been album normalized.
-
-`zoog` had a similar issue. Modifying an album-normalized track's internal gain
-requires creation of an `R128_ALBUM_GAIN` tag if there is not one present. If
-the track is not album-normalized, then adding such a tag is nonsensical.
-
-`zoog` did not introduce new `R128_ALBUM_GAIN` tags and It was suggested that a
-tool like [loudgain](https://github.com/Moonbase59/loudgain) be used create
-`R128_ALBUM_GAIN` tags before applying `zoog` to album-normalized files.
-However, failure to do this would likely result in different internal gains being
-applied to different tracks in an album, losing album-normalization in a way that
-would likely go unnoticed.
-
-Due to the potential for error, `zoog` was removed and `opusgain` was created.
-Like `vorbisgain` and similar tools, `opusgain` decodes the audio to determine loudness
-and has an option to specify whether the tracks being normalized are part of an album.
+The recommended way to use `zoog` on album-normalized files when album gain
+tags were missing was to use a tool like
+[loudgain](https://github.com/Moonbase59/loudgain) to generate these tags
+before applying `zoog`. Since the potential for error when using `zoog` was
+high and could require the use of additional tools, it was deprecated.
 
 ### When should I use `opusgain` versus `loudgain`
 
@@ -303,8 +296,19 @@ Applying `opusgain` to various test files then reviewing the diagnostic output
 and `R128` tags generated by [loudgain](https://github.com/Moonbase59/loudgain)
 when applied to the rewritten files is helpful in this regard.
 
+### Why was `opuscomment` renamed to `zoogcomment`?
+
+This was done when functionality to support Ogg Vorbis files was added.
+
 ## Disclaimer
 
-Please see LICENSE. Unless you have a source you can easily reconstruct your Opus files
-from, the author recommends making a backup of any files you intend to modify first, and
-running `opusinfo` afterwards on any processed files.
+Please see LICENSE. Unless you have a source you can easily reconstruct your
+Ogg Opus and/or Vorbis files from, the author recommends making a backup of any
+files you intend to modify first, and running `opusinfo` afterwards on any
+processed files.
+
+## References
+
+1. [RFC 7845 - Ogg Encapsulation for the Opus Audio Codec](https://www.rfc-editor.org/rfc/rfc7845.txt)
+2. [Vorbis I Specification](https://www.xiph.org/vorbis/doc/Vorbis_I_spec.html)
+3. [Ogg Vorbis identification header](https://wiki.xiph.org/OggVorbis)

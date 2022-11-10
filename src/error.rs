@@ -4,7 +4,7 @@ use ogg::reading::OggReadError;
 use tempfile::PersistError;
 use thiserror::Error;
 
-use crate::escaping;
+use crate::{escaping, Codec};
 
 /// The Zoog error type
 #[derive(Debug, Error)]
@@ -29,25 +29,33 @@ pub enum Error {
     #[error("Ogg decoding error: `{0}`")]
     OggDecode(OggReadError),
 
+    /// A read error from a file
+    #[error("Error reading from file: `{0}`")]
+    ReadError(std::io::Error),
+
     /// A write error to a file
     #[error("Error writing to file: `{0}`")]
     WriteError(std::io::Error),
 
-    /// The stream was not an Opus stream
-    #[error("Not an Opus stream")]
-    MissingOpusStream,
+    /// The stream was not of the expected codec
+    #[error("Not a stream of type {0}")]
+    MissingStream(Codec),
 
-    /// The Opus comment header was missing
-    #[error("Comment header is missing")]
-    MissingCommentHeader,
+    /// The stream was not of a recognised codec
+    #[error("Unknown codec")]
+    UnknownCodec,
 
-    /// The Opus comment header was invalid
+    /// The codec identification header was invalid
+    #[error("Malformed identification header")]
+    MalformedIdentificationHeader,
+
+    /// The comment header was invalid
     #[error("Malformed comment header")]
     MalformedCommentHeader,
 
-    /// Missing Opus comment separator
-    #[error("Missing separator in Opus comment")]
-    MissingOpusCommentSeparator,
+    /// Missing comment separator
+    #[error("Missing separator in comment")]
+    MissingCommentSeparator,
 
     /// An invalid UTF-8 sequence was encountered
     #[error("UTF-8 encoding error")]
@@ -104,4 +112,24 @@ pub enum Error {
     /// An interrupt was detected
     #[error("The operation was interrupted")]
     Interrupted,
+
+    /// Unsupported codec version
+    #[error("Version {1} of codec {0} is not supported")]
+    UnsupportedCodecVersion(Codec, u64),
+
+    /// Unsupported codec
+    #[error("The codec {0} was not supported for this operation")]
+    UnsupportedCodec(Codec),
+
+    /// Unrepresentable value in comment header
+    #[error("A value could not be represented in a comment header")]
+    UnrepresentableValueInCommentHeader,
+
+    /// Unexpected logical stream in Ogg file
+    #[error("Unexpected logical stream in Ogg file, serial {0:#x}")]
+    UnexpectedLogicalStream(u32),
+
+    /// Audio parameters changed
+    #[error("Channel count and/or sample rate changed between concatenated audio streams")]
+    UnexpectedAudioParametersChange,
 }
