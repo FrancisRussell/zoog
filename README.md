@@ -110,6 +110,8 @@ The following options are available (run `opusgain --help` for usage):
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
 
+Sequentially multiplexed or "chained" Ogg Opus streams are not supported.
+
 `opusgain` supports Unix shell style wildcards under Windows, where wildcards
 must be handled by the application rather than expanded by the shell.
 
