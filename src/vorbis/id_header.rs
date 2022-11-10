@@ -56,6 +56,8 @@ impl header::IdHeader for IdHeader {
         let value = reader.read_u32::<LittleEndian>().expect("Error reading sample rate");
         value.try_into().expect("Could not convert sample rate to usize")
     }
+
+    fn preskip_samples(&self) -> usize { 0 }
 }
 
 impl IdHeader {
