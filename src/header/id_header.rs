@@ -23,4 +23,7 @@ pub trait IdHeader {
 
     /// Converts the header into a `Vec`
     fn into_vec(self) -> Vec<u8>;
+
+    /// The number of samples to be skipped when decoding this stream
+    fn preskip_samples(&self) -> usize;
 }

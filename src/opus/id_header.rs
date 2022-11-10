@@ -59,6 +59,12 @@ impl header::IdHeader for IdHeader {
     }
 
     fn output_sample_rate(&self) -> usize { OPUS_DECODE_SAMPLE_RATE }
+
+    fn preskip_samples(&self) -> usize {
+        let mut reader = Cursor::new(&self.data[10..12]);
+        let value = reader.read_u16::<LittleEndian>().expect("Error reading pre-skip sample count");
+        value.into()
+    }
 }
 
 impl IdHeader {

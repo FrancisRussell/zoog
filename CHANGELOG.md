@@ -10,6 +10,7 @@
 * Preserve additional binary data in Opus comment header as suggested by the spec.
 * Significant refactoring for multiple codec support.
 * Add `opuscomment` support for Ogg Vorbis and rename to `zoogcomment`.
+* Handle pre-skip when analyzing volume of Ogg Opus streams.
 
 ## 0.6.0
 

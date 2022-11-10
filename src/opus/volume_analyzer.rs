@@ -26,10 +26,11 @@ struct DecodeState {
     #[derivative(Debug = "ignore")]
     meters: Vec<ChannelLoudnessMeter>,
     sample_buffer: Vec<f32>,
+    preskip_remaining: usize,
 }
 
 impl DecodeState {
-    pub fn new(channel_count: usize, sample_rate: usize) -> Result<DecodeState, Error> {
+    pub fn new(channel_count: usize, sample_rate: usize, preskip: usize) -> Result<DecodeState, Error> {
         let sample_rate_u32: u32 = sample_rate.try_into().expect("Unable to truncate sample rate");
         let decoder = Self::build_decoder(channel_count, sample_rate_u32)?;
         let mut meters = Vec::with_capacity(channel_count);
@@ -42,6 +43,7 @@ impl DecodeState {
             decoder,
             meters,
             sample_buffer: vec![0.0f32; channel_count * sample_rate * OPUS_MAX_PACKET_DURATION_MS / ms_per_second],
+            preskip_remaining: preskip,
         };
         Ok(state)
     }
@@ -55,13 +57,14 @@ impl DecodeState {
         Decoder::new(sample_rate, channel_count_typed).map_err(Error::OpusError)
     }
 
-    pub fn reset_decoder(&mut self, channel_count: usize, sample_rate: usize) -> Result<(), Error> {
+    pub fn reset_decoder(&mut self, channel_count: usize, sample_rate: usize, preskip: usize) -> Result<(), Error> {
         if sample_rate != self.sample_rate || channel_count != self.num_channels() {
             return Err(Error::UnexpectedAudioParametersChange);
         }
         let sample_rate_u32: u32 = sample_rate.try_into().expect("Unable to truncate sample rate");
         let decoder = Self::build_decoder(channel_count, sample_rate_u32)?;
         self.decoder = decoder;
+        self.preskip_remaining = preskip;
         Ok(())
     }
 
@@ -74,8 +77,10 @@ impl DecodeState {
         let num_decoded_samples =
             self.decoder.decode_float(packet, &mut self.sample_buffer, decode_fec).map_err(Error::OpusError)?;
         let decoded_samples = &self.sample_buffer[..(channel_count * num_decoded_samples)];
+        let to_skip = std::cmp::min(self.preskip_remaining, num_decoded_samples);
+        self.preskip_remaining -= to_skip;
         for (channel_idx, meter) in self.meters.iter_mut().enumerate() {
-            let samples = decoded_samples.iter().copied().skip(channel_idx).step_by(channel_count);
+            let samples = decoded_samples.iter().copied().skip(channel_idx).step_by(channel_count).skip(to_skip);
             meter.push(samples);
         }
         Ok(())
@@ -141,10 +146,11 @@ impl VolumeAnalyzer {
                 let header = OpusIdHeader::try_parse(&packet.data)?.ok_or(Error::MissingStream(Codec::Opus))?;
                 let channel_count = header.num_output_channels();
                 let sample_rate = header.output_sample_rate();
+                let preskip = header.preskip_samples();
                 if let Some(ref mut decode_state) = self.decode_state {
-                    decode_state.reset_decoder(channel_count, sample_rate)?;
+                    decode_state.reset_decoder(channel_count, sample_rate, preskip)?;
                 } else {
-                    self.decode_state = Some(DecodeState::new(channel_count, sample_rate)?);
+                    self.decode_state = Some(DecodeState::new(channel_count, sample_rate, preskip)?);
                 }
                 self.state = State::AwaitingComments { serial: packet_serial };
             }
