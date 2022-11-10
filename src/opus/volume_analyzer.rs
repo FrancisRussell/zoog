@@ -15,6 +15,7 @@ enum State {
     AwaitingHeader,
     AwaitingComments { serial: u32 },
     Analyzing { serial: u32 },
+    Done,
 }
 
 #[derive(Derivative)]
@@ -151,8 +152,7 @@ impl VolumeAnalyzer {
                 if serial == packet_serial {
                     // Check comment header is valid
                     OpusCommentHeader::try_parse(&packet.data)?;
-                    self.state =
-                        if packet.last_in_stream() { State::AwaitingHeader } else { State::Analyzing { serial } };
+                    self.state = if packet.last_in_stream() { State::Done } else { State::Analyzing { serial } };
                 } else {
                     return Err(Error::UnexpectedLogicalStream(packet_serial));
                 }
@@ -162,11 +162,17 @@ impl VolumeAnalyzer {
                     let decode_state = self.decode_state.as_mut().expect("Decode state unexpectedly missing");
                     decode_state.push_packet(&packet.data)?;
                     if packet.last_in_stream() {
-                        self.state = State::AwaitingHeader;
+                        self.state = State::Done;
                     }
                 } else {
                     return Err(Error::UnexpectedLogicalStream(packet_serial));
                 }
+            }
+            State::Done => {
+                // How does volume normalization for chained streams work, especially when
+                // they may have different values for the output gain header? For now we error
+                // if we see an additional stream.
+                return Err(Error::UnexpectedLogicalStream(packet_serial));
             }
         }
         Ok(())
