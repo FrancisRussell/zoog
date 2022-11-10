@@ -28,7 +28,7 @@ pub enum SubmitResult<S> {
 #[derive(Clone, Copy, Debug)]
 enum State {
     AwaitingHeader,
-    AwaitingComments,
+    AwaitingComments { serial: u32 },
     Forwarding,
 }
 
@@ -208,12 +208,13 @@ where
     where
         HR::Error: From<Error>,
     {
+        let packet_serial = packet.stream_serial();
         match self.state {
             State::AwaitingHeader => {
                 self.header_packet = Some(packet);
-                self.state = State::AwaitingComments;
+                self.state = State::AwaitingComments { serial: packet_serial };
             }
-            State::AwaitingComments => {
+            State::AwaitingComments { serial } if serial == packet_serial => {
                 // Parse Opus header
                 let mut id_header_packet = self.header_packet.take().expect("Missing header packet");
                 let (summary_before, summary_after, changed) = {
@@ -246,7 +247,7 @@ where
                     SubmitResult::HeadersUnchanged(summary_before)
                 });
             }
-            State::Forwarding => {
+            State::AwaitingComments { .. } | State::Forwarding => {
                 self.packet_queue.push_back(packet);
             }
         }

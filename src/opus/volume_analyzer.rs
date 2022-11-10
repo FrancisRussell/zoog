@@ -13,82 +13,77 @@ const OPUS_MAX_PACKET_DURATION_MS: usize = 120;
 #[derive(Clone, Copy, Debug)]
 enum State {
     AwaitingHeader,
-    AwaitingComments,
-    Analyzing,
+    AwaitingComments { serial: u32 },
+    Analyzing { serial: u32 },
 }
 
 #[derive(Derivative)]
 #[derivative(Debug)]
-struct DecodeStateChannel {
-    #[derivative(Debug = "ignore")]
-    loudness_meter: ChannelLoudnessMeter,
-    sample_buffer: Vec<f32>,
-}
-
-impl DecodeStateChannel {
-    fn new(sample_rate: usize) -> DecodeStateChannel {
-        let sample_rate_u32: u32 = sample_rate.try_into().expect("Unable to truncate sample rate");
-        DecodeStateChannel { loudness_meter: ChannelLoudnessMeter::new(sample_rate_u32), sample_buffer: Vec::new() }
-    }
-}
-
-#[derive(Debug)]
 struct DecodeState {
-    channel_count: usize,
-    _sample_rate: usize,
+    sample_rate: usize,
     decoder: Decoder,
-    channel_states: Vec<DecodeStateChannel>,
+    #[derivative(Debug = "ignore")]
+    meters: Vec<ChannelLoudnessMeter>,
     sample_buffer: Vec<f32>,
 }
 
 impl DecodeState {
-    fn new(channel_count: usize, sample_rate: usize) -> Result<DecodeState, Error> {
-        let channel_count_typed = match channel_count {
-            1 => Channels::Mono,
-            2 => Channels::Stereo,
-            n => return Err(Error::InvalidChannelCount(n)),
-        };
+    pub fn new(channel_count: usize, sample_rate: usize) -> Result<DecodeState, Error> {
         let sample_rate_u32: u32 = sample_rate.try_into().expect("Unable to truncate sample rate");
-        let decoder = Decoder::new(sample_rate_u32, channel_count_typed).map_err(Error::OpusError)?;
-        let mut channel_states = Vec::with_capacity(channel_count);
+        let decoder = Self::build_decoder(channel_count, sample_rate_u32)?;
+        let mut meters = Vec::with_capacity(channel_count);
         for _ in 0..channel_count {
-            channel_states.push(DecodeStateChannel::new(sample_rate));
+            meters.push(ChannelLoudnessMeter::new(sample_rate_u32));
         }
-        assert_eq!(channel_states.len(), channel_count);
         let ms_per_second: usize = 1000;
         let state = DecodeState {
-            channel_count,
-            _sample_rate: sample_rate,
+            sample_rate,
             decoder,
-            channel_states,
+            meters,
             sample_buffer: vec![0.0f32; channel_count * sample_rate * OPUS_MAX_PACKET_DURATION_MS / ms_per_second],
         };
         Ok(state)
     }
 
-    fn push_packet(&mut self, packet: &[u8]) -> Result<(), Error> {
+    fn build_decoder(channel_count: usize, sample_rate: u32) -> Result<Decoder, Error> {
+        let channel_count_typed = match channel_count {
+            1 => Channels::Mono,
+            2 => Channels::Stereo,
+            n => return Err(Error::InvalidChannelCount(n)),
+        };
+        Decoder::new(sample_rate, channel_count_typed).map_err(Error::OpusError)
+    }
+
+    pub fn reset_decoder(&mut self, channel_count: usize, sample_rate: usize) -> Result<(), Error> {
+        if sample_rate != self.sample_rate || channel_count != self.num_channels() {
+            return Err(Error::UnexpectedAudioParametersChange);
+        }
+        let sample_rate_u32: u32 = sample_rate.try_into().expect("Unable to truncate sample rate");
+        let decoder = Self::build_decoder(channel_count, sample_rate_u32)?;
+        self.decoder = decoder;
+        Ok(())
+    }
+
+    pub fn num_channels(&self) -> usize { self.meters.len() }
+
+    pub fn push_packet(&mut self, packet: &[u8]) -> Result<(), Error> {
         // Decode to interleaved PCM
         let decode_fec = false;
+        let channel_count = self.num_channels();
         let num_decoded_samples =
             self.decoder.decode_float(packet, &mut self.sample_buffer, decode_fec).map_err(Error::OpusError)?;
-
-        for (c, channel_state) in &mut self.channel_states.iter_mut().enumerate() {
-            channel_state.sample_buffer.resize(num_decoded_samples, 0.0f32);
-            // Extract interleaved data
-            for i in 0..num_decoded_samples {
-                let offset = i * self.channel_count + c;
-                channel_state.sample_buffer[i] = self.sample_buffer[offset];
-            }
-            // Feed to meter
-            channel_state.loudness_meter.push(channel_state.sample_buffer.iter().copied());
+        let decoded_samples = &self.sample_buffer[..(channel_count * num_decoded_samples)];
+        for (channel_idx, meter) in self.meters.iter_mut().enumerate() {
+            let samples = decoded_samples.iter().copied().skip(channel_idx).step_by(channel_count);
+            meter.push(samples);
         }
         Ok(())
     }
 
-    fn get_windows(&self) -> Windows100ms<Vec<Power>> {
-        let windows: Vec<_> = self.channel_states.iter().map(|cs| cs.loudness_meter.as_100ms_windows()).collect();
+    pub fn get_windows(&self) -> Windows100ms<Vec<Power>> {
+        let windows: Vec<_> = self.meters.iter().map(ChannelLoudnessMeter::as_100ms_windows).collect();
         // See notes on `reduce_stero` in `bs1770` crate.
-        let power_scale_factor = match self.channel_count {
+        let power_scale_factor = match self.num_channels() {
             1 => 2.0, // Since mono is still output to two devices
             2 => 1.0,
             n => panic!("Calculating power for number of channels {} not yet supported", n),
@@ -139,22 +134,39 @@ impl VolumeAnalyzer {
     /// Submits a new Ogg packet to the analyzer
     #[allow(clippy::needless_pass_by_value)]
     pub fn submit(&mut self, packet: Packet) -> Result<(), Error> {
+        let packet_serial = packet.stream_serial();
         match self.state {
             State::AwaitingHeader => {
                 let header = OpusIdHeader::try_parse(&packet.data)?.ok_or(Error::MissingStream(Codec::Opus))?;
                 let channel_count = header.num_output_channels();
                 let sample_rate = header.output_sample_rate();
-                self.decode_state = Some(DecodeState::new(channel_count, sample_rate)?);
-                self.state = State::AwaitingComments;
+                if let Some(ref mut decode_state) = self.decode_state {
+                    decode_state.reset_decoder(channel_count, sample_rate)?;
+                } else {
+                    self.decode_state = Some(DecodeState::new(channel_count, sample_rate)?);
+                }
+                self.state = State::AwaitingComments { serial: packet_serial };
             }
-            State::AwaitingComments => {
-                // Check comment header is valid
-                OpusCommentHeader::try_parse(&packet.data)?;
-                self.state = State::Analyzing;
+            State::AwaitingComments { serial } => {
+                if serial == packet_serial {
+                    // Check comment header is valid
+                    OpusCommentHeader::try_parse(&packet.data)?;
+                    self.state =
+                        if packet.last_in_stream() { State::AwaitingHeader } else { State::Analyzing { serial } };
+                } else {
+                    return Err(Error::UnexpectedLogicalStream(packet_serial));
+                }
             }
-            State::Analyzing => {
-                let decode_state = self.decode_state.as_mut().expect("Decode state unexpectedly missing");
-                decode_state.push_packet(&packet.data)?;
+            State::Analyzing { serial } => {
+                if serial == packet_serial {
+                    let decode_state = self.decode_state.as_mut().expect("Decode state unexpectedly missing");
+                    decode_state.push_packet(&packet.data)?;
+                    if packet.last_in_stream() {
+                        self.state = State::AwaitingHeader;
+                    }
+                } else {
+                    return Err(Error::UnexpectedLogicalStream(packet_serial));
+                }
             }
         }
         Ok(())

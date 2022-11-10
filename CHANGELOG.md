@@ -10,6 +10,7 @@
 * Preserve additional binary data in Opus comment header as suggested by the spec.
 * Significant refactoring for multiple codec support.
 * Add `opuscomment` support for Ogg Vorbis and rename to `zoogcomment`.
+* Update `opusgain` to support concatenated Ogg Opus streams.
 
 ## 0.6.0
 
