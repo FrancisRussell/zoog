@@ -124,4 +124,12 @@ pub enum Error {
     /// Unrepresentable value in comment header
     #[error("A value could not be represented in a comment header")]
     UnrepresentableValueInCommentHeader,
+
+    /// Unexpected logical stream in Ogg file
+    #[error("Unexpected logical stream in Ogg file, serial {0}")]
+    UnexpectedLogicalStream(u32),
+
+    /// Audio parameters changed
+    #[error("Channel count and/or sample rate changed between concatenated audio streams")]
+    UnexpectedAudioParametersChange,
 }
