@@ -126,7 +126,7 @@ pub enum Error {
     UnrepresentableValueInCommentHeader,
 
     /// Unexpected logical stream in Ogg file
-    #[error("Unexpected logical stream in Ogg file, serial {0}")]
+    #[error("Unexpected logical stream in Ogg file, serial {0:#x}")]
     UnexpectedLogicalStream(u32),
 
     /// Audio parameters changed
