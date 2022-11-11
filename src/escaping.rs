@@ -27,13 +27,13 @@ where
 
     fn next(&mut self) -> Option<char> {
         if self.delayed.is_none() && let Some(c) = self.inner.next() {
-            match c {
-                '\0' => self.delayed = Some('0'),
-                '\n' => self.delayed = Some('n'),
-                '\r' => self.delayed = Some('r'),
-                '\\' => self.delayed = Some('\\'),
-                _ => {},
-            }
+            self.delayed = match c {
+                '\0' => Some('0'),
+                '\n' => Some('n'),
+                '\r' => Some('r'),
+                '\\' => Some('\\'),
+                _ => None,
+            };
             Some(if self.delayed.is_some() {
                 ESCAPE_CHAR
             } else {
@@ -77,13 +77,13 @@ pub fn unescape_str(value: &str) -> Result<Cow<str>, EscapeDecodeError> {
     let mut is_escape = false;
     for c in value.chars() {
         if is_escape {
-            match c {
-                '0' => result.push('\0'),
-                'n' => result.push('\n'),
-                'r' => result.push('\r'),
-                '\\' => result.push('\\'),
+            result.push(match c {
+                '0' => '\0',
+                'n' => '\n',
+                'r' => '\r',
+                '\\' => '\\',
                 _ => return Err(EscapeDecodeError::InvalidEscape(c)),
-            }
+            });
             is_escape = false;
         } else if c == ESCAPE_CHAR {
             is_escape = true;
