@@ -46,6 +46,6 @@ else
 fi
 
 mv "${OUTPUT}" "${TOP}"
-echo "##[set-output name=path;]${TOP}/${OUTPUT}"
-echo "##[set-output name=name;]${OUTPUT}"
-echo "##[set-output name=content_type;]${CONTENT_TYPE}"
+echo "path=${TOP}/${OUTPUT}" >> ${$GITHUB_OUTPUT}
+echo "name=${OUTPUT}" >> ${$GITHUB_OUTPUT}
+echo "content_type=${CONTENT_TYPE}" >> ${$GITHUB_OUTPUT}

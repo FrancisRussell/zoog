@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* No changes.
+
 ## 0.7.0
 
 * Add `--dry-run` option to `opuscomment`.
