@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-* No changes.
+* Enable compilation with stable Rust.
 
 ## 0.7.0
 
