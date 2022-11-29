@@ -1,4 +1,3 @@
-#![feature(let_chains)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate, clippy::uninlined_format_args, clippy::doc_markdown)]
 

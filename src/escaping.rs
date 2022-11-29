@@ -26,18 +26,20 @@ where
     type Item = char;
 
     fn next(&mut self) -> Option<char> {
-        if self.delayed.is_none() && let Some(c) = self.inner.next() {
-            self.delayed = match c {
-                '\0' => Some('0'),
-                '\n' => Some('n'),
-                '\r' => Some('r'),
-                '\\' => Some('\\'),
-                _ => None,
-            };
-            Some(if self.delayed.is_some() {
-                ESCAPE_CHAR
-            } else {
-                c
+        if self.delayed.is_none() {
+            self.inner.next().map(|c| {
+                self.delayed = match c {
+                    '\0' => Some('0'),
+                    '\n' => Some('n'),
+                    '\r' => Some('r'),
+                    '\\' => Some('\\'),
+                    _ => None,
+                };
+                if self.delayed.is_some() {
+                    ESCAPE_CHAR
+                } else {
+                    c
+                }
             })
         } else {
             self.delayed.take()
