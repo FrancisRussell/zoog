@@ -16,8 +16,12 @@ impl Default for Decibels {
     fn default() -> Decibels { Decibels::from(0.0) }
 }
 
-impl const From<f64> for Decibels {
-    fn from(value: f64) -> Decibels { Decibels { inner: value } }
+impl From<f64> for Decibels {
+    fn from(value: f64) -> Decibels { Self::new(value) }
+}
+
+impl Decibels {
+    pub const fn new(value: f64) -> Decibels { Decibels { inner: value } }
 }
 
 impl Display for Decibels {

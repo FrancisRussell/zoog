@@ -26,18 +26,20 @@ where
     type Item = char;
 
     fn next(&mut self) -> Option<char> {
-        if self.delayed.is_none() && let Some(c) = self.inner.next() {
-            self.delayed = match c {
-                '\0' => Some('0'),
-                '\n' => Some('n'),
-                '\r' => Some('r'),
-                '\\' => Some('\\'),
-                _ => None,
-            };
-            Some(if self.delayed.is_some() {
-                ESCAPE_CHAR
-            } else {
-                c
+        if self.delayed.is_none() {
+            self.inner.next().map(|c| {
+                self.delayed = match c {
+                    '\0' => Some('0'),
+                    '\n' => Some('n'),
+                    '\r' => Some('r'),
+                    '\\' => Some('\\'),
+                    _ => None,
+                };
+                if self.delayed.is_some() {
+                    ESCAPE_CHAR
+                } else {
+                    c
+                }
             })
         } else {
             self.delayed.take()
@@ -108,6 +110,29 @@ mod tests {
         !value.contains(['\0', '\n', '\r'])
     }
 
+    // So we don't have to use unstable features. Function names chosen not to
+    // conflict in the case that this becomes stable.
+    // https://github.com/rust-lang/rust/issues/65143
+    trait IntrospectCowBorrow {
+        fn is_cow_owned(&self) -> bool;
+        fn is_cow_borrowed(&self) -> bool;
+    }
+
+    impl<'a, T> IntrospectCowBorrow for Cow<'a, T>
+    where
+        T: ToOwned + ?Sized,
+    {
+        fn is_cow_owned(&self) -> bool {
+            if let Cow::Owned(_) = self {
+                true
+            } else {
+                false
+            }
+        }
+
+        fn is_cow_borrowed(&self) -> bool { !self.is_cow_owned() }
+    }
+
     #[test]
     fn escape_non_special() {
         let original = "The quick brown fox jumps over the lazy dog";
@@ -115,11 +140,11 @@ mod tests {
 
         let escaped = escape_str(original);
         assert!(is_safe(&escaped));
-        assert!(escaped.is_borrowed());
+        assert!(escaped.is_cow_borrowed());
         assert_eq!(original, escaped);
 
         let unescaped = unescape_str(&escaped).expect("Unable to unescape string");
-        assert!(unescaped.is_borrowed());
+        assert!(unescaped.is_cow_borrowed());
         assert_eq!(original, unescaped);
     }
 
@@ -130,28 +155,28 @@ mod tests {
 
         let escaped = escape_str(original);
         assert!(is_safe(&escaped));
-        assert!(escaped.is_owned());
+        assert!(escaped.is_cow_owned());
         assert_eq!(escaped, "\\0\\n\\r\\\\");
 
         let unescaped = unescape_str(&escaped).expect("Unable to reverse escaping");
-        assert!(unescaped.is_owned());
+        assert!(unescaped.is_cow_owned());
         assert_eq!(original, unescaped);
     }
 
     #[test]
     fn escaping_special_by_char() {
         // Pick up bugs in detecting if strings need to be escaped by testing each
-        // escaped character individually
+        // escaped character indivually
         for c in &ESCAPED_CHARS {
             let original = c.to_string();
 
             let escaped = escape_str(&original);
             assert_eq!(escaped.len(), 2);
             assert!(is_safe(&escaped));
-            assert!(escaped.is_owned());
+            assert!(escaped.is_cow_owned());
 
             let unescaped = unescape_str(&escaped).expect("Unable to reverse escaping");
-            assert!(unescaped.is_owned());
+            assert!(unescaped.is_cow_owned());
             assert_eq!(original, unescaped);
         }
     }
