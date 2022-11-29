@@ -9,6 +9,7 @@ repository = "https://github.com/FrancisRussell/zoog.git"
 license = "BSD-3-Clause"
 keywords = ["ogg", "opus", "vorbis", "normalization"]
 description = "Tools for modifying Ogg Opus output gain and R128 tags and Ogg Opus/Vorbis comment tags"
+rust-version = "1.65"
 
 [dependencies]
 audiopus_sys = { version = "0.2.2", features = ["static"] }
