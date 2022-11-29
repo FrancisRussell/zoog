@@ -1,4 +1,4 @@
-#![feature(const_trait_impl, let_chains, cow_is_borrowed)]
+#![feature(let_chains, cow_is_borrowed)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::missing_errors_doc, clippy::must_use_candidate, clippy::uninlined_format_args, clippy::doc_markdown)]
 
