@@ -1,4 +1,3 @@
-#![feature(let_chains)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::uninlined_format_args)]
 
@@ -342,7 +341,7 @@ fn main_impl() -> Result<(), AppError> {
         }
         Ok(SubmitResult::HeadersUnchanged(comments)) => {
             if let OperationMode::List = operation_mode {
-                if let Some(ref path) = cli.tags_out && path != std::ffi::OsStr::new(STANDARD_STREAM_NAME) {
+                if let Some(ref path) = cli.tags_out.filter(|p| p != std::ffi::OsStr::new(STANDARD_STREAM_NAME)) {
                     let mut comment_file = OutputFile::new_target_or_discard(path, dry_run)?;
                     {
                         let mut comment_file = BufWriter::new(comment_file.as_write());
