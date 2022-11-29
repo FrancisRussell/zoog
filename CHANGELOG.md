@@ -3,6 +3,7 @@
 ## Unreleased
 
 * Enable compilation with stable Rust.
+* Specify minimum Rust version in `Cargo.toml`.
 
 ## 0.7.0
 
