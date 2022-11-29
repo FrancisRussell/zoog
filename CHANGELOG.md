@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* No changes yet.
+
 ## 0.7.1
 
 * Enable compilation with stable Rust.
