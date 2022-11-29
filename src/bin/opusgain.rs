@@ -1,4 +1,3 @@
-#![feature(let_chains)]
 #![warn(clippy::pedantic)]
 #![allow(clippy::uninlined_format_args)]
 
@@ -92,9 +91,11 @@ where
         }
     };
     let result = body();
-    if report_error && let Err(ref e) = result {
-        writeln!(console_output.err(), "Failed to analyze volume of {}: {}", path.as_ref().display(), e)
-            .map_err(Error::ConsoleIoError)?;
+    if report_error {
+        if let Err(ref e) = result {
+            writeln!(console_output.err(), "Failed to analyze volume of {}: {}", path.as_ref().display(), e)
+                .map_err(Error::ConsoleIoError)?;
+        }
     }
     result
 }
