@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.7.1
 
 * Enable compilation with stable Rust.
 * Specify minimum Rust version in `Cargo.toml`.
