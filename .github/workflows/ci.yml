@@ -14,7 +14,7 @@ jobs:
             platform: macos-latest
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -26,7 +26,7 @@ jobs:
           use-cross: true
           command: build
           args: --target=${{ matrix.target }}
-      - uses: actions/upload-artifact@v2
+      - uses: actions/upload-artifact@v3.1.1
         with:
           name: zoog-debug-${{ matrix.target }}
           path: |
@@ -40,7 +40,7 @@ jobs:
     name: Cargo test
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
           toolchain: nightly
@@ -54,27 +54,12 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
+      - uses: actions/checkout@v3
       - uses: actions-rs/toolchain@v1
         with:
             toolchain: nightly
             components: clippy
             override: true
       - uses: actions-rs/clippy-check@v1
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-
-  cargo-bloat:
-    name: Cargo bloat
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@master
-      - name: Install Rust
-        uses: actions-rs/toolchain@v1
-        with:
-          toolchain: nightly
-          override: true
-      - name: Run cargo bloat
-        uses: Kobzol/cargo-bloat-action@ee38cc711cd045e30be53db2660dbcbb88f35e58
         with:
           token: ${{ secrets.GITHUB_TOKEN }}

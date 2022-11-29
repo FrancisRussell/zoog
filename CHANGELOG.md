@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.7.1
+
+* Enable compilation with stable Rust.
+* Specify minimum Rust version in `Cargo.toml`.
+
 ## 0.7.0
 
 * Add `--dry-run` option to `opuscomment`.
