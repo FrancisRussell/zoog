@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-* No changes yet.
+* Make use of static libopus a default feature rather than being hardcoded.
 
 ## 0.7.1
 
