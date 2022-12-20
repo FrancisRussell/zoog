@@ -3,6 +3,7 @@
 ## Unreleased
 
 * Make use of static libopus a default feature rather than being hardcoded.
+* Fix key matching in `zoogcomment` to be case insensitive (bugfix).
 
 ## 0.7.1
 
