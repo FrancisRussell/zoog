@@ -155,10 +155,14 @@ struct KeyValueMatch {
 }
 
 impl KeyValueMatch {
-    pub fn add(&mut self, key: String, value: ValueMatch) { *self.keys.entry(key).or_default() |= value; }
+    pub fn add(&mut self, mut key: String, value: ValueMatch) {
+        key.make_ascii_uppercase();
+        *self.keys.entry(key).or_default() |= value;
+    }
 
     pub fn matches(&self, key: &str, value: &str) -> bool {
-        match self.keys.get(key) {
+        let key = key.to_ascii_uppercase();
+        match self.keys.get(&key) {
             None => false,
             Some(value_match) => value_match.matches(value),
         }
