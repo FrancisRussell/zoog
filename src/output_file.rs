@@ -8,7 +8,7 @@ use zoog::Error;
 #[derive(Debug)]
 enum FileEnum {
     Temp(tempfile::NamedTempFile, PathBuf),
-    Sink(io::Sink),
+    Sink,
 }
 
 #[derive(Debug)]
@@ -41,7 +41,7 @@ fn make_sibling_temporary_file(path: &Path, distinguisher: &OsStr) -> Result<Nam
 
 impl OutputFile {
     /// Creates a new output that discards all data written
-    pub fn new_sink() -> OutputFile { OutputFile { file_enum: FileEnum::Sink(io::sink()) } }
+    pub fn new_sink() -> OutputFile { OutputFile { file_enum: FileEnum::Sink } }
 
     /// Writes to a temporary that replaces the specified path on `commit()`.
     pub fn new_target(path: &Path) -> Result<OutputFile, Error> {
@@ -59,19 +59,11 @@ impl OutputFile {
         }
     }
 
-    /// Returns the underlying file as a `Write`.
-    pub fn as_write(&mut self) -> &mut dyn Write {
-        match self.file_enum {
-            FileEnum::Temp(ref mut temp, _) => temp,
-            FileEnum::Sink(ref mut sink) => sink,
-        }
-    }
-
     /// Deletes the underlying file.
     #[allow(dead_code)]
     pub fn abort(self) -> Result<(), Error> {
         match self.file_enum {
-            FileEnum::Sink(_) => {}
+            FileEnum::Sink => {}
             FileEnum::Temp(temp, _) => {
                 let temp_path = temp.path().to_path_buf();
                 temp.close().map_err(|e| Error::FileDelete(temp_path, e))?;
@@ -83,7 +75,7 @@ impl OutputFile {
     /// Persists the file to the intended path.
     pub fn commit(self) -> Result<(), Error> {
         match self.file_enum {
-            FileEnum::Sink(_) => {}
+            FileEnum::Sink => {}
             FileEnum::Temp(temp, final_path) => {
                 // How to write this code so that it minimizes the chance of
                 // data loss is an open question.
@@ -98,5 +90,21 @@ impl OutputFile {
             }
         }
         Ok(())
+    }
+}
+
+impl Write for OutputFile {
+    fn write(&mut self, data: &[u8]) -> Result<usize, io::Error> {
+        match &mut self.file_enum {
+            FileEnum::Sink => Ok(data.len()),
+            FileEnum::Temp(ref mut temp, _) => temp.write(data),
+        }
+    }
+
+    fn flush(&mut self) -> Result<(), io::Error> {
+        match &mut self.file_enum {
+            FileEnum::Sink => Ok(()),
+            FileEnum::Temp(ref mut temp, _) => temp.flush(),
+        }
     }
 }
