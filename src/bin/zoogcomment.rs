@@ -356,15 +356,20 @@ fn main_impl() -> Result<(), AppError> {
                 }
             }
             OperationMode::Modify | OperationMode::Replace => {
-                // Drop the existing output file and create a new one
-                let mut old_output_file = OutputFile::new_target(&output_path)?;
-                std::mem::swap(&mut output_file, &mut old_output_file);
-                old_output_file.abort()?;
-                // Copy the input file to the output file
-                input_file.rewind().map_err(Error::ReadError)?;
-                std::io::copy(&mut input_file, &mut output_file)
-                    .map_err(|e| Error::FileCopy(input_path, output_path, e))?;
-                commit = true;
+                // If these match we are definitely in-place. If they don't we're probably not,
+                // but can't be 100% certain. Hence we still do the copy via a
+                // temporary file rather than just invoking a filesystem copy.
+                if input_path != output_path {
+                    // Drop the existing output file and create a new one
+                    let mut old_output_file = OutputFile::new_target(&output_path)?;
+                    std::mem::swap(&mut output_file, &mut old_output_file);
+                    old_output_file.abort()?;
+                    // Copy the input file to the output file
+                    input_file.rewind().map_err(Error::ReadError)?;
+                    std::io::copy(&mut input_file, &mut output_file)
+                        .map_err(|e| Error::FileCopy(input_path, output_path, e))?;
+                    commit = true;
+                }
             }
         },
         Ok(SubmitResult::HeadersChanged { .. }) => {
