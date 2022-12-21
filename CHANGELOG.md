@@ -4,6 +4,10 @@
 
 * Make use of static libopus a default feature rather than being hardcoded.
 * Fix key matching in `zoogcomment` to be case insensitive (bugfix).
+* Make `zoogcomment` create output file when there are no changes but
+  an output file has been specified (bugfix).
+* Add error variant for file-copying.
+* Make `Error` non-exhaustive.
 
 ## 0.7.1
 
