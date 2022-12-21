@@ -11,7 +11,7 @@ use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::convert::Into;
 use std::fs::File;
-use std::io::{self, BufRead, BufReader, BufWriter, Read, Write};
+use std::io::{self, BufRead, BufReader, BufWriter, Read, Seek as _, Write as _};
 use std::ops::BitOrAssign;
 use std::path::{Path, PathBuf};
 
@@ -155,10 +155,14 @@ struct KeyValueMatch {
 }
 
 impl KeyValueMatch {
-    pub fn add(&mut self, key: String, value: ValueMatch) { *self.keys.entry(key).or_default() |= value; }
+    pub fn add(&mut self, mut key: String, value: ValueMatch) {
+        key.make_ascii_uppercase();
+        *self.keys.entry(key).or_default() |= value;
+    }
 
     pub fn matches(&self, key: &str, value: &str) -> bool {
-        match self.keys.get(key) {
+        let key = key.to_ascii_uppercase();
+        match self.keys.get(&key) {
             None => false,
             Some(value_match) => value_match.matches(value),
         }
@@ -302,20 +306,17 @@ fn main_impl() -> Result<(), AppError> {
 
     let rewriter_config = CommentRewriterConfig { action };
     let input_path = cli.input_file;
+    let output_path = cli.output_file.unwrap_or_else(|| input_path.clone());
     let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.clone(), e))?;
     let mut input_file = BufReader::new(input_file);
 
     let mut output_file = match operation_mode {
         OperationMode::List => OutputFile::new_sink(),
-        OperationMode::Modify | OperationMode::Replace => {
-            let output_path = cli.output_file.unwrap_or_else(|| input_path.clone());
-            OutputFile::new_target_or_discard(&output_path, dry_run)?
-        }
+        OperationMode::Modify | OperationMode::Replace => OutputFile::new_target_or_discard(&output_path, dry_run)?,
     };
 
     let rewrite_result = {
-        let output_file = output_file.as_write();
-        let mut output_file = BufWriter::new(output_file);
+        let mut output_file = BufWriter::new(&mut output_file);
         let rewrite = CommentHeaderRewrite::new(rewriter_config);
         let summarize = CommentHeaderSummary::default();
         let abort_on_unchanged = true;
@@ -328,8 +329,7 @@ fn main_impl() -> Result<(), AppError> {
             &interrupt_checker,
         )
     };
-    drop(input_file); // Important for Windows
-
+    let mut commit = false;
     match rewrite_result {
         Err(e) => {
             eprintln!("Failure during processing of {}.", input_path.display());
@@ -339,12 +339,12 @@ fn main_impl() -> Result<(), AppError> {
             // We finished processing the file but never got the headers
             eprintln!("File {} appeared to be oddly truncated. Doing nothing.", input_path.display());
         }
-        Ok(SubmitResult::HeadersUnchanged(comments)) => {
-            if let OperationMode::List = operation_mode {
+        Ok(SubmitResult::HeadersUnchanged(comments)) => match operation_mode {
+            OperationMode::List => {
                 if let Some(ref path) = cli.tags_out.filter(|p| p != std::ffi::OsStr::new(STANDARD_STREAM_NAME)) {
                     let mut comment_file = OutputFile::new_target_or_discard(path, dry_run)?;
                     {
-                        let mut comment_file = BufWriter::new(comment_file.as_write());
+                        let mut comment_file = BufWriter::new(&mut comment_file);
                         comments
                             .write_as_text(&mut comment_file, escape)
                             .map_err(|e| Error::FileWriteError(path.into(), e))?;
@@ -355,11 +355,33 @@ fn main_impl() -> Result<(), AppError> {
                     comments.write_as_text(io::stdout(), escape).map_err(Error::ConsoleIoError)?;
                 }
             }
-        }
+            OperationMode::Modify | OperationMode::Replace => {
+                // If these match we are definitely in-place. If they don't we're probably not,
+                // but can't be 100% certain. Hence we still do the copy via a
+                // temporary file rather than just invoking a filesystem copy.
+                if input_path != output_path {
+                    // Drop the existing output file and create a new one
+                    let mut old_output_file = OutputFile::new_target(&output_path)?;
+                    std::mem::swap(&mut output_file, &mut old_output_file);
+                    old_output_file.abort()?;
+                    // Copy the input file to the output file
+                    input_file.rewind().map_err(Error::ReadError)?;
+                    std::io::copy(&mut input_file, &mut output_file)
+                        .map_err(|e| Error::FileCopy(input_path, output_path, e))?;
+                    commit = true;
+                }
+            }
+        },
         Ok(SubmitResult::HeadersChanged { .. }) => {
-            output_file.commit()?;
+            commit = true;
         }
     };
+    drop(input_file); // Important for Windows so we can overwrite
+    if commit {
+        output_file.commit()?;
+    } else {
+        output_file.abort()?;
+    }
     Ok(())
 }
 
