@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.8.0
 
 * Make use of static libopus a default feature rather than being hardcoded.
 * Fix key matching in `zoogcomment` to be case insensitive (bugfix).
