@@ -8,6 +8,7 @@ use crate::{escaping, Codec};
 
 /// The Zoog error type
 #[derive(Debug, Error)]
+#[non_exhaustive]
 pub enum Error {
     /// A specified file could not be opened due to an IO error
     #[error("Unable to open file `{0}` due to `{1}`")]
@@ -20,6 +21,10 @@ pub enum Error {
     /// An error occurred writing to the file
     #[error("Unable to write to file `{0}` due to `{1}`")]
     FileWriteError(PathBuf, std::io::Error),
+
+    /// A specified file could not be copied due to an IO error
+    #[error("Unable to copy `{0}` to `{1}` due to `{2}`")]
+    FileCopy(PathBuf, PathBuf, std::io::Error),
 
     /// A temporary file could not be opened due to an IO error
     #[error("Unable to open temporary file in `{0}` due to `{1}`")]

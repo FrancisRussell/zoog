@@ -328,8 +328,7 @@ fn main_impl() -> Result<(), AppError> {
                 check_running(&interrupt_checker)?;
                 let mut output_file = OutputFile::new_target_or_discard(&input_path, dry_run)?;
                 let rewrite_result = {
-                    let output_file = output_file.as_write();
-                    let mut output_file = BufWriter::new(output_file);
+                    let mut output_file = BufWriter::new(&mut output_file);
                     let rewrite = VolumeHeaderRewrite::new(rewriter_config);
                     let summarize = GainsSummary::default();
                     let abort_on_unchanged = true;
