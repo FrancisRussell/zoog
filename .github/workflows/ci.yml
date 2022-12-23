@@ -15,18 +15,17 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v3
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.2
         with:
           command: cache
-          cache-only: indices
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.2
         with:
           command: install-rustup
           toolchain: nightly
-          targets: ${{ matrix.target }}
+          target: ${{ matrix.target }}
           profile: minimal
           default: true
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.2
         with: 
           command: cargo build
           use-cross: true
@@ -46,17 +45,16 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.2
         with:
           command: cache
-          cache-only: indices
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.2
         with:
           command: install-rustup
           toolchain: nightly
           profile: minimal
           default: true
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.2
         with:
           command: cargo test
 
@@ -65,16 +63,15 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.2
         with:
           command: cache
-          cache-only: indices
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.2
         with:
             command: install-rustup
             toolchain: nightly
             components: clippy
             default: true
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.2
         with:
           command: cargo clippy
