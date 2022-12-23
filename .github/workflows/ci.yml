@@ -23,7 +23,7 @@ jobs:
         with:
           command: install-rustup
           toolchain: nightly
-          target: ${{ matrix.target }}
+          targets: ${{ matrix.target }}
           profile: minimal
           default: true
       - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
