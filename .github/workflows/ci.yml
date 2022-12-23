@@ -15,16 +15,17 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
         with:
+          command: install-rustup
           toolchain: nightly
           target: ${{ matrix.target }}
           profile: minimal
-          override: true
-      - uses: actions-rs/cargo@v1
+          default: true
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
         with: 
+          command: cargo build
           use-cross: true
-          command: build
           args: --target=${{ matrix.target }}
       - uses: actions/upload-artifact@v3.1.1
         with:
@@ -41,25 +42,27 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
         with:
+          command: install-rustup
           toolchain: nightly
           profile: minimal
-          override: true
-      - uses: actions-rs/cargo@v1
+          default: true
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
         with:
-          command: test
+          command: cargo test
 
   clippy:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
         with:
+            command: install-rustup
             toolchain: nightly
             components: clippy
-            override: true
-      - uses: actions-rs/clippy-check@v1
+            default: true
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.1
         with:
-          token: ${{ secrets.GITHUB_TOKEN }}
+          command: cargo clippy
