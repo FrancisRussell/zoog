@@ -361,7 +361,7 @@ fn main_impl() -> Result<(), AppError> {
                 // temporary file rather than just invoking a filesystem copy.
                 if input_path != output_path {
                     // Drop the existing output file and create a new one
-                    let mut old_output_file = OutputFile::new_target(&output_path)?;
+                    let mut old_output_file = OutputFile::new_target_or_discard(&output_path, dry_run)?;
                     std::mem::swap(&mut output_file, &mut old_output_file);
                     old_output_file.abort()?;
                     // Copy the input file to the output file

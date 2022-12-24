@@ -1,6 +1,6 @@
 [package]
 name = "zoog"
-version = "0.8.0"
+version = "0.8.1"
 authors = ["Francis Russell <francis@unchartedbackwaters.co.uk>"]
 edition = "2021"
 homepage = "https://github.com/FrancisRussell/zoog"
