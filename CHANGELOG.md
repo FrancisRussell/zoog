@@ -1,8 +1,9 @@
 # Changelog
 
-## Unreleased
+## 0.8.1
 
-* No changes yet.
+* Fix `zoogcomment` so that in the no-change out-of-place case it does not
+  create a file in dry-run mode (bugfix).
 
 ## 0.8.0
 
