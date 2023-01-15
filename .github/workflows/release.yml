@@ -34,16 +34,19 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
+        name: Install Rustup
         with:
+          command: install-rustup
           toolchain: nightly
           target: ${{ matrix.target }}
           profile: minimal
-          override: true
-      - uses: actions-rs/cargo@v1
+          default: true
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
+        name: Build
         with: 
+          command: cargo build
           use-cross: true
-          command: build
           args: --release --target=${{ matrix.target }}
       - name: Build Archive
         run: ./scripts/build-release ${{ github.ref }} ${{ matrix.target }}
