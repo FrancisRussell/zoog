@@ -15,11 +15,11 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v3
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.3
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
         name: Cargo Cache
         with:
           command: cache
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.3
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
         name: Install Rustup
         with:
           command: install-rustup
@@ -27,7 +27,7 @@ jobs:
           target: ${{ matrix.target }}
           profile: minimal
           default: true
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.3
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
         name: Cargo build
         with: 
           command: cargo build
@@ -48,18 +48,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.3
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
         name: Cargo cache
         with:
           command: cache
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.3
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
         name: Install Rustup
         with:
           command: install-rustup
           toolchain: nightly
           profile: minimal
           default: true
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.3
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
         name: Run tests
         with:
           command: cargo test
@@ -69,18 +69,18 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v3
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.3
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
         name: Cargo cache
         with:
           command: cache
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.3
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
         name: Install Rustup
         with:
             command: install-rustup
             toolchain: nightly
             components: clippy
             default: true
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.3
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
         name: Clippy
         with:
           command: cargo clippy

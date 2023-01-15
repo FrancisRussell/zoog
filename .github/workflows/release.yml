@@ -34,7 +34,7 @@ jobs:
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v3
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.3
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
         name: Install Rustup
         with:
           command: install-rustup
@@ -42,7 +42,7 @@ jobs:
           target: ${{ matrix.target }}
           profile: minimal
           default: true
-      - uses: FrancisRussell/ferrous-actions@v0.1.0-alpha.3
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
         name: Build
         with: 
           command: cargo build
