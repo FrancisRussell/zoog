@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* Bump `tempfile` minimum version to avoid `RUSTSEC-2023-0018`.
+
 ## 0.8.1
 
 * Fix `zoogcomment` so that in the no-change out-of-place case it does not
