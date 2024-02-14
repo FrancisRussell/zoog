@@ -6,6 +6,7 @@ pub mod global {
 
     /// The LUFS value to use for ReplayGain (-18 LUFS). This is approximate
     /// since ReplayGain does not use LUFS.
+    #[allow(clippy::doc_markdown)]
     pub const REPLAY_GAIN_LUFS: Decibels = Decibels::new(-18.0);
 
     /// Separator between field-names and values in comments
