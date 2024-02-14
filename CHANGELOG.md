@@ -3,6 +3,8 @@
 ## Unreleased
 
 * Bump `tempfile` minimum version to avoid `RUSTSEC-2023-0018`.
+* Add `--minimize-mtime-change` option to `opusgain` to allow preserving
+  modification time but with a small increment.
 
 ## 0.8.1
 
