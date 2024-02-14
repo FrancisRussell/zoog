@@ -230,8 +230,8 @@ struct Cli {
     clear: bool,
 
     #[clap(long, action)]
-    /// Reduce timestamp changes when rewriting files.
-    minimize_timestamp_changes: bool,
+    /// Minimize modification timestamp change when rewriting files.
+    minimize_mtime_change: bool,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -239,7 +239,7 @@ fn main_impl() -> Result<(), AppError> {
     let interrupt_checker = CtrlCChecker::new()?;
     let cli = Cli::parse_from(wild::args_os());
     let album_mode = cli.album;
-    let minimize_timestamp_changes = cli.minimize_timestamp_changes;
+    let minimize_mtime_change = cli.minimize_mtime_change;
     let num_threads = if cli.num_threads == 0 {
         eprintln!("The number of thread specified must be greater than 0.");
         Err(Error::InvalidThreadCount)
@@ -328,7 +328,7 @@ fn main_impl() -> Result<(), AppError> {
             };
 
             let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.clone(), e))?;
-            let input_file_modified = if minimize_timestamp_changes {
+            let input_file_modified = if minimize_mtime_change {
                 Some(
                     input_file
                         .metadata()

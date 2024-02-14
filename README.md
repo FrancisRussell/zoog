@@ -107,12 +107,12 @@ The following options are available (run `opusgain --help` for usage):
 * `-c, --clear`: Remove all `R128` tags from the specified files. The output
   gain of each file is unchanged, regardless of the specified preset.
 
-* `--minimize-timestamp-changes`: Attempts to apply the smallest increment
-  possible (filesystem dependent) to the modification time of the file. This is
+* `--minimize-mtime-change`: Attempts to apply the smallest increment possible
+  (filesystem dependent) to the modification time of the file. This is
   deliberately not a preserve in order to avoid misleading backup/data-transfer
   programs that use this information to determine if a file has changed. On
   modern filesystems (ext4, APFS, btrfs) this is typically a nanosecond, but
-  could be up to a second or two on older filesystems (ext3, FAT32).
+  could be up to two seconds on older filesystems (ext3, FAT32).
 
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
