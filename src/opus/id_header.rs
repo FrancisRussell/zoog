@@ -60,6 +60,7 @@ impl header::IdHeader for IdHeader {
 
     fn output_sample_rate(&self) -> usize { OPUS_DECODE_SAMPLE_RATE }
 
+    #[allow(clippy::missing_panics_doc)]
     fn preskip_samples(&self) -> usize {
         let mut reader = Cursor::new(&self.data[10..12]);
         let value = reader.read_u16::<LittleEndian>().expect("Error reading pre-skip sample count");
@@ -69,6 +70,7 @@ impl header::IdHeader for IdHeader {
 
 impl IdHeader {
     /// The current output gain set in the header
+    #[allow(clippy::missing_panics_doc)]
     pub fn get_output_gain(&self) -> FixedPointGain {
         let mut reader = Cursor::new(&self.data[16..18]);
         let value = reader.read_i16::<LittleEndian>().expect("Error reading gain");
@@ -76,6 +78,7 @@ impl IdHeader {
     }
 
     /// Sets the header's output gain
+    #[allow(clippy::missing_panics_doc)]
     pub fn set_output_gain(&mut self, gain: FixedPointGain) {
         let mut writer = Cursor::new(&mut self.data[16..18]);
         writer.write_i16::<LittleEndian>(gain.as_fixed_point()).expect("Error writing gain");
@@ -91,6 +94,7 @@ impl IdHeader {
     }
 
     /// Gets the Opus encapsulation version
+    #[allow(clippy::missing_panics_doc)]
     pub fn version(&self) -> u8 {
         let mut reader = Cursor::new(&self.data[8..9]);
         reader.read_u8().expect("Error reading output channel count")

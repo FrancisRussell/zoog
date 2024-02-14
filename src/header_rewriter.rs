@@ -204,6 +204,7 @@ where
     /// `HeadersUnchanged` is returned, the supplied stream did not need
     /// any alterations. In this case, the partial output should be discarded
     /// and no further packets submitted.
+    #[allow(clippy::missing_panics_doc)]
     pub fn submit(&mut self, mut packet: Packet) -> Result<SubmitResult<HS::Summary>, E>
     where
         HR::Error: From<Error>,

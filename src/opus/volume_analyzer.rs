@@ -138,7 +138,7 @@ impl Default for VolumeAnalyzer {
 
 impl VolumeAnalyzer {
     /// Submits a new Ogg packet to the analyzer
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value, clippy::missing_panics_doc)]
     pub fn submit(&mut self, packet: Packet) -> Result<(), Error> {
         let packet_serial = packet.stream_serial();
         match self.state {
