@@ -13,23 +13,29 @@ pub struct FixedPointGain {
 
 impl FixedPointGain {
     /// The underlying signed 16-bit integer representation
+    #[must_use]
     pub fn as_fixed_point(self) -> i16 { self.value }
 
     /// This value as Decibels
+    #[must_use]
     pub fn as_decibels(self) -> Decibels { Decibels::from(f64::from(self.value) / 256.0) }
 
     /// Construct from a fixed-point integer encoding
+    #[must_use]
     pub fn from_fixed_point(value: i16) -> FixedPointGain { FixedPointGain { value } }
 
     /// Does this value represent the identity gain?
+    #[must_use]
     pub fn is_zero(self) -> bool { self.value == 0 }
 
     /// Checked addition returning `None` on overflow or underflow.
+    #[must_use]
     pub fn checked_add(self, rhs: FixedPointGain) -> Option<FixedPointGain> {
         self.value.checked_add(rhs.value).map(|value| FixedPointGain { value })
     }
 
     /// Checked subtraction returning `None` on overflow or underflow.
+    #[must_use]
     pub fn checked_neg(self) -> Option<FixedPointGain> {
         self.value.checked_neg().map(|value| FixedPointGain { value })
     }

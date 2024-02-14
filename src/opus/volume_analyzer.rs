@@ -215,13 +215,16 @@ impl VolumeAnalyzer {
 
     /// Returns the mean LUFS of all completed files submitted to the volume
     /// analyzer so far
+    #[must_use]
     pub fn mean_lufs(&self) -> Decibels { Self::gated_mean_to_lufs(self.windows.as_ref()) }
 
     /// Returns the LUFS of all tracks submitted ot the volume analyzer so far
+    #[must_use]
     pub fn track_lufs(&self) -> Vec<Decibels> { self.track_loudness.clone() }
 
     /// Returns the volume of the most recent track submitted to the volume
     /// analyzer
+    #[must_use]
     pub fn last_track_lufs(&self) -> Option<Decibels> { self.track_loudness.last().copied() }
 
     /// Returns the mean LUFS of all completed files submitted to the supplied

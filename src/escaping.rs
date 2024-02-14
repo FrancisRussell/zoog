@@ -50,6 +50,7 @@ where
 }
 
 /// Escapes a string slice using `vorbiscomment`-style escaping
+#[must_use]
 pub fn escape_str(value: &str) -> Cow<str> {
     if value.contains(ESCAPED_CHARS) {
         EscapingIterator::new(value.chars()).collect()

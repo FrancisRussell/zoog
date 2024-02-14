@@ -33,6 +33,7 @@ pub struct CommentHeaderRewrite<'a> {
 }
 
 impl CommentHeaderRewrite<'_> {
+    #[must_use]
     pub fn new(config: CommentRewriterConfig) -> CommentHeaderRewrite { CommentHeaderRewrite { config } }
 }
 

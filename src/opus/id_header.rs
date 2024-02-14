@@ -71,6 +71,7 @@ impl header::IdHeader for IdHeader {
 impl IdHeader {
     /// The current output gain set in the header
     #[allow(clippy::missing_panics_doc)]
+    #[must_use]
     pub fn get_output_gain(&self) -> FixedPointGain {
         let mut reader = Cursor::new(&self.data[16..18]);
         let value = reader.read_i16::<LittleEndian>().expect("Error reading gain");
@@ -95,6 +96,7 @@ impl IdHeader {
 
     /// Gets the Opus encapsulation version
     #[allow(clippy::missing_panics_doc)]
+    #[must_use]
     pub fn version(&self) -> u8 {
         let mut reader = Cursor::new(&self.data[8..9]);
         reader.read_u8().expect("Error reading output channel count")

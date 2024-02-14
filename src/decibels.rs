@@ -9,6 +9,7 @@ pub struct Decibels {
 
 impl Decibels {
     /// The Decibel value as an `f64`.
+    #[must_use]
     pub fn as_f64(&self) -> f64 { self.inner }
 }
 
@@ -21,6 +22,7 @@ impl From<f64> for Decibels {
 }
 
 impl Decibels {
+    #[must_use]
     pub const fn new(value: f64) -> Decibels { Decibels { inner: value } }
 }
 

@@ -44,6 +44,7 @@ pub enum CodecHeaders {
 
 impl CodecHeaders {
     /// Which codec are the headers for
+    #[must_use]
     pub fn codec(&self) -> Codec {
         match self {
             CodecHeaders::Opus(_, _) => Codec::Opus,
