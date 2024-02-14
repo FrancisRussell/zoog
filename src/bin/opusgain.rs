@@ -230,7 +230,7 @@ struct Cli {
     clear: bool,
 
     #[clap(long, action)]
-    /// Minimize modification timestamp change when rewriting files.
+    /// Minimize modification timestamp increment when rewriting files.
     minimize_mtime_change: bool,
 }
 
