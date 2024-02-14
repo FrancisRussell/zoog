@@ -2,10 +2,12 @@ use std::time::{Duration, SystemTime};
 
 /// Modification timestamp granularities from various filesystems.
 const SORTED_MODIFICATION_GRANULARITIES: &[Duration] = &[
-    Duration::from_nanos(1),   // btrfs, ZFS, APFS, ext4 (256-bit inodes)
-    Duration::from_nanos(100), // NTFS
-    Duration::from_secs(1),    // HFS+, ext3, ext4 (128-bit inodes)
-    Duration::from_secs(2),    // FAT32
+    Duration::from_nanos(1),    // btrfs, ZFS, APFS, ext4 (256-bit inodes)
+    Duration::from_nanos(100),  // NTFS
+    Duration::from_micros(100), // UDF
+    Duration::from_millis(10),  // exFAT
+    Duration::from_secs(1),     // HFS+, ext3, ext4 (128-bit inodes)
+    Duration::from_secs(2),     // FAT32
 ];
 
 /// Sets the modification time of a file to the one specified but with a small
