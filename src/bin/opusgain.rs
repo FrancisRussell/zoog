@@ -383,9 +383,8 @@ fn main_impl() -> Result<(), AppError> {
                         // Update timestamp if necessary
                         if !dry_run {
                             if let Some(modification_time) = input_file_modified {
-                                let file = std::fs::File::open(&input_path)
-                                    .map_err(|e| Error::FileMetadataWriteError(input_path.clone(), e))?;
-                                set_mtime_with_minimal_increment(&file, modification_time)
+                                std::fs::File::open(&input_path)
+                                    .and_then(|file| set_mtime_with_minimal_increment(&file, modification_time))
                                     .map_err(|e| Error::FileMetadataWriteError(input_path.clone(), e))?;
                             }
                         }
