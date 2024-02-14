@@ -229,7 +229,7 @@ struct Cli {
     /// unchanged regardless of the specified preset.
     clear: bool,
 
-    #[clap(long, action)]
+    #[clap(short = 'M', long, action)]
     /// Minimize modification timestamp increment when rewriting files.
     minimize_mtime_change: bool,
 }
