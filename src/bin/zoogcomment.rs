@@ -304,6 +304,7 @@ fn main_impl() -> Result<(), AppError> {
     let action = match operation_mode {
         OperationMode::List => CommentRewriterAction::NoChange,
         OperationMode::Modify => {
+            #[allow(clippy::type_complexity)]
             let retain: Box<dyn Fn(&str, &str) -> bool> = Box::new(|k, v| !delete_tags.matches(k, v));
             CommentRewriterAction::Modify { retain, append }
         }
