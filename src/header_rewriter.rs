@@ -311,7 +311,7 @@ where
             Err(e) => break Err(Error::OggDecode(e).into()),
             Ok(None) => {
                 // Make sure to flush any buffered data
-                break output.flush().map(|_| result).map_err(|e| Error::WriteError(e).into());
+                break output.flush().map(|()| result).map_err(|e| Error::WriteError(e).into());
             }
             Ok(Some(packet)) => {
                 let submit_result = rewriter.submit(packet);

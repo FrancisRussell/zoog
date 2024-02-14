@@ -196,6 +196,7 @@ enum OutputGainSetting {
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about = "Modifies Ogg Opus output gain values and R128 tags")]
+#[allow(clippy::struct_excessive_bools)]
 struct Cli {
     #[clap(short, long, action)]
     /// Enable album mode

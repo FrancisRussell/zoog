@@ -1,5 +1,11 @@
 #![warn(clippy::pedantic)]
-#![allow(clippy::missing_errors_doc, clippy::must_use_candidate, clippy::uninlined_format_args, clippy::doc_markdown)]
+#![allow(
+    clippy::missing_errors_doc,
+    clippy::must_use_candidate,
+    clippy::uninlined_format_args,
+    clippy::doc_markdown,
+    clippy::missing_panics_doc
+)]
 
 mod codec;
 mod constants;

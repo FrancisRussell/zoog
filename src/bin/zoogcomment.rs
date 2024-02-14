@@ -140,7 +140,7 @@ impl BitOrAssign for ValueMatch {
                 if rhs.len() > lhs.len() {
                     std::mem::swap(&mut rhs, &mut lhs);
                 }
-                lhs.extend(rhs.into_iter());
+                lhs.extend(rhs);
                 ValueMatch::ContainedIn(lhs)
             }
             _ => ValueMatch::All,
