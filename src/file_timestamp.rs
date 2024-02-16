@@ -12,16 +12,31 @@ const SORTED_MODIFICATION_GRANULARITIES: &[Duration] = &[
 
 /// Sets the modification time of a file to the one specified but with a small
 /// increment.
+///
+/// This function aims not to set the modification timestamp to a time beyond
+/// the one currently present on the supplied file. This function returns `true`
+/// if this operation was successfully applied. If it returns `false` then
+/// the file timestamp may either be unchanged, or set to the supplied
+/// timestamp, but with no increment applied.
 pub fn set_mtime_with_minimal_increment(file: &std::fs::File, base_mtime: SystemTime) -> std::io::Result<bool> {
-    // Just in case the timestamp was extracted from a filesystem with different
-    // modification timestamp granularity.
-    file.set_modified(base_mtime)?;
-    let base_mtime = file.metadata()?.modified()?;
-    for increment in SORTED_MODIFICATION_GRANULARITIES.iter().copied() {
+    // Record the original mtime and avoid setting the timestamp ahead of this
+    // (though it could also occur due to timestamp rounding).
+    let existing_mtime = file.metadata()?.modified()?;
+    if base_mtime > existing_mtime {
+        // Previous modification timestamp is ahead of the current one
+        return Ok(false);
+    }
+
+    // We include the zero increment just in case we are copying to a filesystem
+    // which has some sort of timestamp rounding.
+    for increment in std::iter::once(Duration::ZERO).chain(SORTED_MODIFICATION_GRANULARITIES.iter().copied()) {
         let candidate_mtime = base_mtime + increment;
+        if candidate_mtime > existing_mtime {
+            return Ok(false);
+        }
         file.set_modified(candidate_mtime)?;
         let new_mtime = file.metadata()?.modified()?;
-        if new_mtime != base_mtime {
+        if new_mtime > base_mtime {
             return Ok(true);
         }
     }
