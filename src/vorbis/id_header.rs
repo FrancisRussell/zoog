@@ -62,6 +62,8 @@ impl header::IdHeader for IdHeader {
 
 impl IdHeader {
     /// The Vorbis version
+    #[allow(clippy::missing_panics_doc)]
+    #[must_use]
     pub fn version(&self) -> u32 {
         let mut reader = Cursor::new(&self.data[7..11]);
         reader.read_u32::<LittleEndian>().expect("Error reading version")

@@ -137,4 +137,12 @@ pub enum Error {
     /// Audio parameters changed
     #[error("Channel count and/or sample rate changed between concatenated audio streams")]
     UnexpectedAudioParametersChange,
+
+    /// An error occurred reading the file metadata
+    #[error("Unable to read metadata from file `{0}` due to `{1}`")]
+    FileMetadataReadError(PathBuf, std::io::Error),
+
+    /// An error occurred writing the file metadata
+    #[error("Unable to write metadata to file `{0}` due to `{1}`")]
+    FileMetadataWriteError(PathBuf, std::io::Error),
 }

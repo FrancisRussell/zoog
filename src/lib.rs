@@ -1,5 +1,5 @@
 #![warn(clippy::pedantic)]
-#![allow(clippy::missing_errors_doc, clippy::must_use_candidate, clippy::uninlined_format_args, clippy::doc_markdown)]
+#![allow(clippy::missing_errors_doc, clippy::uninlined_format_args)]
 
 mod codec;
 mod constants;
@@ -14,6 +14,9 @@ pub mod header_rewriter;
 
 /// Functionality for rewriting Ogg Opus streams with new comments
 pub mod comment_rewrite;
+
+/// Functionality for manipulating file timestamps
+pub mod file_timestamp;
 
 /// Support for detecting an operation should be interrupted
 pub mod interrupt;

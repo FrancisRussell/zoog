@@ -20,6 +20,7 @@ use ctrlc_handling::CtrlCChecker;
 use output_file::OutputFile;
 use thiserror::Error;
 use zoog::comment_rewrite::{CommentHeaderRewrite, CommentHeaderSummary, CommentRewriterAction, CommentRewriterConfig};
+use zoog::file_timestamp::set_mtime_with_minimal_increment;
 use zoog::header::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::{escaping, Error};
@@ -99,6 +100,10 @@ struct Cli {
     /// Output file (cannot be specified in list mode)
     #[clap(conflicts_with = "list")]
     output_file: Option<PathBuf>,
+
+    #[clap(short = 'M', long, action)]
+    /// Minimize modification timestamp increment when rewriting files.
+    minimize_mtime_change: bool,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -140,7 +145,7 @@ impl BitOrAssign for ValueMatch {
                 if rhs.len() > lhs.len() {
                     std::mem::swap(&mut rhs, &mut lhs);
                 }
-                lhs.extend(rhs.into_iter());
+                lhs.extend(rhs);
                 ValueMatch::ContainedIn(lhs)
             }
             _ => ValueMatch::All,
@@ -281,6 +286,7 @@ fn main_impl() -> Result<(), AppError> {
 
     let dry_run = cli.dry_run;
     let escape = cli.escapes;
+    let minimize_mtime_change = cli.minimize_mtime_change;
     let delete_tags = parse_delete_comment_args(cli.delete, escape)?;
     let append = {
         let mut append = parse_new_comment_args(cli.tags, escape)?;
@@ -298,6 +304,7 @@ fn main_impl() -> Result<(), AppError> {
     let action = match operation_mode {
         OperationMode::List => CommentRewriterAction::NoChange,
         OperationMode::Modify => {
+            #[allow(clippy::type_complexity)]
             let retain: Box<dyn Fn(&str, &str) -> bool> = Box::new(|k, v| !delete_tags.matches(k, v));
             CommentRewriterAction::Modify { retain, append }
         }
@@ -308,6 +315,17 @@ fn main_impl() -> Result<(), AppError> {
     let input_path = cli.input_file;
     let output_path = cli.output_file.unwrap_or_else(|| input_path.clone());
     let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.clone(), e))?;
+    let input_file_modified = if minimize_mtime_change {
+        Some(
+            input_file
+                .metadata()
+                .and_then(|metadata| metadata.modified())
+                .map_err(|e| Error::FileMetadataReadError(input_path.clone(), e))?,
+        )
+    } else {
+        None
+    };
+
     let mut input_file = BufReader::new(input_file);
 
     let mut output_file = match operation_mode {
@@ -367,7 +385,7 @@ fn main_impl() -> Result<(), AppError> {
                     // Copy the input file to the output file
                     input_file.rewind().map_err(Error::ReadError)?;
                     std::io::copy(&mut input_file, &mut output_file)
-                        .map_err(|e| Error::FileCopy(input_path, output_path, e))?;
+                        .map_err(|e| Error::FileCopy(input_path, output_path.clone(), e))?;
                     commit = true;
                 }
             }
@@ -379,6 +397,14 @@ fn main_impl() -> Result<(), AppError> {
     drop(input_file); // Important for Windows so we can overwrite
     if commit {
         output_file.commit()?;
+        // Update timestamp if necessary
+        if !dry_run {
+            if let Some(modification_time) = input_file_modified {
+                std::fs::File::open(&output_path)
+                    .and_then(|file| set_mtime_with_minimal_increment(&file, modification_time))
+                    .map_err(|e| Error::FileMetadataWriteError(output_path.clone(), e))?;
+            }
+        }
     } else {
         output_file.abort()?;
     }

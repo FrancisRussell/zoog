@@ -44,6 +44,7 @@ pub enum CodecHeaders {
 
 impl CodecHeaders {
     /// Which codec are the headers for
+    #[must_use]
     pub fn codec(&self) -> Codec {
         match self {
             CodecHeaders::Opus(_, _) => Codec::Opus,
@@ -204,6 +205,7 @@ where
     /// `HeadersUnchanged` is returned, the supplied stream did not need
     /// any alterations. In this case, the partial output should be discarded
     /// and no further packets submitted.
+    #[allow(clippy::missing_panics_doc)]
     pub fn submit(&mut self, mut packet: Packet) -> Result<SubmitResult<HS::Summary>, E>
     where
         HR::Error: From<Error>,
@@ -311,7 +313,7 @@ where
             Err(e) => break Err(Error::OggDecode(e).into()),
             Ok(None) => {
                 // Make sure to flush any buffered data
-                break output.flush().map(|_| result).map_err(|e| Error::WriteError(e).into());
+                break output.flush().map(|()| result).map_err(|e| Error::WriteError(e).into());
             }
             Ok(Some(packet)) => {
                 let submit_result = rewriter.submit(packet);

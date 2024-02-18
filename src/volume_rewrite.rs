@@ -45,6 +45,7 @@ pub struct VolumeRewriterConfig {
 impl VolumeRewriterConfig {
     /// Computes the source volume that will be used for the output gain
     /// calculation
+    #[must_use]
     pub fn volume_for_output_gain_calculation(&self) -> Option<Decibels> {
         match self.output_gain_mode {
             OutputGainMode::Album => self.album_volume,
@@ -55,6 +56,7 @@ impl VolumeRewriterConfig {
 
 impl VolumeTarget {
     /// A description intended to be friendly for printing
+    #[must_use]
     pub fn to_friendly_string(&self) -> String {
         match *self {
             VolumeTarget::ZeroGain => String::from("original input"),
@@ -108,6 +110,7 @@ pub struct VolumeHeaderRewrite {
 }
 
 impl VolumeHeaderRewrite {
+    #[must_use]
     pub fn new(config: VolumeRewriterConfig) -> VolumeHeaderRewrite { VolumeHeaderRewrite { config } }
 }
 

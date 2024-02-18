@@ -138,7 +138,7 @@ impl Default for VolumeAnalyzer {
 
 impl VolumeAnalyzer {
     /// Submits a new Ogg packet to the analyzer
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value, clippy::missing_panics_doc)]
     pub fn submit(&mut self, packet: Packet) -> Result<(), Error> {
         let packet_serial = packet.stream_serial();
         match self.state {
@@ -215,13 +215,16 @@ impl VolumeAnalyzer {
 
     /// Returns the mean LUFS of all completed files submitted to the volume
     /// analyzer so far
+    #[must_use]
     pub fn mean_lufs(&self) -> Decibels { Self::gated_mean_to_lufs(self.windows.as_ref()) }
 
     /// Returns the LUFS of all tracks submitted ot the volume analyzer so far
+    #[must_use]
     pub fn track_lufs(&self) -> Vec<Decibels> { self.track_loudness.clone() }
 
     /// Returns the volume of the most recent track submitted to the volume
     /// analyzer
+    #[must_use]
     pub fn last_track_lufs(&self) -> Option<Decibels> { self.track_loudness.last().copied() }
 
     /// Returns the mean LUFS of all completed files submitted to the supplied

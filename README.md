@@ -95,9 +95,6 @@ The following options are available (run `opusgain --help` for usage):
   apply the calculated album gain, but this behaviour can be overridden using
   the `--output-gain-mode` option.
 
-* `-n, --dry-run`: Displays the same output that `opusgain` would otherwise
-  produce, but does not make any changes to the supplied files.
-
 * `-j N, --num-threads=N`: Use `N` threads for processing. The default is to use the
   number of cores detected on the system. Larger numbers will be rounded down
   to this value. To avoid high disk space usage during processing, or a large
@@ -106,6 +103,16 @@ The following options are available (run `opusgain --help` for usage):
 
 * `-c, --clear`: Remove all `R128` tags from the specified files. The output
   gain of each file is unchanged, regardless of the specified preset.
+
+* `-M`, `--minimize-mtime-change`: Attempts to apply the smallest increment
+  possible (filesystem dependent) to the modification time of the file. This is
+  deliberately not a preserve in order to avoid misleading backup/data-transfer
+  programs that use this information to determine if a file has changed. On
+  modern filesystems (ext4, APFS, btrfs) this is typically a nanosecond, but
+  could be up to two seconds on older filesystems (ext3, FAT32).
+
+* `-n, --dry-run`: Displays the same output that `opusgain` would otherwise
+  produce, but does not make any changes to the supplied files.
 
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
@@ -156,6 +163,13 @@ The following options are available (run `zoogcomment --help` for usage):
   written to this file. Tags are written in `NAME=VALUE` format, with one tag per
   line. If `-` is specified for the file name, tags will be written to standard
   output.
+
+* `-M`, `--minimize-mtime-change`: Attempts to apply the smallest increment
+  possible (filesystem dependent) to the modification time of the file. This is
+  deliberately not a preserve in order to avoid misleading backup/data-transfer
+  programs that use this information to determine if a file has changed. On
+  modern filesystems (ext4, APFS, btrfs) this is typically a nanosecond, but
+  could be up to two seconds on older filesystems (ext3, FAT32).
 
 * `-n, --dry-run`: Displays the same output that `zoogcomment` would otherwise
   produce, but does not make any changes to the filesystem.

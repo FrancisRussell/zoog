@@ -50,6 +50,7 @@ where
 }
 
 /// Escapes a string slice using `vorbiscomment`-style escaping
+#[must_use]
 pub fn escape_str(value: &str) -> Cow<str> {
     if value.contains(ESCAPED_CHARS) {
         EscapingIterator::new(value.chars()).collect()
@@ -122,13 +123,7 @@ mod tests {
     where
         T: ToOwned + ?Sized,
     {
-        fn is_cow_owned(&self) -> bool {
-            if let Cow::Owned(_) = self {
-                true
-            } else {
-                false
-            }
-        }
+        fn is_cow_owned(&self) -> bool { matches!(self, Cow::Owned(_)) }
 
         fn is_cow_borrowed(&self) -> bool { !self.is_cow_owned() }
     }

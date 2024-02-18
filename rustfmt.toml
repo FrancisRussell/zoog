@@ -1,4 +1,4 @@
-fn_args_layout = "Compressed"
+fn_params_layout = "Compressed"
 fn_single_line = true
 force_multiline_blocks = false
 group_imports = "StdExternalCrate"

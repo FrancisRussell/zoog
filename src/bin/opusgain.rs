@@ -25,6 +25,7 @@ use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use thiserror::Error;
+use zoog::file_timestamp::set_mtime_with_minimal_increment;
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::opus::{VolumeAnalyzer, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use zoog::volume_rewrite::{
@@ -195,6 +196,7 @@ enum OutputGainSetting {
 
 #[derive(Debug, Parser)]
 #[clap(author, version, about = "Modifies Ogg Opus output gain values and R128 tags")]
+#[allow(clippy::struct_excessive_bools)]
 struct Cli {
     #[clap(short, long, action)]
     /// Enable album mode
@@ -226,6 +228,10 @@ struct Cli {
     /// Clear all R128 tags from the specified files. Output gain will remain
     /// unchanged regardless of the specified preset.
     clear: bool,
+
+    #[clap(short = 'M', long, action)]
+    /// Minimize modification timestamp increment when rewriting files.
+    minimize_mtime_change: bool,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -233,6 +239,7 @@ fn main_impl() -> Result<(), AppError> {
     let interrupt_checker = CtrlCChecker::new()?;
     let cli = Cli::parse_from(wild::args_os());
     let album_mode = cli.album;
+    let minimize_mtime_change = cli.minimize_mtime_change;
     let num_threads = if cli.num_threads == 0 {
         eprintln!("The number of thread specified must be greater than 0.");
         Err(Error::InvalidThreadCount)
@@ -321,6 +328,16 @@ fn main_impl() -> Result<(), AppError> {
             };
 
             let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.clone(), e))?;
+            let input_file_modified = if minimize_mtime_change {
+                Some(
+                    input_file
+                        .metadata()
+                        .and_then(|metadata| metadata.modified())
+                        .map_err(|e| Error::FileMetadataReadError(input_path.clone(), e))?,
+                )
+            } else {
+                None
+            };
             let mut input_file = BufReader::new(input_file);
 
             {
@@ -363,6 +380,14 @@ fn main_impl() -> Result<(), AppError> {
                     }
                     Ok(SubmitResult::HeadersChanged { from: old_gains, to: new_gains }) => {
                         output_file.commit()?;
+                        // Update timestamp if necessary
+                        if !dry_run {
+                            if let Some(modification_time) = input_file_modified {
+                                std::fs::File::open(&input_path)
+                                    .and_then(|file| set_mtime_with_minimal_increment(&file, modification_time))
+                                    .map_err(|e| Error::FileMetadataWriteError(input_path.clone(), e))?;
+                            }
+                        }
                         writeln!(console.out(), "Old gain values:").map_err(Error::ConsoleIoError)?;
                         print_gains(&old_gains, console)?;
                         writeln!(console.out(), "New gain values:").map_err(Error::ConsoleIoError)?;
