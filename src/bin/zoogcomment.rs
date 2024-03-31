@@ -9,7 +9,6 @@ mod output_file;
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
-use std::convert::Into;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Seek as _, Write as _};
 use std::ops::BitOrAssign;
