@@ -15,8 +15,11 @@ pub mod header_rewriter;
 /// Functionality for rewriting Ogg Opus streams with new comments
 pub mod comment_rewrite;
 
-/// Functionality for manipulating file timestamps
-pub mod file_timestamp;
+/// Functionality for dealing with the filesystem
+pub mod filesystem;
+
+/// Functionality for transforming path lists into groups of albums and singles
+pub mod file_grouping;
 
 /// Support for detecting an operation should be interrupted
 pub mod interrupt;

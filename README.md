@@ -114,6 +114,42 @@ The following options are available (run `opusgain --help` for usage):
 * `-n, --dry-run`: Displays the same output that `opusgain` would otherwise
   produce, but does not make any changes to the supplied files.
 
+* `-I PATH_PROCESSING_MODE, --interpret-paths=PATH_PROCESSING_MODE`
+
+  This option controls how the supplied paths are interpreted.
+
+  * `files-singles` (default): Each supplied path must be to a file. Files are
+    normalized independently, with any album tags being removed. It is an error
+    to supply a folder.
+
+  * `files-album`: Each supplied path must be to a file. Files are treated as
+    all belonging to the same album and album normalization tags will be
+    generated.  It is an error to supply a folder. This option is equivalent to
+    supplying the `-a` or `--album` flag.
+  
+  * `folders-are-albums`: Each file path supplied is treated as a single, with
+    album tags being removed. Each supplied folder path is explored
+    recursively, with all found Opus files being treated as part of a single
+    album. This option therefore makes is possible to apply multiple album
+    normalizations in a single `opusgain` invocation.
+
+    For example, if you had the files:
+
+    ```
+    a.opus
+    album1/b.opus
+    album1/c.opus
+    album2/e.opus
+    album2/f.opus
+    d.opus
+    ```
+
+    Then `opusgain -I folders-are-albums *` in that folder would be expanded
+    (by the shell on Linux/MacOS or by `opusgain` on Windows) to `opusgain -I
+    folders-are-albums a.opus album1 album2 d.opus` with `a.opus` and `d.opus`
+    being treated as singles and `album1` and `album2` being normalized as
+    independent albums.
+
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
 

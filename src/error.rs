@@ -4,7 +4,7 @@ use ogg::reading::OggReadError;
 use tempfile::PersistError;
 use thiserror::Error;
 
-use crate::{escaping, Codec};
+use crate::{escaping, file_grouping, Codec};
 
 /// The Zoog error type
 #[derive(Debug, Error)]
@@ -145,4 +145,10 @@ pub enum Error {
     /// An error occurred writing the file metadata
     #[error("Unable to write metadata to file `{0}` due to `{1}`")]
     FileMetadataWriteError(PathBuf, std::io::Error),
+
+    #[error("Path had unexpected file-type: `{0}`")]
+    UnhandledFileType(PathBuf),
+
+    #[error("Unable to map paths into albums/singles: `{0}`")]
+    FileGroup(#[from] file_grouping::FileGroupingError),
 }

@@ -5,6 +5,8 @@
 * Bump `tempfile` minimum version to avoid `RUSTSEC-2023-0018`.
 * Add `--minimize-mtime-change` option to `opusgain` and `zoogcomment` to allow
   preserving modification time but with a small increment.
+* Add `--interpret-paths` option to enable support for normalizing files in
+  different ways in a single invocation.
 
 ## 0.8.1
 

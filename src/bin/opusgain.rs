@@ -25,7 +25,8 @@ use parking_lot::Mutex;
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use thiserror::Error;
-use zoog::file_timestamp::set_mtime_with_minimal_increment;
+use zoog::file_grouping::{paths_to_file_groups, PathsProcessingMode};
+use zoog::filesystem::set_mtime_with_minimal_increment;
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::opus::{VolumeAnalyzer, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use zoog::volume_rewrite::{
@@ -199,7 +200,7 @@ enum OutputGainSetting {
 #[allow(clippy::struct_excessive_bools)]
 struct Cli {
     #[clap(short, long, action)]
-    /// Enable album mode
+    /// Enable album mode (same as --interpret-paths=files-album)
     album: bool,
 
     #[clap(value_enum, short, long, default_value_t = Preset::ReplayGain)]
@@ -232,13 +233,23 @@ struct Cli {
     #[clap(short = 'M', long, action)]
     /// Minimize modification timestamp increment when rewriting files.
     minimize_mtime_change: bool,
+
+    #[clap(long, short = 'I', name = "INTERPRET_PATHS_MODE", value_enum, conflicts_with = "album")]
+    #[clap(default_value_t = PathsProcessingMode::FileListSingles)]
+    /// How the list of supplied paths is interpreted
+    interpret_paths: PathsProcessingMode,
 }
 
 #[allow(clippy::too_many_lines)]
 fn main_impl() -> Result<(), AppError> {
     let interrupt_checker = CtrlCChecker::new()?;
-    let cli = Cli::parse_from(wild::args_os());
-    let album_mode = cli.album;
+    let cli = {
+        let mut cli = Cli::parse_from(wild::args_os());
+        if cli.album {
+            cli.interpret_paths = PathsProcessingMode::FileListAlbum;
+        };
+        cli
+    };
     let minimize_mtime_change = cli.minimize_mtime_change;
     let num_threads = if cli.num_threads == 0 {
         eprintln!("The number of thread specified must be greater than 0.");
@@ -253,16 +264,6 @@ fn main_impl() -> Result<(), AppError> {
     }?;
     ThreadPoolBuilder::new().num_threads(num_threads).build_global().expect("Failed to initialize thread pool");
 
-    let output_gain_mode = match cli.output_gain_mode {
-        OutputGainSetting::Auto => {
-            if album_mode {
-                OutputGainMode::Album
-            } else {
-                OutputGainMode::Track
-            }
-        }
-        OutputGainSetting::Track => OutputGainMode::Track,
-    };
     let volume_target = match cli.preset {
         Preset::ReplayGain => VolumeTarget::LUFS(REPLAY_GAIN_LUFS),
         Preset::R128 => VolumeTarget::LUFS(R128_LUFS),
@@ -272,14 +273,15 @@ fn main_impl() -> Result<(), AppError> {
 
     let dry_run = cli.dry_run;
     let clear = cli.clear;
-    let (album_mode, volume_target) = if clear {
+    let volume_target = if clear {
         // We do not compute album loudness or change output gain when clearing tags
-        (false, VolumeTarget::NoChange)
+        VolumeTarget::NoChange
     } else {
-        (album_mode, volume_target)
+        volume_target
     };
 
-    let num_processed = AtomicUsize::new(0);
+    let num_files_single = AtomicUsize::new(0);
+    let num_files_album = AtomicUsize::new(0);
     let num_already_normalized = AtomicUsize::new(0);
 
     if dry_run {
@@ -287,135 +289,165 @@ fn main_impl() -> Result<(), AppError> {
     }
 
     let console_output = Standard::default();
-    let input_files = cli.input_files;
-    let album_volume =
-        if album_mode { Some(compute_album_volume(&input_files, &console_output, &interrupt_checker)?) } else { None };
+    let input_groups = paths_to_file_groups(cli.input_files, cli.interpret_paths)?;
 
-    // Prevent us from rewriting more than one file at once. This is to stop us
-    // consuming too much disk space or leaving lots of temporary files around
-    // if we encounter an error.
-    let rewrite_mutex = Mutex::new(());
-
-    input_files.into_par_iter().panic_fuse().try_for_each(|input_path| -> Result<(), AppError> {
-        let console = &DelayedConsoleOutput::new(&console_output);
-        let body = || -> Result<(), AppError> {
-            writeln!(
-                console.out(),
-                "Processing file {} with target loudness of {}...",
-                &input_path.display(),
-                volume_target.to_friendly_string()
-            )
-            .map_err(Error::ConsoleIoError)?;
-            let track_volume = if clear {
-                None
-            } else {
-                Some(match &album_volume {
-                    None => {
-                        let mut analyzer = VolumeAnalyzer::default();
-                        apply_volume_analysis(&mut analyzer, &input_path, console, false, &interrupt_checker)?;
-                        analyzer.last_track_lufs().expect("Last track volume unexpectedly missing")
-                    }
-                    Some(album_volume) => album_volume
-                        .get_track_mean(&input_path)
-                        .expect("Could not find previously computed track volume"),
-                })
-            };
-            let rewriter_config = VolumeRewriterConfig {
-                output_gain: volume_target,
-                output_gain_mode,
-                track_volume,
-                album_volume: album_volume.as_ref().map(AlbumVolume::get_album_mean),
-            };
-
-            let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.clone(), e))?;
-            let input_file_modified = if minimize_mtime_change {
-                Some(
-                    input_file
-                        .metadata()
-                        .and_then(|metadata| metadata.modified())
-                        .map_err(|e| Error::FileMetadataReadError(input_path.clone(), e))?,
-                )
-            } else {
-                None
-            };
-            let mut input_file = BufReader::new(input_file);
-
-            {
-                let rewrite_guard = rewrite_mutex.lock();
-                check_running(&interrupt_checker)?;
-                let mut output_file = OutputFile::new_target_or_discard(&input_path, dry_run)?;
-                let rewrite_result = {
-                    let mut output_file = BufWriter::new(&mut output_file);
-                    let rewrite = VolumeHeaderRewrite::new(rewriter_config);
-                    let summarize = GainsSummary::default();
-                    let abort_on_unchanged = true;
-                    rewrite_stream_with_interrupt(
-                        rewrite,
-                        summarize,
-                        &mut input_file,
-                        &mut output_file,
-                        abort_on_unchanged,
-                        &interrupt_checker,
-                    )
-                };
-                drop(input_file); // Important for Windows
-                num_processed.fetch_add(1, Ordering::Relaxed);
-
-                match rewrite_result {
-                    Err(e) => {
-                        writeln!(console.err(), "Failure during processing of {}.", input_path.display())
-                            .map_err(Error::ConsoleIoError)?;
-                        return Err(e.into());
-                    }
-                    Ok(SubmitResult::Good) => {
-                        // Either we should already be normalized or get back a result which
-                        // indicated we changed the gains in the input file. If we get neither
-                        // then something weird happened.
-                        writeln!(
-                            console.err(),
-                            "File {} appeared to be oddly truncated. Doing nothing.",
-                            input_path.display(),
-                        )
-                        .map_err(Error::ConsoleIoError)?;
-                    }
-                    Ok(SubmitResult::HeadersChanged { from: old_gains, to: new_gains }) => {
-                        output_file.commit()?;
-                        // Update timestamp if necessary
-                        if !dry_run {
-                            if let Some(modification_time) = input_file_modified {
-                                std::fs::File::open(&input_path)
-                                    .and_then(|file| set_mtime_with_minimal_increment(&file, modification_time))
-                                    .map_err(|e| Error::FileMetadataWriteError(input_path.clone(), e))?;
-                            }
-                        }
-                        writeln!(console.out(), "Old gain values:").map_err(Error::ConsoleIoError)?;
-                        print_gains(&old_gains, console)?;
-                        writeln!(console.out(), "New gain values:").map_err(Error::ConsoleIoError)?;
-                        print_gains(&new_gains, console)?;
-                    }
-                    Ok(SubmitResult::HeadersUnchanged(gains)) => {
-                        writeln!(console.out(), "All gains are already correct so doing nothing. Existing gains were:")
-                            .map_err(Error::ConsoleIoError)?;
-                        print_gains(&gains, console)?;
-                        num_already_normalized.fetch_add(1, Ordering::Relaxed);
-                    }
-                }
-                drop(rewrite_guard);
-            }
-            Ok(())
+    for input_group in input_groups {
+        let input_files = input_group.get_file_paths();
+        let album_mode = input_group.is_album();
+        let album_volume = if album_mode {
+            Some(compute_album_volume(&input_files, &console_output, &interrupt_checker)?)
+        } else {
+            None
         };
-        let result = body();
-        if let Err(ref e) = result {
-            writeln!(console.err(), "Failed to rewrite {}: {}", input_path.display(), e)
-                .map_err(Error::ConsoleIoError)?;
-        }
-        writeln!(console.out()).map_err(Error::ConsoleIoError)?;
-        result
-    })?;
 
-    let num_processed = num_processed.into_inner();
+        let output_gain_mode = match cli.output_gain_mode {
+            OutputGainSetting::Auto => {
+                if album_mode {
+                    OutputGainMode::Album
+                } else {
+                    OutputGainMode::Track
+                }
+            }
+            OutputGainSetting::Track => OutputGainMode::Track,
+        };
+
+        // Prevent us from rewriting more than one file at once. This is to stop us
+        // consuming too much disk space or leaving lots of temporary files around
+        // if we encounter an error.
+        let rewrite_mutex = Mutex::new(());
+
+        input_files.into_par_iter().panic_fuse().try_for_each(|input_path| -> Result<(), AppError> {
+            let console = &DelayedConsoleOutput::new(&console_output);
+            let body = || -> Result<(), AppError> {
+                writeln!(
+                    console.out(),
+                    "Processing file {} with target loudness of {}...",
+                    &input_path.display(),
+                    volume_target.to_friendly_string()
+                )
+                .map_err(Error::ConsoleIoError)?;
+                let track_volume = if clear {
+                    None
+                } else {
+                    Some(match &album_volume {
+                        None => {
+                            let mut analyzer = VolumeAnalyzer::default();
+                            apply_volume_analysis(&mut analyzer, &input_path, console, false, &interrupt_checker)?;
+                            analyzer.last_track_lufs().expect("Last track volume unexpectedly missing")
+                        }
+                        Some(album_volume) => album_volume
+                            .get_track_mean(&input_path)
+                            .expect("Could not find previously computed track volume"),
+                    })
+                };
+                let rewriter_config = VolumeRewriterConfig {
+                    output_gain: volume_target,
+                    output_gain_mode,
+                    track_volume,
+                    album_volume: album_volume.as_ref().map(AlbumVolume::get_album_mean),
+                };
+
+                let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.clone(), e))?;
+                let input_file_modified = if minimize_mtime_change {
+                    Some(
+                        input_file
+                            .metadata()
+                            .and_then(|metadata| metadata.modified())
+                            .map_err(|e| Error::FileMetadataReadError(input_path.clone(), e))?,
+                    )
+                } else {
+                    None
+                };
+                let mut input_file = BufReader::new(input_file);
+
+                {
+                    let rewrite_guard = rewrite_mutex.lock();
+                    check_running(&interrupt_checker)?;
+                    let mut output_file = OutputFile::new_target_or_discard(&input_path, dry_run)?;
+                    let rewrite_result = {
+                        let mut output_file = BufWriter::new(&mut output_file);
+                        let rewrite = VolumeHeaderRewrite::new(rewriter_config);
+                        let summarize = GainsSummary::default();
+                        let abort_on_unchanged = true;
+                        rewrite_stream_with_interrupt(
+                            rewrite,
+                            summarize,
+                            &mut input_file,
+                            &mut output_file,
+                            abort_on_unchanged,
+                            &interrupt_checker,
+                        )
+                    };
+                    drop(input_file); // Important for Windows
+                    if album_mode {
+                        num_files_album.fetch_add(1, Ordering::Relaxed);
+                    } else {
+                        num_files_single.fetch_add(1, Ordering::Relaxed);
+                    }
+
+                    match rewrite_result {
+                        Err(e) => {
+                            writeln!(console.err(), "Failure during processing of {}.", input_path.display())
+                                .map_err(Error::ConsoleIoError)?;
+                            return Err(e.into());
+                        }
+                        Ok(SubmitResult::Good) => {
+                            // Either we should already be normalized or get back a result which
+                            // indicated we changed the gains in the input file. If we get neither
+                            // then something weird happened.
+                            writeln!(
+                                console.err(),
+                                "File {} appeared to be oddly truncated. Doing nothing.",
+                                input_path.display(),
+                            )
+                            .map_err(Error::ConsoleIoError)?;
+                        }
+                        Ok(SubmitResult::HeadersChanged { from: old_gains, to: new_gains }) => {
+                            output_file.commit()?;
+                            // Update timestamp if necessary
+                            if !dry_run {
+                                if let Some(modification_time) = input_file_modified {
+                                    std::fs::File::open(&input_path)
+                                        .and_then(|file| set_mtime_with_minimal_increment(&file, modification_time))
+                                        .map_err(|e| Error::FileMetadataWriteError(input_path.clone(), e))?;
+                                }
+                            }
+                            writeln!(console.out(), "Old gain values:").map_err(Error::ConsoleIoError)?;
+                            print_gains(&old_gains, console)?;
+                            writeln!(console.out(), "New gain values:").map_err(Error::ConsoleIoError)?;
+                            print_gains(&new_gains, console)?;
+                        }
+                        Ok(SubmitResult::HeadersUnchanged(gains)) => {
+                            writeln!(
+                                console.out(),
+                                "All gains are already correct so doing nothing. Existing gains were:"
+                            )
+                            .map_err(Error::ConsoleIoError)?;
+                            print_gains(&gains, console)?;
+                            num_already_normalized.fetch_add(1, Ordering::Relaxed);
+                        }
+                    }
+                    drop(rewrite_guard);
+                }
+                Ok(())
+            };
+            let result = body();
+            if let Err(ref e) = result {
+                writeln!(console.err(), "Failed to rewrite {}: {}", input_path.display(), e)
+                    .map_err(Error::ConsoleIoError)?;
+            }
+            writeln!(console.out()).map_err(Error::ConsoleIoError)?;
+            result
+        })?;
+    }
+
+    let num_files_single = num_files_single.into_inner();
+    let num_files_album = num_files_album.into_inner();
+    let num_processed = num_files_single + num_files_album;
     let num_already_normalized = num_already_normalized.into_inner();
     println!("Processing complete.");
+    println!("Total files processed as singles: {}", num_files_single);
+    println!("Total files processed as albums: {}", num_files_album);
     println!("Total files processed: {}", num_processed);
     println!("Files processed but already normalized: {}", num_already_normalized);
     Ok(())
