@@ -150,6 +150,13 @@ The following options are available (run `opusgain --help` for usage):
     being treated as singles and `album1` and `album2` being normalized as
     independent albums.
 
+* `-e FILE_EXTENSIONS`, `--file-extensions=FILE_EXTENSIONS`: When folders are
+  passed on the command line to be searched for files, this option determines
+  what file extensions are considered to be Opus files. Multiple extensions may
+  be supplied separated by commas. By default this value is `opus`, but
+  `ogg,opus` could be supplied to assume that all found `.ogg` files are Opus
+  as well.
+
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
 

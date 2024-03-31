@@ -1,4 +1,5 @@
-use std::collections::VecDeque;
+use std::collections::{HashSet, VecDeque};
+use std::ffi::OsString;
 use std::path::{Path, PathBuf};
 
 use clap::ValueEnum;
@@ -175,7 +176,9 @@ impl FileGrouper for FoldersAreAlbums {
     }
 }
 
-pub fn paths_to_file_groups<I, P>(input_paths: I, processing_mode: PathsProcessingMode) -> Result<Vec<FileGroup>, Error>
+pub fn paths_to_file_groups<I, P>(
+    input_paths: I, processing_mode: PathsProcessingMode, file_extensions: &HashSet<OsString>,
+) -> Result<Vec<FileGroup>, Error>
 where
     I: IntoIterator<Item = P>,
     P: AsRef<Path>,
@@ -190,7 +193,9 @@ where
         if let Some(path) = path_stack.last_mut().expect("Path stack unexpectedly empty").1.pop_front() {
             let metadata = path.symlink_metadata().map_err(|e| Error::FileOpenError(path.to_path_buf(), e))?;
             if metadata.is_file() {
-                grouper.file(&path)?;
+                if path.extension().map(|ext| file_extensions.contains(ext)).unwrap_or(false) {
+                    grouper.file(&path)?;
+                }
             } else if metadata.is_dir() {
                 let entries: Result<VecDeque<PathBuf>, _> = path
                     .read_dir()

@@ -10,7 +10,8 @@ mod ctrlc_handling;
 #[path = "../output_file.rs"]
 mod output_file;
 
-use std::collections::{BTreeMap, HashMap};
+use std::collections::{BTreeMap, HashMap, HashSet};
+use std::ffi::OsString;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
@@ -238,6 +239,13 @@ struct Cli {
     #[clap(default_value_t = PathsProcessingMode::FileListSingles)]
     /// How the list of supplied paths is interpreted
     interpret_paths: PathsProcessingMode,
+
+    #[clap(long, short = 'e', value_delimiter = ',', default_value = "opus")]
+    /// When directories are searched, what file extensions will be considered
+    /// to be Opus. Multiple comma-separated values can be supplied. For
+    /// example setting this value to "ogg,opus" will cause files with
+    /// either extension to be treated as Opus files for processing.
+    file_extensions: Vec<OsString>,
 }
 
 #[allow(clippy::too_many_lines)]
@@ -289,7 +297,8 @@ fn main_impl() -> Result<(), AppError> {
     }
 
     let console_output = Standard::default();
-    let input_groups = paths_to_file_groups(cli.input_files, cli.interpret_paths)?;
+    let file_extensions: HashSet<_> = cli.file_extensions.iter().cloned().collect();
+    let input_groups = paths_to_file_groups(cli.input_files, cli.interpret_paths, &file_extensions)?;
 
     for input_group in input_groups {
         let input_files = input_group.get_file_paths();
