@@ -150,5 +150,5 @@ pub enum Error {
     UnhandledFileType(PathBuf),
 
     #[error("Unable to map paths into albums/singles: `{0}`")]
-    FileGroup(#[from] file_grouping::FileGroupingError),
+    FileGroup(#[from] file_grouping::Error),
 }

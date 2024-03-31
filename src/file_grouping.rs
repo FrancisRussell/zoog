@@ -4,8 +4,6 @@ use std::path::{Path, PathBuf};
 
 use clap::ValueEnum;
 
-use crate::Error;
-
 /// How a list of paths is grouped into albums and singles.
 #[derive(Clone, Copy, Debug, ValueEnum)]
 pub enum PathsProcessingMode {
@@ -22,11 +20,11 @@ pub enum PathsProcessingMode {
 }
 
 impl PathsProcessingMode {
-    fn build_grouper(&self) -> Box<dyn FileGrouper> {
-        match *self {
+    fn build_grouper(self) -> Box<dyn FileGrouper> {
+        match self {
             PathsProcessingMode::FileListSingles => Box::new(FileList::new(false)),
             PathsProcessingMode::FileListAlbum => Box::new(FileList::new(true)),
-            PathsProcessingMode::FoldersAreAlbums => Box::new(FoldersAreAlbums::default()),
+            PathsProcessingMode::FoldersAreAlbums => Box::<FoldersAreAlbums>::default(),
         }
     }
 }
@@ -41,8 +39,10 @@ pub enum FileGroup {
 }
 
 impl FileGroup {
+    #[must_use]
     pub fn is_album(&self) -> bool { matches!(self, FileGroup::Album(_)) }
 
+    #[must_use]
     pub fn get_file_paths(&self) -> Vec<PathBuf> {
         match self {
             FileGroup::Singles(files) | FileGroup::Album(files) => files.clone(),
@@ -52,7 +52,7 @@ impl FileGroup {
 
 /// Errors that can occur when producing groups of albums and singles.
 #[derive(Clone, Debug, thiserror::Error)]
-pub enum FileGroupingError {
+pub enum Error {
     /// A folder was supplied when doing so is invalid.
     #[error("File grouper did not expect a folder: {0}")]
     UnexpectedFolder(PathBuf),
@@ -73,7 +73,7 @@ trait TreeVisitor {
 
 /// A trait for types capable of visiting a filesystem hierarchy and producing a
 /// list of albums and singles.
-trait FileGrouper: TreeVisitor<Error = FileGroupingError> {
+trait FileGrouper: TreeVisitor<Error = Error> {
     /// Returns paths of files grouped into albums and singles
     fn groups(&self) -> Vec<FileGroup>;
 }
@@ -93,10 +93,10 @@ impl FileList {
 }
 
 impl TreeVisitor for FileList {
-    type Error = FileGroupingError;
+    type Error = Error;
 
     fn enter_folder(&mut self, path: &Path) -> Result<bool, Self::Error> {
-        Err(FileGroupingError::UnexpectedFolder(path.to_path_buf()))
+        Err(Error::UnexpectedFolder(path.to_path_buf()))
     }
 
     fn file(&mut self, path: &Path) -> Result<(), Self::Error> {
@@ -105,7 +105,7 @@ impl TreeVisitor for FileList {
     }
 
     fn exit_folder(&mut self, path: &Path) -> Result<(), Self::Error> {
-        Err(FileGroupingError::UnexpectedFolder(path.to_path_buf()))
+        Err(Error::UnexpectedFolder(path.to_path_buf()))
     }
 }
 
@@ -132,7 +132,7 @@ struct FoldersAreAlbums {
 }
 
 impl TreeVisitor for FoldersAreAlbums {
-    type Error = FileGroupingError;
+    type Error = Error;
 
     fn enter_folder(&mut self, _path: &Path) -> Result<bool, Self::Error> {
         if self.depth == 0 {
@@ -176,9 +176,15 @@ impl FileGrouper for FoldersAreAlbums {
     }
 }
 
-pub fn paths_to_file_groups<I, P>(
-    input_paths: I, processing_mode: PathsProcessingMode, file_extensions: &HashSet<OsString>,
-) -> Result<Vec<FileGroup>, Error>
+/// Given a list of paths, converts them into a list of file groupings,
+/// which may correspond to albums or singles. `processing_mode` determines the
+/// algorithm that will be used while `file_extensions` contains file extensions
+/// for files that will be returned. Files with other extensions will be
+/// ignored.
+#[allow(clippy::missing_panics_doc)]
+pub fn paths_to_file_groups<I, P, H: std::hash::BuildHasher>(
+    input_paths: I, processing_mode: PathsProcessingMode, file_extensions: &HashSet<OsString, H>,
+) -> Result<Vec<FileGroup>, crate::Error>
 where
     I: IntoIterator<Item = P>,
     P: AsRef<Path>,
@@ -191,18 +197,18 @@ where
         // All entries in the stack are folder contents except the top-level which is
         // the list of files/folders supplied.
         if let Some(path) = path_stack.last_mut().expect("Path stack unexpectedly empty").1.pop_front() {
-            let metadata = path.symlink_metadata().map_err(|e| Error::FileOpenError(path.to_path_buf(), e))?;
+            let metadata = path.symlink_metadata().map_err(|e| crate::Error::FileOpenError(path.clone(), e))?;
             if metadata.is_file() {
-                if path.extension().map(|ext| file_extensions.contains(ext)).unwrap_or(false) {
+                if path.extension().is_some_and(|ext| file_extensions.contains(ext)) {
                     grouper.file(&path)?;
                 }
             } else if metadata.is_dir() {
                 let entries: Result<VecDeque<PathBuf>, _> = path
                     .read_dir()
-                    .map_err(|e| Error::FileOpenError(path.to_path_buf(), e))?
+                    .map_err(|e| crate::Error::FileOpenError(path.clone(), e))?
                     .map(|entry| entry.map(|entry| entry.path()))
                     .collect();
-                let entries = entries.map_err(|e| Error::FileOpenError(path.to_path_buf(), e))?;
+                let entries = entries.map_err(|e| crate::Error::FileOpenError(path.clone(), e))?;
                 grouper.enter_folder(&path)?;
                 path_stack.push((Some(path), entries));
             }
