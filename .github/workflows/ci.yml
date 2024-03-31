@@ -23,10 +23,15 @@ jobs:
         name: Install Rustup
         with:
           command: install-rustup
-          toolchain: nightly
+          toolchain: stable
           target: ${{ matrix.target }}
           profile: minimal
           default: true
+      - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
+        name: Install cross (workaround for (https://github.com/cross-rs/cross/issues/1453))
+        with:
+          command: cargo install
+          args: cross --git https://github.com/cross-rs/cross --tag v0.2.5
       - uses: FrancisRussell/ferrous-actions@v0.1.0-beta.1
         name: Cargo build
         with: 
