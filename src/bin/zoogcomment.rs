@@ -9,7 +9,6 @@ mod output_file;
 
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
-use std::convert::Into;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Seek as _, Write as _};
 use std::ops::BitOrAssign;
@@ -20,7 +19,7 @@ use ctrlc_handling::CtrlCChecker;
 use output_file::OutputFile;
 use thiserror::Error;
 use zoog::comment_rewrite::{CommentHeaderRewrite, CommentHeaderSummary, CommentRewriterAction, CommentRewriterConfig};
-use zoog::file_timestamp::set_mtime_with_minimal_increment;
+use zoog::filesystem::set_mtime_with_minimal_increment;
 use zoog::header::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::{escaping, Error};
