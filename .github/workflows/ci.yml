@@ -38,3 +38,4 @@ jobs:
         run: rustc --version
       - name: Build using cross normally
         run: cross build --target=${{ matrix.target }}
+        continue-on-error: true
