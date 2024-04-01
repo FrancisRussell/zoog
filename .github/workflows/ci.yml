@@ -23,7 +23,7 @@ jobs:
         name: Install Rustup
         with:
           command: install-rustup
-          toolchain: stable
+          toolchain: nightly
           target: ${{ matrix.target }}
           profile: minimal
           default: true
