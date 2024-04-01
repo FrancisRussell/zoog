@@ -128,10 +128,12 @@ The following options are available (run `opusgain --help` for usage):
     supplying the `-a` or `--album` flag.
   
   * `folders-are-albums`: Each file path supplied is treated as a single, with
-    album tags being removed. Each supplied folder path is explored
-    recursively, with all found Opus files being treated as part of a single
-    album. This option therefore makes is possible to apply multiple album
-    normalizations in a single `opusgain` invocation.
+    album tags being removed. Each supplied folder path is explored (including
+    recursive traversal of sub-folders) with all found Opus files being treated
+    as part of a single album. This option therefore makes it possible to apply
+    multiple album normalizations in a single `opusgain` invocation. Which
+    files inside folders are considered Ogg Opus files is controlled by the
+    `--file-extensions` option.
 
     For example, if you had the files:
 
@@ -152,10 +154,10 @@ The following options are available (run `opusgain --help` for usage):
 
 * `-e FILE_EXTENSIONS`, `--file-extensions=FILE_EXTENSIONS`: When folders are
   passed on the command line to be searched for files, this option determines
-  what file extensions are considered to be Opus files. Multiple extensions may
-  be supplied separated by commas. By default this value is `opus`, but
-  `ogg,opus` could be supplied to assume that all found `.ogg` files are Opus
-  as well.
+  what file extensions are considered to be Ogg Opus files. Multiple extensions
+  may be supplied separated by commas. By default this value is `opus`, but
+  `ogg,opus` could be supplied to assume that all found `.ogg` files are Ogg
+  Opus as well.
 
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
