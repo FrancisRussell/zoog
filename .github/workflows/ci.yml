@@ -31,7 +31,7 @@ jobs:
         name: Install cross
         with:
           command: cargo install
-          args: cross --git https://github.com/cross-rs/cross --tag v0.2.5
+          args: cross --git https://github.com/cross-rs/cross --rev 085092ca01d6ac9f5a0b612d9e68bcdf1e50f7ee
       - name: Report Cross version
         run: cross --version
       - name: Report Rustc version
