@@ -20,6 +20,8 @@ pub enum PathsProcessingMode {
 }
 
 impl PathsProcessingMode {
+    /// Builds a `FileGrouper` which can be used to map a list of paths
+    /// to files grouped into albums and singles.
     fn build_grouper(self) -> Box<dyn FileGrouper> {
         match self {
             PathsProcessingMode::FileListSingles => Box::new(FileList::new(false)),
@@ -39,9 +41,11 @@ pub enum FileGroup {
 }
 
 impl FileGroup {
+    /// Returns `true` if this `FileGroup` represents an album.
     #[must_use]
     pub fn is_album(&self) -> bool { matches!(self, FileGroup::Album(_)) }
 
+    /// Returns all paths in the `FileGroup`.
     #[must_use]
     pub fn get_file_paths(&self) -> Vec<PathBuf> {
         match self {
