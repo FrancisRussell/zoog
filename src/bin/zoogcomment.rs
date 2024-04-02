@@ -13,6 +13,7 @@ use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Seek as _, Write as _};
 use std::ops::BitOrAssign;
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 
 use clap::Parser;
 use ctrlc_handling::CtrlCChecker;
@@ -42,14 +43,16 @@ enum AppError {
     StandardInputReadError(io::Error),
 }
 
-fn main() {
+fn main() -> ExitCode {
     if let Err(e) = main_impl() {
         match e {
             AppError::LibraryError(e) => eprintln!("Aborted due to error: {}", e),
             AppError::SilentExit => {}
             e => eprintln!("{}", e),
         }
-        std::process::exit(1);
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
     }
 }
 
