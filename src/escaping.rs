@@ -51,7 +51,7 @@ where
 
 /// Escapes a string slice using `vorbiscomment`-style escaping
 #[must_use]
-pub fn escape_str(value: &str) -> Cow<str> {
+pub fn escape_str(value: &str) -> Cow<'_, str> {
     if value.contains(ESCAPED_CHARS) {
         EscapingIterator::new(value.chars()).collect()
     } else {
@@ -72,7 +72,7 @@ pub enum EscapeDecodeError {
 }
 
 /// Unescapes a string slice using `vorbiscomment`-style escaping
-pub fn unescape_str(value: &str) -> Result<Cow<str>, EscapeDecodeError> {
+pub fn unescape_str(value: &str) -> Result<Cow<'_, str>, EscapeDecodeError> {
     if !value.contains(ESCAPE_CHAR) {
         return Ok(value.into());
     }

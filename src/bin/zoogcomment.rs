@@ -196,8 +196,8 @@ fn validate_comment_filename(path: &Path) -> Result<(), AppError> {
         ext.make_ascii_lowercase();
         if OGG_OPUS_EXTENSIONS.iter().any(|e| ext == *e) {
             eprintln!(
-                "Based on the file extension {:?} looks like it might be a media file. Refusing to use it for tags.",
-                path
+                "Based on the file extension {} looks like it might be a media file. Refusing to use it for tags.",
+                path.display()
             );
             return Err(AppError::SilentExit);
         }
@@ -392,7 +392,7 @@ fn main_impl() -> Result<(), AppError> {
         Ok(SubmitResult::HeadersChanged { .. }) => {
             commit = true;
         }
-    };
+    }
     drop(input_file); // Important for Windows so we can overwrite
     if commit {
         output_file.commit()?;
