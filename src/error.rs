@@ -4,7 +4,7 @@ use ogg::reading::OggReadError;
 use tempfile::PersistError;
 use thiserror::Error;
 
-use crate::{escaping, file_grouping, Codec};
+use crate::{escaping, Codec};
 
 /// The Zoog error type
 #[derive(Debug, Error)]
@@ -144,7 +144,4 @@ pub enum Error {
 
     #[error("Path had unexpected file-type: `{0}`")]
     UnhandledFileType(PathBuf),
-
-    #[error("Unable to map paths into albums/singles: `{0}`")]
-    FileGroup(#[from] file_grouping::Error),
 }

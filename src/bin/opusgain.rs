@@ -8,6 +8,7 @@ use std::io::{BufReader, BufWriter};
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
+use std::time::SystemTime;
 
 use clap::{Parser, ValueEnum};
 use console_output::{ConsoleOutput, Delayed as DelayedConsoleOutput, Standard};
@@ -21,7 +22,7 @@ use rayon::ThreadPoolBuilder;
 use termcolor::ColorChoice;
 use thiserror::Error;
 use zoog::file_grouping::{paths_to_file_groups, PathsProcessingMode};
-use zoog::filesystem::{set_mtime_with_minimal_increment, SetMtimeOutcome};
+use zoog::filesystem::{adjust_mtime, SetMtimeOutcome, TimestampUpdateMode};
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::opus::{VolumeAnalyzer, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use zoog::volume_rewrite::{
@@ -36,6 +37,9 @@ enum AppError {
 
     #[error("Unable to register Ctrl-C handler: `{0}`")]
     CtrlCRegistration(#[from] ctrlc_handling::CtrlCRegistrationError),
+
+    #[error("Unable to map paths into albums/singles: `{0}`")]
+    FileGroup(#[from] zoog::file_grouping::Error),
 }
 
 fn main() -> ExitCode {
@@ -228,8 +232,12 @@ struct Cli {
     /// unchanged regardless of the specified preset.
     clear: bool,
 
-    #[clap(short = 'M', long, action)]
-    /// Minimize modification timestamp increment when rewriting files.
+    #[clap(long, value_enum, default_value_t = TimestampUpdateMode::Present, conflicts_with = "minimize_mtime_change")]
+    /// Strategy to use for setting modification time of rewritten files.
+    mtime_strategy: TimestampUpdateMode,
+
+    #[clap(short = 'M', action)]
+    /// Alias for --mtime-strategy=minimal-increment.
     minimize_mtime_change: bool,
 
     #[clap(long, short = 'I', name = "INTERPRET_PATHS_MODE", value_enum, conflicts_with = "album")]
@@ -245,7 +253,8 @@ struct Cli {
     file_extensions: Vec<OsString>,
 
     #[clap(long = "colour", alias = "color", value_parser = clap::value_parser!(ColorChoice), default_value = "auto", value_name = "WHEN")]
-    /// Control whether colour is used in output [possible values: always, always-ansi, auto, never]
+    /// Control whether colour is used in output [possible values: always,
+    /// always-ansi, auto, never]
     colour: ColorChoice,
 }
 
@@ -254,7 +263,8 @@ fn run(console_output: &Standard, mut cli: Cli, interrupt_checker: &CtrlCChecker
     if cli.album {
         cli.interpret_paths = PathsProcessingMode::FileListAlbum;
     }
-    let minimize_mtime_change = cli.minimize_mtime_change;
+    let mtime_strategy =
+        if cli.minimize_mtime_change { TimestampUpdateMode::MinimalIncrement } else { cli.mtime_strategy };
     let num_threads = if cli.num_threads == 0 {
         error!(console_output, "The number of thread specified must be greater than 0.");
         Err(Error::InvalidThreadCount)
@@ -352,16 +362,10 @@ fn run(console_output: &Standard, mut cli: Cli, interrupt_checker: &CtrlCChecker
                 };
 
                 let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.clone(), e))?;
-                let input_file_modified = if minimize_mtime_change {
-                    Some(
-                        input_file
-                            .metadata()
-                            .and_then(|metadata| metadata.modified())
-                            .map_err(|e| Error::FileMetadataReadError(input_path.clone(), e))?,
-                    )
-                } else {
-                    None
-                };
+                let input_file_modified = input_file
+                    .metadata()
+                    .and_then(|metadata| metadata.modified())
+                    .map_err(|e| Error::FileMetadataReadError(input_path.clone(), e))?;
                 let mut input_file = BufReader::new(input_file);
 
                 {
@@ -408,18 +412,17 @@ fn run(console_output: &Standard, mut cli: Cli, interrupt_checker: &CtrlCChecker
                             output_file.commit()?;
                             // Update timestamp if necessary
                             if !dry_run {
-                                if let Some(modification_time) = input_file_modified {
-                                    let outcome = std::fs::File::open(&input_path)
-                                        .and_then(|file| set_mtime_with_minimal_increment(&file, modification_time))
-                                        .map_err(|e| Error::FileMetadataWriteError(input_path.clone(), e))?;
-                                    if !matches!(outcome, SetMtimeOutcome::Success) {
-                                        warn!(
-                                            console,
-                                            "WARNING: did not update modification time on {}: {}.",
-                                            input_path.display(),
-                                            outcome
-                                        );
-                                    }
+                                let now = SystemTime::now();
+                                let outcome = std::fs::File::open(&input_path)
+                                    .and_then(|file| adjust_mtime(&file, input_file_modified, now, mtime_strategy))
+                                    .map_err(|e| Error::FileMetadataWriteError(input_path.clone(), e))?;
+                                if !matches!(outcome, SetMtimeOutcome::Success) {
+                                    warn!(
+                                        console,
+                                        "Modification time update on {}: {}.",
+                                        input_path.display(),
+                                        outcome
+                                    );
                                 }
                             }
                             info!(console, "Old gain values:");

@@ -9,7 +9,7 @@ repository = "https://github.com/FrancisRussell/zoog.git"
 license = "BSD-3-Clause"
 keywords = ["ogg", "opus", "vorbis", "normalization"]
 description = "Tools for modifying Ogg Opus output gain and R128 tags and Ogg Opus/Vorbis comment tags"
-rust-version = "1.75"
+rust-version = "1.80"
 
 [dependencies]
 audiopus_sys = { version = "0.2.2" }
@@ -29,10 +29,11 @@ wild = { version = "2.1.0", optional = true }
 
 [features]
 default = ["audiopus_sys/static", "cli"]
-cli = ["dep:ctrlc", "dep:num_cpus", "dep:parking_lot", "dep:rayon", "dep:termcolor", "dep:wild"]
+cli = ["dep:clap", "dep:ctrlc", "dep:num_cpus", "dep:parking_lot", "dep:rayon", "dep:termcolor", "dep:wild"]
 
 [dependencies.clap]
 version = "4.0.10"
+optional = true
 default-features = false
 features = [ "derive", "help", "std", "usage", "wrap_help", "suggestions" ]
 
