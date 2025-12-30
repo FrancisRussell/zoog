@@ -36,7 +36,7 @@ pub type CommentHeader = CommentHeaderGeneric<Specifics>;
 
 #[cfg(test)]
 mod tests {
-    use rand::distributions::{Distribution, Uniform};
+    use rand::distr::{Distribution, Uniform};
     use rand::rngs::SmallRng;
     use rand::SeedableRng;
 
@@ -67,7 +67,8 @@ mod tests {
         let header: CommentHeader = create_random_header(&mut rng);
         let original_data = comment_header_as_vec(&header)?;
         let experimental_data_size = 1024;
-        let experimental_data_dist = Uniform::new_inclusive(0u8, 0xFFu8);
+        let experimental_data_dist =
+            Uniform::new_inclusive(0u8, 0xFFu8).expect("Unable to create experimental data distribution");
         let padded_data: Vec<u8> = original_data
             .iter()
             .copied()

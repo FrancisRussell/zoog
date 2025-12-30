@@ -24,13 +24,19 @@ pub trait LockableWriter: Write {
 }
 
 impl LockableWriter for &Stdout {
-    type Locked<'a> = io::StdoutLock<'static> where Self: 'a;
+    type Locked<'a>
+        = io::StdoutLock<'static>
+    where
+        Self: 'a;
 
     fn lock(&self) -> Self::Locked<'_> { Stdout::lock(self) }
 }
 
 impl LockableWriter for &Stderr {
-    type Locked<'a> = io::StderrLock<'static> where Self: 'a;
+    type Locked<'a>
+        = io::StderrLock<'static>
+    where
+        Self: 'a;
 
     fn lock(&self) -> Self::Locked<'_> { Stderr::lock(self) }
 }
@@ -48,8 +54,14 @@ pub trait ConsoleOutput {
 }
 
 impl ConsoleOutput for Standard {
-    type ErrStream<'a> = &'a Stderr where Self: 'a;
-    type OutStream<'a> = &'a Stdout where Self: 'a;
+    type ErrStream<'a>
+        = &'a Stderr
+    where
+        Self: 'a;
+    type OutStream<'a>
+        = &'a Stdout
+    where
+        Self: 'a;
 
     fn out(&self) -> Self::OutStream<'_> { &self.out }
 
@@ -108,13 +120,19 @@ pub trait Guarded<T> {
 }
 
 impl<T> Guarded<T> for &Mutex<T> {
-    type Guard<'b> = MutexGuard<'b, T> where Self: 'b;
+    type Guard<'b>
+        = MutexGuard<'b, T>
+    where
+        Self: 'b;
 
     fn lock(&mut self) -> Self::Guard<'_> { Mutex::lock(self) }
 }
 
 impl<T> Guarded<T> for MutexGuard<'_, T> {
-    type Guard<'b> = &'b mut T where Self: 'b;
+    type Guard<'b>
+        = &'b mut T
+    where
+        Self: 'b;
 
     fn lock(&mut self) -> Self::Guard<'_> { &mut *self }
 }
@@ -140,14 +158,23 @@ impl<L: Guarded<StreamWrites>> Write for DelayedWriter<'_, L> {
 }
 
 impl LockableWriter for DelayedWriter<'_, &Mutex<StreamWrites>> {
-    type Locked<'a> = DelayedWriter<'a, MutexGuard<'a, StreamWrites>> where Self: 'a;
+    type Locked<'a>
+        = DelayedWriter<'a, MutexGuard<'a, StreamWrites>>
+    where
+        Self: 'a;
 
     fn lock(&self) -> Self::Locked<'_> { DelayedWriter { id_generator: self.id_generator, writes: self.writes.lock() } }
 }
 
 impl<W: ConsoleOutput> ConsoleOutput for Delayed<'_, W> {
-    type ErrStream<'a> = DelayedWriter<'a, &'a Mutex<StreamWrites>> where Self: 'a;
-    type OutStream<'a> = DelayedWriter<'a, &'a Mutex<StreamWrites>> where Self: 'a;
+    type ErrStream<'a>
+        = DelayedWriter<'a, &'a Mutex<StreamWrites>>
+    where
+        Self: 'a;
+    type OutStream<'a>
+        = DelayedWriter<'a, &'a Mutex<StreamWrites>>
+    where
+        Self: 'a;
 
     fn out(&self) -> Self::OutStream<'_> { DelayedWriter { id_generator: &self.id_generator, writes: &self.out } }
 

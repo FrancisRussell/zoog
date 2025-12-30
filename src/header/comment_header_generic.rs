@@ -99,7 +99,10 @@ impl<S> CommentHeaderGeneric<S> {
 }
 
 impl<S: CommentHeaderSpecifics> CommentList for CommentHeaderGeneric<S> {
-    type Iter<'b> = <DiscreteCommentList as CommentList>::Iter<'b> where Self: 'b;
+    type Iter<'b>
+        = <DiscreteCommentList as CommentList>::Iter<'b>
+    where
+        Self: 'b;
 
     fn len(&self) -> usize { self.user_comments.len() }
 
