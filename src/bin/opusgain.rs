@@ -255,7 +255,7 @@ fn main_impl() -> Result<(), AppError> {
         let mut cli = Cli::parse_from(wild::args_os());
         if cli.album {
             cli.interpret_paths = PathsProcessingMode::FileListAlbum;
-        };
+        }
         cli
     };
     let minimize_mtime_change = cli.minimize_mtime_change;

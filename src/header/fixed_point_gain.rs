@@ -47,7 +47,7 @@ impl TryFrom<Decibels> for FixedPointGain {
         let fixed = (value.as_f64() * 256.0).round();
         #[allow(clippy::cast_possible_truncation)]
         let value = fixed as i16;
-        if (f64::from(value) - fixed).abs() < std::f64::EPSILON {
+        if (f64::from(value) - fixed).abs() < f64::EPSILON {
             Ok(FixedPointGain { value })
         } else {
             Err(Error::GainOutOfBounds)
