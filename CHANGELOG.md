@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+* No changes yet.
+
 ## 0.8.1
 
 * Fix `zoogcomment` so that in the no-change out-of-place case it does not
