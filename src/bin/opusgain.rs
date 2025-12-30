@@ -15,6 +15,7 @@ use std::ffi::OsString;
 use std::fs::File;
 use std::io::{BufReader, BufWriter, Write};
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
 use std::sync::atomic::{AtomicUsize, Ordering};
 
 use clap::{Parser, ValueEnum};
@@ -44,12 +45,12 @@ enum AppError {
     CtrlCRegistration(#[from] ctrlc_handling::CtrlCRegistrationError),
 }
 
-fn main() {
+fn main() -> ExitCode {
     match main_impl() {
-        Ok(()) => {}
+        Ok(()) => ExitCode::SUCCESS,
         Err(e) => {
             eprintln!("Aborted due to error: {}", e);
-            std::process::exit(1);
+            ExitCode::FAILURE
         }
     }
 }
