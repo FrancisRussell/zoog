@@ -2,6 +2,9 @@ on: [push]
 
 name: CI
 
+env:
+  CMAKE_POLICY_VERSION_MINIMUM: 3.5
+
 jobs:
   check-build:
     name: Check build
