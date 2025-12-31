@@ -92,3 +92,4 @@ jobs:
         name: Clippy
         with:
           command: cargo clippy
+          annotations: false
