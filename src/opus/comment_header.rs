@@ -37,7 +37,7 @@ pub type CommentHeader = CommentHeaderGeneric<Specifics>;
 #[cfg(test)]
 mod tests {
     use rand::distr::{Distribution, Uniform};
-    use rand::rngs::SmallRng;
+    use rand::rngs::StdRng;
     use rand::SeedableRng;
 
     use super::*;
@@ -46,7 +46,7 @@ mod tests {
 
     #[test]
     fn padding_is_discarded() -> Result<(), Error> {
-        let mut rng = SmallRng::seed_from_u64(57128);
+        let mut rng = StdRng::seed_from_u64(57128);
         let header: CommentHeader = create_random_header(&mut rng);
         let original_data = comment_header_as_vec(&header)?;
         let padding_size = 1024;
@@ -63,7 +63,7 @@ mod tests {
 
     #[test]
     fn experimental_data_is_preserved() -> Result<(), Error> {
-        let mut rng = SmallRng::seed_from_u64(73295);
+        let mut rng = StdRng::seed_from_u64(73295);
         let header: CommentHeader = create_random_header(&mut rng);
         let original_data = comment_header_as_vec(&header)?;
         let experimental_data_size = 1024;
