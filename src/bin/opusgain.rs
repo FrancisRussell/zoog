@@ -28,7 +28,7 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use thiserror::Error;
 use zoog::file_grouping::{paths_to_file_groups, PathsProcessingMode};
-use zoog::filesystem::set_mtime_with_minimal_increment;
+use zoog::filesystem::{set_mtime_with_minimal_increment, SetMtimeOutcome};
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::opus::{VolumeAnalyzer, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use zoog::volume_rewrite::{
@@ -417,9 +417,18 @@ fn main_impl() -> Result<(), AppError> {
                             // Update timestamp if necessary
                             if !dry_run {
                                 if let Some(modification_time) = input_file_modified {
-                                    std::fs::File::open(&input_path)
+                                    let outcome = std::fs::File::open(&input_path)
                                         .and_then(|file| set_mtime_with_minimal_increment(&file, modification_time))
                                         .map_err(|e| Error::FileMetadataWriteError(input_path.clone(), e))?;
+                                    if !matches!(outcome, SetMtimeOutcome::Success) {
+                                        writeln!(
+                                            console.err(),
+                                            "WARNING: did not update modification time on {}: {}.",
+                                            input_path.display(),
+                                            outcome
+                                        )
+                                        .map_err(Error::ConsoleIoError)?;
+                                    }
                                 }
                             }
                             writeln!(console.out(), "Old gain values:").map_err(Error::ConsoleIoError)?;
