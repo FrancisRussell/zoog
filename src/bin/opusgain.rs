@@ -332,7 +332,7 @@ fn main_impl() -> Result<(), AppError> {
                 writeln!(
                     console.out(),
                     "Processing file {} with target loudness of {}...",
-                    &input_path.display(),
+                    input_path.display(),
                     volume_target.to_friendly_string()
                 )
                 .map_err(Error::ConsoleIoError)?;
