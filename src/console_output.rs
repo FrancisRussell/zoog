@@ -1,10 +1,8 @@
-use std::collections::VecDeque;
 use std::io::{self, Stderr, Stdout, Write};
-use std::ops::DerefMut;
-use std::sync::atomic::{AtomicUsize, Ordering};
 
 use parking_lot::{Mutex, MutexGuard};
 
+/// Console output backed directly by the process stdout and stderr.
 #[derive(Debug)]
 pub struct Standard {
     out: Stdout,
@@ -15,6 +13,7 @@ impl Default for Standard {
     fn default() -> Standard { Standard { out: io::stdout(), err: io::stderr() } }
 }
 
+/// A [`Write`] implementation that can be locked for exclusive, atomic access.
 pub trait LockableWriter: Write {
     type Locked<'a>: Write
     where
@@ -41,6 +40,7 @@ impl LockableWriter for &Stderr {
     fn lock(&self) -> Self::Locked<'_> { Stderr::lock(self) }
 }
 
+/// Provides access to stdout and stderr streams, each of which can be locked.
 pub trait ConsoleOutput {
     type OutStream<'a>: LockableWriter
     where
@@ -68,167 +68,131 @@ impl ConsoleOutput for Standard {
     fn err(&self) -> Self::ErrStream<'_> { &self.err }
 }
 
+/// A single buffered operation on a stream.
 #[derive(Copy, Clone, Debug)]
 enum StreamOperation {
     Write(usize),
     Flush,
 }
 
-#[derive(Debug, Default)]
-pub struct StreamWrites {
-    data: Vec<u8>,
-    operations: VecDeque<(usize, StreamOperation)>,
+/// Which stream an operation targets.
+#[derive(Copy, Clone, Debug)]
+enum StreamTarget {
+    Out,
+    Err,
 }
 
-impl StreamWrites {
-    #[allow(clippy::unnecessary_wraps)]
-    fn write(&mut self, id: usize, data: &[u8]) -> Result<usize, io::Error> {
+/// Accumulated writes and flushes across both streams, in the order they were
+/// issued.
+#[derive(Debug, Default)]
+struct BufferedOps {
+    data: Vec<u8>,
+    operations: Vec<(StreamTarget, StreamOperation)>,
+}
+
+impl BufferedOps {
+    fn write(&mut self, target: StreamTarget, data: &[u8]) -> usize {
         self.data.extend(data);
-        self.operations.push_back((id, StreamOperation::Write(data.len())));
-        Ok(data.len())
+        self.operations.push((target, StreamOperation::Write(data.len())));
+        data.len()
     }
 
-    #[allow(clippy::unnecessary_wraps)]
-    fn flush(&mut self, id: usize) -> Result<(), io::Error> {
-        self.operations.push_back((id, StreamOperation::Flush));
+    fn flush(&mut self, target: StreamTarget) { self.operations.push((target, StreamOperation::Flush)); }
+}
+
+/// Buffers all writes in memory and replays them in order to the inner console
+/// on drop, holding the stdout and stderr locks for the entire replay to
+/// prevent interleaving with output from other threads.
+#[derive(Debug)]
+pub struct Delayed<'a, W: ConsoleOutput> {
+    inner: &'a W,
+    ops: Mutex<BufferedOps>,
+}
+
+/// A [`Write`] implementation that appends to a [`Delayed`]'s shared operation
+/// buffer.
+#[derive(Debug)]
+pub struct DelayedWriter<'a> {
+    target: StreamTarget,
+    ops: &'a Mutex<BufferedOps>,
+}
+
+impl Write for DelayedWriter<'_> {
+    fn write(&mut self, data: &[u8]) -> Result<usize, io::Error> { Ok(self.ops.lock().write(self.target, data)) }
+
+    fn flush(&mut self) -> Result<(), io::Error> {
+        self.ops.lock().flush(self.target);
         Ok(())
     }
 }
 
-#[derive(Debug, Default)]
-struct IdGenerator {
-    next: AtomicUsize,
-}
-
-impl IdGenerator {
-    pub fn next(&self) -> usize { self.next.fetch_add(1, Ordering::Relaxed) }
-}
-
+/// A locked variant of [`DelayedWriter`] that holds the operation buffer mutex
+/// for the duration of its lifetime.
 #[derive(Debug)]
-pub struct Delayed<'a, W: ConsoleOutput> {
-    inner: &'a W,
-    id_generator: IdGenerator,
-    out: Mutex<StreamWrites>,
-    err: Mutex<StreamWrites>,
+pub struct LockedDelayedWriter<'a> {
+    target: StreamTarget,
+    ops: MutexGuard<'a, BufferedOps>,
 }
 
-pub trait Guarded<T> {
-    type Guard<'a>: DerefMut<Target = T>
-    where
-        Self: 'a;
-    fn lock(&mut self) -> Self::Guard<'_>;
-}
-
-impl<T> Guarded<T> for &Mutex<T> {
-    type Guard<'b>
-        = MutexGuard<'b, T>
-    where
-        Self: 'b;
-
-    fn lock(&mut self) -> Self::Guard<'_> { Mutex::lock(self) }
-}
-
-impl<T> Guarded<T> for MutexGuard<'_, T> {
-    type Guard<'b>
-        = &'b mut T
-    where
-        Self: 'b;
-
-    fn lock(&mut self) -> Self::Guard<'_> { &mut *self }
-}
-
-#[derive(Debug)]
-pub struct DelayedWriter<'a, L: Guarded<StreamWrites>> {
-    id_generator: &'a IdGenerator,
-    writes: L,
-}
-
-impl<L: Guarded<StreamWrites>> Write for DelayedWriter<'_, L> {
-    fn write(&mut self, data: &[u8]) -> Result<usize, io::Error> {
-        let id = self.id_generator.next();
-        let mut writes = self.writes.lock();
-        writes.write(id, data)
-    }
+impl Write for LockedDelayedWriter<'_> {
+    fn write(&mut self, data: &[u8]) -> Result<usize, io::Error> { Ok(self.ops.write(self.target, data)) }
 
     fn flush(&mut self) -> Result<(), io::Error> {
-        let id = self.id_generator.next();
-        let mut writes = self.writes.lock();
-        writes.flush(id)
+        self.ops.flush(self.target);
+        Ok(())
     }
 }
 
-impl LockableWriter for DelayedWriter<'_, &Mutex<StreamWrites>> {
+impl LockableWriter for DelayedWriter<'_> {
     type Locked<'a>
-        = DelayedWriter<'a, MutexGuard<'a, StreamWrites>>
+        = LockedDelayedWriter<'a>
     where
         Self: 'a;
 
-    fn lock(&self) -> Self::Locked<'_> { DelayedWriter { id_generator: self.id_generator, writes: self.writes.lock() } }
+    fn lock(&self) -> Self::Locked<'_> { LockedDelayedWriter { target: self.target, ops: self.ops.lock() } }
 }
 
 impl<W: ConsoleOutput> ConsoleOutput for Delayed<'_, W> {
     type ErrStream<'a>
-        = DelayedWriter<'a, &'a Mutex<StreamWrites>>
+        = DelayedWriter<'a>
     where
         Self: 'a;
     type OutStream<'a>
-        = DelayedWriter<'a, &'a Mutex<StreamWrites>>
+        = DelayedWriter<'a>
     where
         Self: 'a;
 
-    fn out(&self) -> Self::OutStream<'_> { DelayedWriter { id_generator: &self.id_generator, writes: &self.out } }
+    fn out(&self) -> Self::OutStream<'_> { DelayedWriter { target: StreamTarget::Out, ops: &self.ops } }
 
-    fn err(&self) -> Self::OutStream<'_> { DelayedWriter { id_generator: &self.id_generator, writes: &self.err } }
+    fn err(&self) -> Self::ErrStream<'_> { DelayedWriter { target: StreamTarget::Err, ops: &self.ops } }
 }
 
-impl<W> Delayed<'_, W>
-where
-    W: ConsoleOutput,
-{
-    pub fn new(inner: &W) -> Delayed<'_, W> {
-        Delayed { inner, id_generator: IdGenerator::default(), out: Mutex::default(), err: Mutex::default() }
-    }
+impl<W: ConsoleOutput> Delayed<'_, W> {
+    pub fn new(inner: &W) -> Delayed<'_, W> { Delayed { inner, ops: Mutex::default() } }
 
     #[allow(clippy::similar_names)]
     fn flush_delayed_operations(&mut self) -> Result<(), io::Error> {
         let (out, err) = (self.inner.out(), self.inner.err());
         let (mut out, mut err) = (out.lock(), err.lock());
-        let (mut out_writes, mut err_writes) = (self.out.lock(), self.err.lock());
-        let (mut out_offset, mut err_offset) = (0, 0);
-
-        loop {
-            let next_is_stdout = match (out_writes.operations.front(), err_writes.operations.front()) {
-                (Some((out_id, _)), Some((err_id, _))) => out_id < err_id,
-                (Some(_), None) => true,
-                (None, Some(_)) => false,
-                (None, None) => break,
+        let ops = self.ops.lock();
+        let mut offset = 0;
+        for (target, op) in &ops.operations {
+            let writer: &mut dyn Write = match target {
+                StreamTarget::Out => &mut out,
+                StreamTarget::Err => &mut err,
             };
-            let (writer, offset, writes): (&mut dyn Write, _, _) = if next_is_stdout {
-                (&mut out, &mut out_offset, &mut out_writes)
-            } else {
-                (&mut err, &mut err_offset, &mut err_writes)
-            };
-            let (_id, op) = writes.operations.pop_front().expect("Unexpectedly failed to pop operation");
-            let data = &writes.data;
             match op {
                 StreamOperation::Write(length) => {
-                    writer.write_all(&data[*offset..(*offset + length)])?;
-                    *offset += length;
+                    writer.write_all(&ops.data[offset..offset + length])?;
+                    offset += length;
                 }
-                StreamOperation::Flush => {
-                    writer.flush()?;
-                }
+                StreamOperation::Flush => writer.flush()?,
             }
         }
-
-        (*out_writes, *err_writes) = (StreamWrites::default(), StreamWrites::default());
         Ok(())
     }
 }
 
-impl<W> Drop for Delayed<'_, W>
-where
-    W: ConsoleOutput,
-{
+impl<W: ConsoleOutput> Drop for Delayed<'_, W> {
     fn drop(&mut self) { drop(self.flush_delayed_operations()); }
 }
