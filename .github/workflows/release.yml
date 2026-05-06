@@ -34,9 +34,18 @@ jobs:
         include:
           - target: x86_64-apple-darwin
             platform: macos-latest
+          - target: x86_64-unknown-linux-musl
+            apt_packages: musl-dev
+          - target: x86_64-pc-windows-gnu
+            apt_packages: gcc-mingw-w64-x86-64-posix
+          - target: i686-pc-windows-gnu
+            apt_packages: gcc-mingw-w64-i686-posix
     runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v3
+      - name: Install apt packages
+        if: ${{ matrix.apt_packages != '' }}
+        run: sudo apt-get install -y --no-install-recommends ${{ matrix.apt_packages }}
       - uses: FrancisRussell/ferrous-actions@v1
         name: Install Rustup
         with:
@@ -46,15 +55,9 @@ jobs:
           profile: minimal
           default: true
       - uses: FrancisRussell/ferrous-actions@v1
-        name: Install cross (workaround for (https://github.com/cross-rs/cross/issues/1453))
-        with:
-          command: cargo install
-          args: cross --git https://github.com/cross-rs/cross --tag v0.2.5
-      - uses: FrancisRussell/ferrous-actions@v1
         name: Build
         with:
           command: cargo build
-          use-cross: true
           args: --release --target=${{ matrix.target }}
       - name: Build Archive
         run: ./scripts/build-release ${{ github.ref }} ${{ matrix.target }}
