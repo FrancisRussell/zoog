@@ -1,5 +1,5 @@
 use rand::distr::{StandardUniform, Uniform};
-use rand::Rng;
+use rand::{Rng, RngExt as _};
 
 use crate::{header, Error};
 

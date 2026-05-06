@@ -35,7 +35,7 @@ default-features = false
 features = [ "derive", "help", "std", "usage", "wrap_help", "suggestions" ]
 
 [dev-dependencies]
-rand = { version = "0.9.3", default-features = false, features = [ "small_rng" ] }
+rand = { version = "0.10.1", default-features = false, features = [ "std_rng" ] }
 
 [profile.release]
 lto = "thin"
