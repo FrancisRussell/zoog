@@ -25,7 +25,7 @@ jobs:
             apt_packages: gcc-mingw-w64-i686-posix
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
       - uses: FrancisRussell/ferrous-actions@v1
         name: Cargo Cache
         with:
@@ -46,7 +46,7 @@ jobs:
         with:
           command: cargo build
           args: --target=${{ matrix.target }}
-      - uses: actions/upload-artifact@v6.0.0
+      - uses: actions/upload-artifact@v6
         with:
           name: zoog-debug-${{ matrix.target }}
           path: |
@@ -63,7 +63,7 @@ jobs:
         platform: [ubuntu-latest, macos-latest]
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
       - name: Install test dependencies (Linux)
         if: runner.os == 'Linux'
         run: sudo apt-get install -y --no-install-recommends ffmpeg opus-tools vorbis-tools
@@ -96,7 +96,7 @@ jobs:
     name: Clippy
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
       - uses: FrancisRussell/ferrous-actions@v1
         name: Cargo cache
         with:
