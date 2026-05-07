@@ -1,12 +1,6 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::uninlined_format_args)]
 
-#[path = "../ctrlc_handling.rs"]
-mod ctrlc_handling;
-
-#[path = "../output_file.rs"]
-mod output_file;
-
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
 use std::fs::File;
@@ -16,14 +10,17 @@ use std::path::{Path, PathBuf};
 use std::process::ExitCode;
 
 use clap::Parser;
+use console_output::{ConsoleOutput as _, Standard};
 use ctrlc_handling::CtrlCChecker;
+use logging::{error, warn};
 use output_file::OutputFile;
+use termcolor::ColorChoice;
 use thiserror::Error;
 use zoog::comment_rewrite::{CommentHeaderRewrite, CommentHeaderSummary, CommentRewriterAction, CommentRewriterConfig};
 use zoog::filesystem::{set_mtime_with_minimal_increment, SetMtimeOutcome};
 use zoog::header::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
-use zoog::{escaping, Error};
+use zoog::{console_output, ctrlc_handling, escaping, logging, output_file, Error};
 
 const OGG_OPUS_EXTENSIONS: [&str; 7] = ["ogg", "ogv", "oga", "ogx", "ogm", "spx", "opus"];
 const STANDARD_STREAM_NAME: &str = "-";
@@ -44,11 +41,20 @@ enum AppError {
 }
 
 fn main() -> ExitCode {
-    if let Err(e) = main_impl() {
+    let cli = Cli::parse_from(wild::args_os());
+    let console = Standard::new(cli.colour);
+    let interrupt_checker = match CtrlCChecker::new() {
+        Ok(c) => c,
+        Err(e) => {
+            error!(&console, "{}", AppError::CtrlCRegistration(e));
+            return ExitCode::FAILURE;
+        }
+    };
+    if let Err(e) = run(&console, cli, &interrupt_checker) {
         match e {
-            AppError::LibraryError(e) => eprintln!("Aborted due to error: {}", e),
+            AppError::LibraryError(e) => error!(&console, "Aborted due to error: {}", e),
             AppError::SilentExit => {}
-            e => eprintln!("{}", e),
+            e => error!(&console, "{}", e),
         }
         ExitCode::FAILURE
     } else {
@@ -106,6 +112,10 @@ struct Cli {
     #[clap(short = 'M', long, action)]
     /// Minimize modification timestamp increment when rewriting files.
     minimize_mtime_change: bool,
+
+    #[clap(long = "colour", alias = "color", value_parser = clap::value_parser!(ColorChoice), default_value = "auto", value_name = "WHEN")]
+    /// Control whether colour is used in output [possible values: always, always-ansi, auto, never]
+    colour: ColorChoice,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -193,12 +203,13 @@ where
 }
 
 /// Try to protect user against passing a media file as a tags file
-fn validate_comment_filename(path: &Path) -> Result<(), AppError> {
+fn validate_comment_filename<C: console_output::ConsoleOutput>(path: &Path, console: &C) -> Result<(), AppError> {
     if let Some(ext) = path.extension() {
         let mut ext = ext.to_string_lossy().to_string();
         ext.make_ascii_lowercase();
         if OGG_OPUS_EXTENSIONS.iter().any(|e| ext == *e) {
-            eprintln!(
+            warn!(
+                console,
                 "Based on the file extension {} looks like it might be a media file. Refusing to use it for tags.",
                 path.display()
             );
@@ -269,21 +280,19 @@ fn read_comments_from_stdin(escaped: bool) -> Result<DiscreteCommentList, AppErr
     read_comments_from_read(stdin, escaped, error_map)
 }
 
-fn main_impl() -> Result<(), AppError> {
-    let interrupt_checker = CtrlCChecker::new()?;
-    let cli = Cli::parse_from(wild::args_os());
+fn run(console: &Standard, cli: Cli, interrupt_checker: &CtrlCChecker) -> Result<(), AppError> {
     let operation_mode = match (cli.list, cli.modify, cli.replace) {
         (_, false, false) => OperationMode::List,
         (false, true, false) => OperationMode::Modify,
         (false, false, true) => OperationMode::Replace,
         _ => {
-            eprintln!("Invalid combination of modes passed");
+            error!(console, "Invalid combination of modes passed");
             return Err(AppError::SilentExit);
         }
     };
 
     for comment_file in [&cli.tags_in, &cli.tags_out].iter().copied().flatten() {
-        validate_comment_filename(comment_file)?;
+        validate_comment_filename(comment_file, console)?;
     }
 
     let dry_run = cli.dry_run;
@@ -346,18 +355,18 @@ fn main_impl() -> Result<(), AppError> {
             &mut input_file,
             &mut output_file,
             abort_on_unchanged,
-            &interrupt_checker,
+            interrupt_checker,
         )
     };
     let mut commit = false;
     match rewrite_result {
         Err(e) => {
-            eprintln!("Failure during processing of {}.", input_path.display());
+            error!(&console, "Failure during processing of {}.", input_path.display());
             return Err(e.into());
         }
         Ok(SubmitResult::Good) => {
             // We finished processing the file but never got the headers
-            eprintln!("File {} appeared to be oddly truncated. Doing nothing.", input_path.display());
+            warn!(&console, "File {} appeared to be oddly truncated. Doing nothing.", input_path.display());
         }
         Ok(SubmitResult::HeadersUnchanged(comments)) => match operation_mode {
             OperationMode::List => {
@@ -372,7 +381,7 @@ fn main_impl() -> Result<(), AppError> {
                     }
                     comment_file.commit()?;
                 } else {
-                    comments.write_as_text(io::stdout(), escape).map_err(Error::ConsoleIoError)?;
+                    comments.write_as_text(io::stdout(), escape).map_err(Error::WriteError)?;
                 }
             }
             OperationMode::Modify | OperationMode::Replace => {
@@ -406,7 +415,12 @@ fn main_impl() -> Result<(), AppError> {
                     .and_then(|file| set_mtime_with_minimal_increment(&file, modification_time))
                     .map_err(|e| Error::FileMetadataWriteError(output_path.clone(), e))?;
                 if !matches!(outcome, SetMtimeOutcome::Success) {
-                    eprintln!("WARNING: did not update modification time on {}: {}.", output_path.display(), outcome);
+                    warn!(
+                        &console,
+                        "WARNING: did not update modification time on {}: {}.",
+                        output_path.display(),
+                        outcome
+                    );
                 }
             }
         }

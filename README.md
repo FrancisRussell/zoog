@@ -159,6 +159,10 @@ The following options are available (run `opusgain --help` for usage):
   `ogg,opus` could be supplied to assume that all found `.ogg` files are Ogg
   Opus as well.
 
+* `--colour=WHEN`, `--color=WHEN`: Controls whether coloured output is used.
+  Valid values are `auto` (default), `always` (use console APIs or fallback to
+  ANSI escape codes), `always-ansi` (emit ANSI escape codes) and `never`.
+
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
 
@@ -218,6 +222,10 @@ The following options are available (run `zoogcomment --help` for usage):
 
 * `-n, --dry-run`: Displays the same output that `zoogcomment` would otherwise
   produce, but does not make any changes to the filesystem.
+
+* `--colour=WHEN`, `--color=WHEN`: Controls whether coloured output is used.
+  Valid values are `auto` (default), `always` (use console APIs or fallback to
+  ANSI escape codes), `always-ansi` (emit ANSI escape codes) and `never`.
 
 `zoogcomment` only has knowledge of UTF-8. Usage on systems where UTF-8 is not
 the character encoding scheme in use may encounter issues.
