@@ -55,11 +55,15 @@ impl FileGroup {
 }
 
 /// Errors that can occur when producing groups of albums and singles.
-#[derive(Clone, Debug, thiserror::Error)]
+#[derive(Debug, thiserror::Error)]
 pub enum Error {
     /// A folder was supplied when doing so is invalid.
     #[error("File grouper did not expect a folder: {0}")]
     UnexpectedFolder(PathBuf),
+
+    /// An IO error occurred while accessing a path.
+    #[error("Unable to open `{0}` due to `{1}`")]
+    FileOpenError(PathBuf, std::io::Error),
 }
 
 /// Trait for visitors of a list of files / folders.
@@ -188,7 +192,7 @@ impl FileGrouper for FoldersAreAlbums {
 #[allow(clippy::missing_panics_doc)]
 pub fn paths_to_file_groups<I, P, H: std::hash::BuildHasher>(
     input_paths: I, processing_mode: PathsProcessingMode, file_extensions: &HashSet<OsString, H>,
-) -> Result<Vec<FileGroup>, crate::Error>
+) -> Result<Vec<FileGroup>, Error>
 where
     I: IntoIterator<Item = P>,
     P: AsRef<Path>,
@@ -201,7 +205,7 @@ where
         // All entries in the stack are folder contents except the top-level which is
         // the list of files/folders supplied.
         if let Some(path) = path_stack.last_mut().expect("Path stack unexpectedly empty").1.pop_front() {
-            let metadata = path.symlink_metadata().map_err(|e| crate::Error::FileOpenError(path.clone(), e))?;
+            let metadata = path.symlink_metadata().map_err(|e| Error::FileOpenError(path.clone(), e))?;
             if metadata.is_file() {
                 if path.extension().is_some_and(|ext| file_extensions.contains(ext)) {
                     grouper.file(&path)?;
@@ -209,10 +213,10 @@ where
             } else if metadata.is_dir() {
                 let entries: Result<VecDeque<PathBuf>, _> = path
                     .read_dir()
-                    .map_err(|e| crate::Error::FileOpenError(path.clone(), e))?
+                    .map_err(|e| Error::FileOpenError(path.clone(), e))?
                     .map(|entry| entry.map(|entry| entry.path()))
                     .collect();
-                let entries = entries.map_err(|e| crate::Error::FileOpenError(path.clone(), e))?;
+                let entries = entries.map_err(|e| Error::FileOpenError(path.clone(), e))?;
                 grouper.enter_folder(&path)?;
                 path_stack.push((Some(path), entries));
             }

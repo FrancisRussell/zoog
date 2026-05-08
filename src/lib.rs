@@ -16,9 +16,11 @@ pub mod header_rewriter;
 pub mod comment_rewrite;
 
 /// Functionality for dealing with the filesystem
+#[cfg(feature = "cli")]
 pub mod filesystem;
 
 /// Functionality for transforming path lists into groups of albums and singles
+#[cfg(feature = "cli")]
 pub mod file_grouping;
 
 /// Support for detecting an operation should be interrupted

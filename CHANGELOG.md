@@ -3,8 +3,11 @@
 ## Unreleased
 
 * Bump `tempfile` minimum version to avoid `RUSTSEC-2023-0018`.
-* Add `--minimize-mtime-change` option to `opusgain` and `zoogcomment` to allow
-  preserving modification time but with a small increment.
+* Replace `--minimize-mtime-change` option in `opusgain` and `zoogcomment` with
+  `--mtime-strategy`, which supports three modes: `present` (set to current
+  system time, default), `preserve` (restore original modification time), and
+  `minimal-increment` (apply the smallest filesystem-detectable increment to the
+  original modification time).
 * Add `--interpret-paths` and `--file-extensions` options to enable support for
   normalizing files in different ways in a single invocation.
 * Add colour support.

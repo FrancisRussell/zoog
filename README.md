@@ -104,12 +104,26 @@ The following options are available (run `opusgain --help` for usage):
 * `-c, --clear`: Remove all `R128` tags from the specified files. The output
   gain of each file is unchanged, regardless of the specified preset.
 
-* `-M`, `--minimize-mtime-change`: Attempts to apply the smallest increment
-  possible (filesystem dependent) to the modification time of the file. This is
-  deliberately not a preserve in order to avoid misleading backup/data-transfer
-  programs that use this information to determine if a file has changed. On
-  modern filesystems (ext4, APFS, btrfs) this is typically a nanosecond, but
-  could be up to two seconds on older filesystems (ext3, FAT32).
+* `--mtime-strategy=STRATEGY`: Controls how the modification time of files
+  is altered after being rewritten.
+
+  * `present` (default): The file's modification timestamp is set to the
+  current system time.
+
+  * `preserve`: The updated file's modification timestamp is set to the
+  modification time of the original file. Note that because Ogg files can
+  absorb small tag changes without altering file size, backup programs that
+  detect changes via modification time and file size may not detect that the
+  file has been updated.
+
+  * `minimal-increment`: A small delta is applied to the modification time of
+  the file. This delta is filesystem-dependent but on a modern filesystem is
+  likely to be in the order of a nanosecond. This strategy exists so that
+  backup programs which use modification time and/or filesize to detect file
+  changes correctly pick up changes, without significantly altering
+  modification time.
+
+* `-M`: Alias for `--mtime-strategy=minimal-increment`.
 
 * `-n, --dry-run`: Displays the same output that `opusgain` would otherwise
   produce, but does not make any changes to the supplied files.
@@ -213,12 +227,26 @@ The following options are available (run `zoogcomment --help` for usage):
   line. If `-` is specified for the file name, tags will be written to standard
   output.
 
-* `-M`, `--minimize-mtime-change`: Attempts to apply the smallest increment
-  possible (filesystem dependent) to the modification time of the file. This is
-  deliberately not a preserve in order to avoid misleading backup/data-transfer
-  programs that use this information to determine if a file has changed. On
-  modern filesystems (ext4, APFS, btrfs) this is typically a nanosecond, but
-  could be up to two seconds on older filesystems (ext3, FAT32).
+* `--mtime-strategy=STRATEGY`: Controls how the modification time of files
+  is altered after being rewritten.
+
+  * `present` (default): The file's modification timestamp is set to the
+  current system time.
+
+  * `preserve`: The updated file's modification timestamp is set to the
+  modification time of the original file. Note that because Ogg files can
+  absorb small tag changes without altering file size, backup programs that
+  detect changes via modification time and file size may not detect that the
+  file has been updated.
+
+  * `minimal-increment`: A small delta is applied to the modification time of
+  the file. This delta is filesystem-dependent but on a modern filesystem is
+  likely to be in the order of a nanosecond. This strategy exists so that
+  backup programs which use modification time and/or filesize to detect file
+  changes correctly pick up changes, without significantly altering
+  modification time.
+
+* `-M`: Alias for `--mtime-strategy=minimal-increment`.
 
 * `-n, --dry-run`: Displays the same output that `zoogcomment` would otherwise
   produce, but does not make any changes to the filesystem.

@@ -8,6 +8,7 @@ use std::io::{self, BufRead, BufReader, BufWriter, Read, Seek as _, Write as _};
 use std::ops::BitOrAssign;
 use std::path::{Path, PathBuf};
 use std::process::ExitCode;
+use std::time::SystemTime;
 
 use clap::Parser;
 use console_output::{ConsoleOutput as _, Standard};
@@ -17,7 +18,7 @@ use output_file::OutputFile;
 use termcolor::ColorChoice;
 use thiserror::Error;
 use zoog::comment_rewrite::{CommentHeaderRewrite, CommentHeaderSummary, CommentRewriterAction, CommentRewriterConfig};
-use zoog::filesystem::{set_mtime_with_minimal_increment, SetMtimeOutcome};
+use zoog::filesystem::{adjust_mtime, SetMtimeOutcome, TimestampUpdateMode};
 use zoog::header::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::{console_output, ctrlc_handling, escaping, logging, output_file, Error};
@@ -109,12 +110,17 @@ struct Cli {
     #[clap(conflicts_with = "list")]
     output_file: Option<PathBuf>,
 
-    #[clap(short = 'M', long, action)]
-    /// Minimize modification timestamp increment when rewriting files.
+    #[clap(long, value_enum, default_value_t = TimestampUpdateMode::Present, conflicts_with = "minimize_mtime_change")]
+    /// Strategy to use for setting modification time of rewritten files.
+    mtime_strategy: TimestampUpdateMode,
+
+    #[clap(short = 'M', action)]
+    /// Alias for --mtime-strategy=minimal-increment.
     minimize_mtime_change: bool,
 
     #[clap(long = "colour", alias = "color", value_parser = clap::value_parser!(ColorChoice), default_value = "auto", value_name = "WHEN")]
-    /// Control whether colour is used in output [possible values: always, always-ansi, auto, never]
+    /// Control whether colour is used in output [possible values: always,
+    /// always-ansi, auto, never]
     colour: ColorChoice,
 }
 
@@ -297,7 +303,8 @@ fn run(console: &Standard, cli: Cli, interrupt_checker: &CtrlCChecker) -> Result
 
     let dry_run = cli.dry_run;
     let escape = cli.escapes;
-    let minimize_mtime_change = cli.minimize_mtime_change;
+    let mtime_strategy =
+        if cli.minimize_mtime_change { TimestampUpdateMode::MinimalIncrement } else { cli.mtime_strategy };
     let delete_tags = parse_delete_comment_args(cli.delete, escape)?;
     let append = {
         let mut append = parse_new_comment_args(cli.tags, escape)?;
@@ -326,16 +333,10 @@ fn run(console: &Standard, cli: Cli, interrupt_checker: &CtrlCChecker) -> Result
     let input_path = cli.input_file;
     let output_path = cli.output_file.unwrap_or_else(|| input_path.clone());
     let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.clone(), e))?;
-    let input_file_modified = if minimize_mtime_change {
-        Some(
-            input_file
-                .metadata()
-                .and_then(|metadata| metadata.modified())
-                .map_err(|e| Error::FileMetadataReadError(input_path.clone(), e))?,
-        )
-    } else {
-        None
-    };
+    let input_file_modified = input_file
+        .metadata()
+        .and_then(|metadata| metadata.modified())
+        .map_err(|e| Error::FileMetadataReadError(input_path.clone(), e))?;
 
     let mut input_file = BufReader::new(input_file);
 
@@ -410,18 +411,12 @@ fn run(console: &Standard, cli: Cli, interrupt_checker: &CtrlCChecker) -> Result
         output_file.commit()?;
         // Update timestamp if necessary
         if !dry_run {
-            if let Some(modification_time) = input_file_modified {
-                let outcome = std::fs::File::open(&output_path)
-                    .and_then(|file| set_mtime_with_minimal_increment(&file, modification_time))
-                    .map_err(|e| Error::FileMetadataWriteError(output_path.clone(), e))?;
-                if !matches!(outcome, SetMtimeOutcome::Success) {
-                    warn!(
-                        &console,
-                        "WARNING: did not update modification time on {}: {}.",
-                        output_path.display(),
-                        outcome
-                    );
-                }
+            let now = SystemTime::now();
+            let outcome = std::fs::File::open(&output_path)
+                .and_then(|file| adjust_mtime(&file, input_file_modified, now, mtime_strategy))
+                .map_err(|e| Error::FileMetadataWriteError(output_path.clone(), e))?;
+            if !matches!(outcome, SetMtimeOutcome::Success) {
+                warn!(&console, "Modification time update on {}: {}.", output_path.display(), outcome);
             }
         }
     } else {
