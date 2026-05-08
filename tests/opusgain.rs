@@ -142,3 +142,22 @@ fn r128_preset_album_mode_track_output_gain() {
         2 * ENCODING_TOLERANCE_Q78
     );
 }
+
+#[test]
+// --clear removes R128_TRACK_GAIN and R128_ALBUM_GAIN without changing the
+// output gain. Run album r128 preset first to ensure both tags are present,
+// then clear and verify they are absent while the output gain is unchanged.
+fn clear_removes_r128_tags() {
+    let (_dir, file) = reference_file();
+
+    run_ok(opusgain().args(["--album", "--preset=r128"]).arg(&file));
+    assert!(opusinfo_r128_track_gain(&file).is_some(), "R128_TRACK_GAIN should be present after r128 preset");
+    assert!(opusinfo_r128_album_gain(&file).is_some(), "R128_ALBUM_GAIN should be present after r128 album preset");
+    let output_gain_before = opusinfo_output_gain_q78(&file);
+
+    run_ok(opusgain().args(["--clear"]).arg(&file));
+
+    assert!(opusinfo_r128_track_gain(&file).is_none(), "R128_TRACK_GAIN should be absent after --clear");
+    assert!(opusinfo_r128_album_gain(&file).is_none(), "R128_ALBUM_GAIN should be absent after --clear");
+    assert_eq!(opusinfo_output_gain_q78(&file), output_gain_before, "output gain should be unchanged by --clear");
+}
