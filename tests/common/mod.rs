@@ -3,6 +3,8 @@
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
+use zoog::header::FixedPointGain;
+
 pub fn zoogcomment() -> Command { Command::new(env!("CARGO_BIN_EXE_zoogcomment")) }
 
 pub fn opusgain() -> Command { Command::new(env!("CARGO_BIN_EXE_opusgain")) }
@@ -28,12 +30,13 @@ pub fn make_tone_opus(dir: &Path) -> PathBuf { make_tone_opus_with_tags(dir, &[]
 /// Solving for A and expressing as a volume scale relative to the ffmpeg
 /// default of 1/8:     A      = sqrt(2 · 10^((LUFS + 0.691) / 10)) / |H|
 ///     volume = A / (1/8) = 8A
-pub fn make_reference_opus(dir: &Path, target_lufs: f64) -> PathBuf {
+pub fn make_reference_opus(dir: &Path, target_lufs: zoog::Decibels) -> PathBuf {
     // K-weighting filter magnitude at 1 kHz / 48 kHz per ITU-R BS.1770
     const K_WEIGHT_1KHZ_48KHZ: f64 = 1.083640;
-    let a = f64::sqrt(2.0 * 10.0_f64.powf((target_lufs + 0.691) / 10.0)) / K_WEIGHT_1KHZ_48KHZ;
+    let lufs = target_lufs.as_f64();
+    let a = f64::sqrt(2.0 * 10.0_f64.powf((lufs + 0.691) / 10.0)) / K_WEIGHT_1KHZ_48KHZ;
     let volume = a * 8.0;
-    let filename = format!("{target_lufs}lufs.opus");
+    let filename = format!("{lufs}lufs.opus");
     build_opus(dir, &filename, 1000, 5, 2, Some(volume), &[])
 }
 
@@ -82,25 +85,29 @@ fn build_opus(
     path
 }
 
-/// Read the output gain from an Opus file as a Q7.8 fixed-point integer.
-pub fn opusinfo_output_gain_q78(path: &Path) -> i32 {
+/// Read the output gain from an Opus file.
+pub fn opusinfo_output_gain(path: &Path) -> FixedPointGain {
     let info = opusinfo_tags(path);
     for line in info.lines() {
         if let Some(rest) = line.trim().strip_prefix("Playback gain:") {
             let db: f64 = rest.trim().trim_end_matches("dB").trim().parse().expect("parse playback gain");
-            return (db * 256.0).round() as i32;
+            return FixedPointGain::try_from(zoog::Decibels::from(db)).expect("playback gain out of range");
         }
     }
     panic!("Playback gain not found in opusinfo output:\n{info}");
 }
 
 /// Read the R128_TRACK_GAIN tag from an Opus file, returning None if absent.
-pub fn opusinfo_r128_track_gain(path: &Path) -> Option<i32> { opusinfo_r128_tag(path, zoog::opus::TAG_TRACK_GAIN) }
+pub fn opusinfo_r128_track_gain(path: &Path) -> Option<FixedPointGain> {
+    opusinfo_r128_tag(path, zoog::opus::TAG_TRACK_GAIN)
+}
 
 /// Read the R128_ALBUM_GAIN tag from an Opus file, returning None if absent.
-pub fn opusinfo_r128_album_gain(path: &Path) -> Option<i32> { opusinfo_r128_tag(path, zoog::opus::TAG_ALBUM_GAIN) }
+pub fn opusinfo_r128_album_gain(path: &Path) -> Option<FixedPointGain> {
+    opusinfo_r128_tag(path, zoog::opus::TAG_ALBUM_GAIN)
+}
 
-fn opusinfo_r128_tag(path: &Path, tag: &str) -> Option<i32> {
+fn opusinfo_r128_tag(path: &Path, tag: &str) -> Option<FixedPointGain> {
     let info = opusinfo_tags(path);
     let prefix = format!("{tag}=");
     for line in info.lines() {

@@ -6,18 +6,19 @@ use std::fs;
 use std::path::PathBuf;
 
 use common::{
-    make_reference_opus, make_silence_opus, opusgain, opusinfo_output_gain_q78, opusinfo_r128_album_gain,
+    make_reference_opus, make_silence_opus, opusgain, opusinfo_output_gain, opusinfo_r128_album_gain,
     opusinfo_r128_track_gain, run_ok,
 };
 use tempfile::TempDir;
-use zoog::R128_LUFS;
+use zoog::header::FixedPointGain;
+use zoog::{Decibels, R128_LUFS, REPLAY_GAIN_LUFS};
 
 // The reference tone is calibrated to this loudness per ITU-R BS.1770.
-const REFERENCE_LUFS: f64 = -20.0;
+const REFERENCE_LUFS: Decibels = Decibels::new(-20.0);
 
 // A second loudness level used in album mode tests, distinct from
 // REFERENCE_LUFS.
-const SECOND_LUFS: f64 = -26.0;
+const SECOND_LUFS: Decibels = Decibels::new(-26.0);
 
 fn reference_file() -> (TempDir, PathBuf) {
     let dir = TempDir::new().expect("create temp dir");
@@ -25,11 +26,13 @@ fn reference_file() -> (TempDir, PathBuf) {
     (dir, file)
 }
 
-// Maximum deviation in Q7.8 units from the expected R128_TRACK_GAIN under the
-// original preset, to allow for Opus lossy encoding of the reference signal.
-// 0.1 dB was chosen as it is well below the ~1 dB threshold of human loudness
+// Maximum permissible deviation from the expected gain, covering both
+// single-file encoding error and the compound error when comparing two
+// independently encoded files. Well below the ~1 dB threshold of human loudness
 // perception.
-const ENCODING_TOLERANCE_Q78: i32 = 26; // 0.1 dB * 256
+const LOUDNESS_EPSILON: Decibels = Decibels::new(0.2);
+
+fn db_to_fpg(db: Decibels) -> FixedPointGain { FixedPointGain::try_from(db).expect("gain in range") }
 
 #[test]
 // rg preset targets -18 LUFS. R128_TRACK_GAIN is always (R128_LUFS - (-18)) *
@@ -40,7 +43,7 @@ fn rg_preset_single_file() {
 
     run_ok(opusgain().args(["--preset=rg"]).arg(&file));
 
-    assert_eq!(opusinfo_r128_track_gain(&file), Some(-1280));
+    assert_eq!(opusinfo_r128_track_gain(&file), Some(db_to_fpg(R128_LUFS - REPLAY_GAIN_LUFS)));
 }
 
 #[test]
@@ -52,7 +55,7 @@ fn r128_preset_single_file() {
 
     run_ok(opusgain().args(["--preset=r128"]).arg(&file));
 
-    assert_eq!(opusinfo_r128_track_gain(&file), Some(0));
+    assert_eq!(opusinfo_r128_track_gain(&file), Some(FixedPointGain::default()));
 }
 
 #[test]
@@ -66,12 +69,14 @@ fn original_preset_single_file() {
 
     run_ok(opusgain().args(["--preset=original"]).arg(&file));
 
-    assert_eq!(opusinfo_output_gain_q78(&file), 0);
-    let expected_track_gain = ((R128_LUFS.as_f64() - REFERENCE_LUFS) * 256.0).round() as i32;
+    assert!(opusinfo_output_gain(&file).is_zero());
+    let expected = R128_LUFS - REFERENCE_LUFS;
     let track_gain = opusinfo_r128_track_gain(&file).expect("R128_TRACK_GAIN should be present");
+    let diff = (track_gain.as_decibels() - expected).abs();
     assert!(
-        (track_gain - expected_track_gain).abs() <= ENCODING_TOLERANCE_Q78,
-        "R128_TRACK_GAIN {track_gain} differs from expected {expected_track_gain} by more than ±{ENCODING_TOLERANCE_Q78}"
+        diff <= LOUDNESS_EPSILON,
+        "R128_TRACK_GAIN {} differs from expected {expected} by more than ±{LOUDNESS_EPSILON}",
+        track_gain.as_decibels()
     );
 }
 
@@ -90,19 +95,19 @@ fn r128_preset_album_mode() {
     let album_gain1 = opusinfo_r128_album_gain(&file1).expect("R128_ALBUM_GAIN should be present");
     let album_gain2 = opusinfo_r128_album_gain(&file2).expect("R128_ALBUM_GAIN should be present");
     assert_eq!(album_gain1, album_gain2);
-    assert!(album_gain1.abs() <= ENCODING_TOLERANCE_Q78);
+    assert!(album_gain1.as_decibels().abs() <= LOUDNESS_EPSILON);
 
-    assert_eq!(opusinfo_output_gain_q78(&file1), opusinfo_output_gain_q78(&file2));
+    assert_eq!(opusinfo_output_gain(&file1), opusinfo_output_gain(&file2));
 
     let track_gain1 = opusinfo_r128_track_gain(&file1).expect("R128_TRACK_GAIN should be present");
     let track_gain2 = opusinfo_r128_track_gain(&file2).expect("R128_TRACK_GAIN should be present");
-    let expected_diff = ((SECOND_LUFS - REFERENCE_LUFS) * 256.0).round() as i32;
+    let expected_diff = SECOND_LUFS - REFERENCE_LUFS;
+    let diff = (track_gain1.as_decibels() - track_gain2.as_decibels() - expected_diff).abs();
     assert!(
-        (track_gain1 - track_gain2 - expected_diff).abs() <= 2 * ENCODING_TOLERANCE_Q78,
-        "track gain difference {} differs from expected {} by more than ±{}",
-        track_gain1 - track_gain2,
+        diff <= LOUDNESS_EPSILON,
+        "track gain difference {} differs from expected {} by more than ±{LOUDNESS_EPSILON}",
+        track_gain1.as_decibels() - track_gain2.as_decibels(),
         expected_diff,
-        2 * ENCODING_TOLERANCE_Q78
     );
 }
 
@@ -120,28 +125,28 @@ fn r128_preset_album_mode_track_output_gain() {
 
     let track_gain1 = opusinfo_r128_track_gain(&file1).expect("R128_TRACK_GAIN should be present");
     let track_gain2 = opusinfo_r128_track_gain(&file2).expect("R128_TRACK_GAIN should be present");
-    assert!(track_gain1.abs() <= ENCODING_TOLERANCE_Q78);
-    assert!(track_gain2.abs() <= ENCODING_TOLERANCE_Q78);
+    assert!(track_gain1.as_decibels().abs() <= LOUDNESS_EPSILON);
+    assert!(track_gain2.as_decibels().abs() <= LOUDNESS_EPSILON);
 
-    let output_gain1 = opusinfo_output_gain_q78(&file1);
-    let output_gain2 = opusinfo_output_gain_q78(&file2);
-    let expected_output_diff = ((SECOND_LUFS - REFERENCE_LUFS) * 256.0).round() as i32;
+    let output_gain1 = opusinfo_output_gain(&file1);
+    let output_gain2 = opusinfo_output_gain(&file2);
+    let expected_output_diff = SECOND_LUFS - REFERENCE_LUFS;
+    let output_diff = (output_gain1.as_decibels() - output_gain2.as_decibels() - expected_output_diff).abs();
     assert!(
-        (output_gain1 - output_gain2 - expected_output_diff).abs() <= 2 * ENCODING_TOLERANCE_Q78,
-        "output gain difference {} differs from expected {} by more than ±{}",
-        output_gain1 - output_gain2,
+        output_diff <= LOUDNESS_EPSILON,
+        "output gain difference {} differs from expected {} by more than ±{LOUDNESS_EPSILON}",
+        output_gain1.as_decibels() - output_gain2.as_decibels(),
         expected_output_diff,
-        2 * ENCODING_TOLERANCE_Q78
     );
 
     let album_gain1 = opusinfo_r128_album_gain(&file1).expect("R128_ALBUM_GAIN should be present");
     let album_gain2 = opusinfo_r128_album_gain(&file2).expect("R128_ALBUM_GAIN should be present");
+    let album_diff = (album_gain1.as_decibels() - album_gain2.as_decibels() + expected_output_diff).abs();
     assert!(
-        (album_gain1 - album_gain2 + expected_output_diff).abs() <= 2 * ENCODING_TOLERANCE_Q78,
-        "album gain difference {} differs from expected {} by more than ±{}",
-        album_gain1 - album_gain2,
+        album_diff <= LOUDNESS_EPSILON,
+        "album gain difference {} differs from expected {} by more than ±{LOUDNESS_EPSILON}",
+        album_gain1.as_decibels() - album_gain2.as_decibels(),
         -expected_output_diff,
-        2 * ENCODING_TOLERANCE_Q78
     );
 }
 
@@ -155,13 +160,13 @@ fn clear_removes_r128_tags() {
     run_ok(opusgain().args(["--album", "--preset=r128"]).arg(&file));
     assert!(opusinfo_r128_track_gain(&file).is_some(), "R128_TRACK_GAIN should be present after r128 preset");
     assert!(opusinfo_r128_album_gain(&file).is_some(), "R128_ALBUM_GAIN should be present after r128 album preset");
-    let output_gain_before = opusinfo_output_gain_q78(&file);
+    let output_gain_before = opusinfo_output_gain(&file);
 
     run_ok(opusgain().args(["--clear"]).arg(&file));
 
     assert!(opusinfo_r128_track_gain(&file).is_none(), "R128_TRACK_GAIN should be absent after --clear");
     assert!(opusinfo_r128_album_gain(&file).is_none(), "R128_ALBUM_GAIN should be absent after --clear");
-    assert_eq!(opusinfo_output_gain_q78(&file), output_gain_before, "output gain should be unchanged by --clear");
+    assert_eq!(opusinfo_output_gain(&file), output_gain_before, "output gain should be unchanged by --clear");
 }
 
 #[test]
@@ -176,17 +181,20 @@ fn r128_preset_silence() {
 
     run_ok(opusgain().args(["--preset=r128"]).arg(&file));
 
-    assert!(opusinfo_output_gain_q78(&file) <= 0, "output gain should not be a positive boost for silence");
-    assert_eq!(opusinfo_r128_track_gain(&file), Some(0));
+    assert!(
+        opusinfo_output_gain(&file).as_decibels() <= Decibels::default(),
+        "output gain should not be a positive boost for silence"
+    );
+    assert_eq!(opusinfo_r128_track_gain(&file), Some(FixedPointGain::default()));
 
     run_ok(opusgain().args(["--album", "--preset=r128"]).arg(&file));
 
     assert!(
-        opusinfo_output_gain_q78(&file) <= 0,
+        opusinfo_output_gain(&file).as_decibels() <= Decibels::default(),
         "output gain should not be a positive boost for silence in album mode"
     );
-    assert_eq!(opusinfo_r128_track_gain(&file), Some(0));
-    assert_eq!(opusinfo_r128_album_gain(&file), Some(0));
+    assert_eq!(opusinfo_r128_track_gain(&file), Some(FixedPointGain::default()));
+    assert_eq!(opusinfo_r128_album_gain(&file), Some(FixedPointGain::default()));
 }
 
 #[test]
@@ -198,4 +206,22 @@ fn dry_run_does_not_modify() {
     run_ok(opusgain().args(["--dry-run", "--preset=r128"]).arg(&file));
 
     assert_eq!(before, fs::read(&file).expect("read file"));
+}
+
+#[test]
+// no-change preset preserves the existing output gain and rewrites
+// R128_TRACK_GAIN relative to it. After an rg run the output gain is set to
+// (REPLAY_GAIN_LUFS - measured). Running no-change then gives:
+//   R128_TRACK_GAIN = R128_LUFS - measured - output_gain
+//                   = R128_LUFS - REPLAY_GAIN_LUFS
+// The measured LUFS cancels so the result is exact with no encoding tolerance.
+fn no_change_preserves_output_gain() {
+    let (_dir, file) = reference_file();
+    run_ok(opusgain().args(["--preset=rg"]).arg(&file));
+    let output_gain_after_rg = opusinfo_output_gain(&file);
+
+    run_ok(opusgain().args(["--preset=no-change"]).arg(&file));
+
+    assert_eq!(opusinfo_output_gain(&file), output_gain_after_rg);
+    assert_eq!(opusinfo_r128_track_gain(&file), Some(db_to_fpg(R128_LUFS - REPLAY_GAIN_LUFS)));
 }
