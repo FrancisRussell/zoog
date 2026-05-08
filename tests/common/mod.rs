@@ -33,7 +33,8 @@ pub fn make_reference_opus(dir: &Path, target_lufs: f64) -> PathBuf {
     const K_WEIGHT_1KHZ_48KHZ: f64 = 1.083640;
     let a = f64::sqrt(2.0 * 10.0_f64.powf((target_lufs + 0.691) / 10.0)) / K_WEIGHT_1KHZ_48KHZ;
     let volume = a * 8.0;
-    build_opus(dir, "reference.opus", 1000, 5, 2, Some(volume), &[])
+    let filename = format!("{target_lufs}lufs.opus");
+    build_opus(dir, &filename, 1000, 5, 2, Some(volume), &[])
 }
 
 pub fn make_silence_opus(dir: &Path) -> PathBuf {
@@ -94,11 +95,17 @@ pub fn opusinfo_output_gain_q78(path: &Path) -> i32 {
 }
 
 /// Read the R128_TRACK_GAIN tag from an Opus file, returning None if absent.
-pub fn opusinfo_r128_track_gain(path: &Path) -> Option<i32> {
+pub fn opusinfo_r128_track_gain(path: &Path) -> Option<i32> { opusinfo_r128_tag(path, zoog::opus::TAG_TRACK_GAIN) }
+
+/// Read the R128_ALBUM_GAIN tag from an Opus file, returning None if absent.
+pub fn opusinfo_r128_album_gain(path: &Path) -> Option<i32> { opusinfo_r128_tag(path, zoog::opus::TAG_ALBUM_GAIN) }
+
+fn opusinfo_r128_tag(path: &Path, tag: &str) -> Option<i32> {
     let info = opusinfo_tags(path);
+    let prefix = format!("{tag}=");
     for line in info.lines() {
-        if let Some(rest) = line.trim().strip_prefix("R128_TRACK_GAIN=") {
-            return Some(rest.trim().parse().expect("parse R128_TRACK_GAIN"));
+        if let Some(rest) = line.trim().strip_prefix(&prefix) {
+            return Some(rest.trim().parse().unwrap_or_else(|_| panic!("parse {tag}")));
         }
     }
     None

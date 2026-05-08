@@ -4,12 +4,18 @@ mod common;
 
 use std::path::PathBuf;
 
-use common::{make_reference_opus, opusgain, opusinfo_output_gain_q78, opusinfo_r128_track_gain, run_ok};
+use common::{
+    make_reference_opus, opusgain, opusinfo_output_gain_q78, opusinfo_r128_album_gain, opusinfo_r128_track_gain, run_ok,
+};
 use tempfile::TempDir;
 use zoog::R128_LUFS;
 
 // The reference tone is calibrated to this loudness per ITU-R BS.1770.
 const REFERENCE_LUFS: f64 = -20.0;
+
+// A second loudness level used in album mode tests, distinct from
+// REFERENCE_LUFS.
+const SECOND_LUFS: f64 = -26.0;
 
 fn reference_file() -> (TempDir, PathBuf) {
     let dir = TempDir::new().expect("create temp dir");
@@ -64,5 +70,75 @@ fn original_preset_single_file() {
     assert!(
         (track_gain - expected_track_gain).abs() <= ENCODING_TOLERANCE_Q78,
         "R128_TRACK_GAIN {track_gain} differs from expected {expected_track_gain} by more than ±{ENCODING_TOLERANCE_Q78}"
+    );
+}
+
+#[test]
+// Album mode processes files together: all files get the same output gain and
+// R128_ALBUM_GAIN. For r128 preset, R128_ALBUM_GAIN ≈ 0 (LUFS-independent, same
+// reasoning as the single-file r128 test). Track gains differ since the files
+// are at different loudness levels.
+fn r128_preset_album_mode() {
+    let dir = TempDir::new().expect("create temp dir");
+    let file1 = make_reference_opus(dir.path(), REFERENCE_LUFS);
+    let file2 = make_reference_opus(dir.path(), SECOND_LUFS);
+
+    run_ok(opusgain().args(["--album", "--preset=r128"]).arg(&file1).arg(&file2));
+
+    let album_gain1 = opusinfo_r128_album_gain(&file1).expect("R128_ALBUM_GAIN should be present");
+    let album_gain2 = opusinfo_r128_album_gain(&file2).expect("R128_ALBUM_GAIN should be present");
+    assert_eq!(album_gain1, album_gain2);
+    assert!(album_gain1.abs() <= ENCODING_TOLERANCE_Q78);
+
+    assert_eq!(opusinfo_output_gain_q78(&file1), opusinfo_output_gain_q78(&file2));
+
+    let track_gain1 = opusinfo_r128_track_gain(&file1).expect("R128_TRACK_GAIN should be present");
+    let track_gain2 = opusinfo_r128_track_gain(&file2).expect("R128_TRACK_GAIN should be present");
+    let expected_diff = ((SECOND_LUFS - REFERENCE_LUFS) * 256.0).round() as i32;
+    assert!(
+        (track_gain1 - track_gain2 - expected_diff).abs() <= 2 * ENCODING_TOLERANCE_Q78,
+        "track gain difference {} differs from expected {} by more than ±{}",
+        track_gain1 - track_gain2,
+        expected_diff,
+        2 * ENCODING_TOLERANCE_Q78
+    );
+}
+
+#[test]
+// With --output-gain-mode=track in album mode, each file is track-normalised
+// independently: output gains differ by the loudness difference between tracks,
+// R128_TRACK_GAIN is the same on all files (≈ 0 for r128), and R128_ALBUM_GAIN
+// differs per file since each has a different output gain applied.
+fn r128_preset_album_mode_track_output_gain() {
+    let dir = TempDir::new().expect("create temp dir");
+    let file1 = make_reference_opus(dir.path(), REFERENCE_LUFS);
+    let file2 = make_reference_opus(dir.path(), SECOND_LUFS);
+
+    run_ok(opusgain().args(["--album", "--preset=r128", "--output-gain-mode=track"]).arg(&file1).arg(&file2));
+
+    let track_gain1 = opusinfo_r128_track_gain(&file1).expect("R128_TRACK_GAIN should be present");
+    let track_gain2 = opusinfo_r128_track_gain(&file2).expect("R128_TRACK_GAIN should be present");
+    assert!(track_gain1.abs() <= ENCODING_TOLERANCE_Q78);
+    assert!(track_gain2.abs() <= ENCODING_TOLERANCE_Q78);
+
+    let output_gain1 = opusinfo_output_gain_q78(&file1);
+    let output_gain2 = opusinfo_output_gain_q78(&file2);
+    let expected_output_diff = ((SECOND_LUFS - REFERENCE_LUFS) * 256.0).round() as i32;
+    assert!(
+        (output_gain1 - output_gain2 - expected_output_diff).abs() <= 2 * ENCODING_TOLERANCE_Q78,
+        "output gain difference {} differs from expected {} by more than ±{}",
+        output_gain1 - output_gain2,
+        expected_output_diff,
+        2 * ENCODING_TOLERANCE_Q78
+    );
+
+    let album_gain1 = opusinfo_r128_album_gain(&file1).expect("R128_ALBUM_GAIN should be present");
+    let album_gain2 = opusinfo_r128_album_gain(&file2).expect("R128_ALBUM_GAIN should be present");
+    assert!(
+        (album_gain1 - album_gain2 + expected_output_diff).abs() <= 2 * ENCODING_TOLERANCE_Q78,
+        "album gain difference {} differs from expected {} by more than ±{}",
+        album_gain1 - album_gain2,
+        -expected_output_diff,
+        2 * ENCODING_TOLERANCE_Q78
     );
 }
