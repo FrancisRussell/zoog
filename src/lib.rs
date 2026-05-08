@@ -15,13 +15,9 @@ pub mod header_rewriter;
 /// Functionality for rewriting Ogg Opus streams with new comments
 pub mod comment_rewrite;
 
-/// Functionality for dealing with the filesystem
+/// Modules used by the CLI frontends
 #[cfg(feature = "cli")]
-pub mod filesystem;
-
-/// Functionality for transforming path lists into groups of albums and singles
-#[cfg(feature = "cli")]
-pub mod file_grouping;
+pub mod frontend;
 
 /// Support for detecting an operation should be interrupted
 pub mod interrupt;
@@ -43,15 +39,3 @@ pub use codec::*;
 pub use constants::global::*;
 pub use decibels::*;
 pub use error::*;
-
-#[cfg(feature = "cli")]
-pub mod console_output;
-
-#[cfg(feature = "cli")]
-pub mod ctrlc_handling;
-
-#[cfg(feature = "cli")]
-pub mod output_file;
-
-#[cfg(feature = "cli")]
-pub mod logging;

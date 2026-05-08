@@ -18,10 +18,11 @@ use output_file::OutputFile;
 use termcolor::ColorChoice;
 use thiserror::Error;
 use zoog::comment_rewrite::{CommentHeaderRewrite, CommentHeaderSummary, CommentRewriterAction, CommentRewriterConfig};
-use zoog::filesystem::{adjust_mtime, SetMtimeOutcome, TimestampUpdateMode};
+use zoog::frontend::filesystem::{adjust_mtime, SetMtimeOutcome, TimestampUpdateMode};
+use zoog::frontend::{console_output, ctrlc_handling, logging, output_file};
 use zoog::header::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
-use zoog::{console_output, ctrlc_handling, escaping, logging, output_file, Error};
+use zoog::{escaping, Error};
 
 const OGG_OPUS_EXTENSIONS: [&str; 7] = ["ogg", "ogv", "oga", "ogx", "ogm", "spx", "opus"];
 const STANDARD_STREAM_NAME: &str = "-";

@@ -3,7 +3,7 @@ use std::io::{self, Write as _};
 
 use termcolor::{Color, ColorSpec, WriteColor as _};
 
-use crate::console_output::LockableWriter;
+use crate::frontend::console_output::LockableWriter;
 
 fn write_coloured(w: &mut impl LockableWriter, spec: &ColorSpec, msg: fmt::Arguments<'_>) -> io::Result<()> {
     let mut w = w.lock();
@@ -33,7 +33,7 @@ macro_rules! info {
     ($console:expr, $($arg:tt)*) => {{
         let _console = $console;
         let mut _stream = _console.out();
-        let _ = $crate::logging::_info_impl(&mut _stream, format_args!($($arg)*));
+        let _ = $crate::frontend::logging::_info_impl(&mut _stream, format_args!($($arg)*));
     }};
 }
 pub use crate::info;
@@ -43,7 +43,7 @@ macro_rules! warn {
     ($console:expr, $($arg:tt)*) => {{
         let _console = $console;
         let mut _stream = _console.err();
-        let _ = $crate::logging::_warn_impl(&mut _stream, format_args!($($arg)*));
+        let _ = $crate::frontend::logging::_warn_impl(&mut _stream, format_args!($($arg)*));
     }};
 }
 pub use crate::warn;
@@ -53,7 +53,7 @@ macro_rules! error {
     ($console:expr, $($arg:tt)*) => {{
         let _console = $console;
         let mut _stream = _console.err();
-        let _ = $crate::logging::_error_impl(&mut _stream, format_args!($($arg)*));
+        let _ = $crate::frontend::logging::_error_impl(&mut _stream, format_args!($($arg)*));
     }};
 }
 pub use crate::error;
