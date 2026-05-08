@@ -21,14 +21,15 @@ use rayon::iter::{IntoParallelIterator, ParallelIterator};
 use rayon::ThreadPoolBuilder;
 use termcolor::ColorChoice;
 use thiserror::Error;
-use zoog::file_grouping::{paths_to_file_groups, PathsProcessingMode};
-use zoog::filesystem::{adjust_mtime, SetMtimeOutcome, TimestampUpdateMode};
+use zoog::frontend::file_grouping::{paths_to_file_groups, PathsProcessingMode};
+use zoog::frontend::filesystem::{adjust_mtime, SetMtimeOutcome, TimestampUpdateMode};
+use zoog::frontend::{console_output, ctrlc_handling, logging, output_file};
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::opus::{VolumeAnalyzer, TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
 use zoog::volume_rewrite::{
     GainsSummary, OpusGains, OutputGainMode, VolumeHeaderRewrite, VolumeRewriterConfig, VolumeTarget,
 };
-use zoog::{console_output, ctrlc_handling, logging, output_file, Decibels, Error, R128_LUFS, REPLAY_GAIN_LUFS};
+use zoog::{Decibels, Error, R128_LUFS, REPLAY_GAIN_LUFS};
 
 #[derive(Debug, Error)]
 enum AppError {
@@ -39,7 +40,7 @@ enum AppError {
     CtrlCRegistration(#[from] ctrlc_handling::CtrlCRegistrationError),
 
     #[error("Unable to map paths into albums/singles: `{0}`")]
-    FileGroup(#[from] zoog::file_grouping::Error),
+    FileGroup(#[from] zoog::frontend::file_grouping::Error),
 }
 
 fn main() -> ExitCode {
