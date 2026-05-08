@@ -12,6 +12,7 @@
   normalizing files in different ways in a single invocation.
 * Add colour support.
 * Fixed bug where the Vorbis Identification header could never fail validation.
+* Add `aarch64-apple-darwin` CI and release builds.
 
 ## 0.8.1
 
