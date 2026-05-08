@@ -26,14 +26,14 @@ impl header::IdHeader for IdHeader {
         if result.version() != 0 {
             return Err(Error::UnsupportedCodecVersion(Codec::Vorbis, u64::from(result.version())));
         }
-        let mut invalid = false;
-        invalid &= result.num_output_channels() == 0;
-        invalid &= result.output_sample_rate() == 0;
-        invalid &= (result.data[29] & 1) != 0;
-        if invalid {
-            Err(Error::MalformedIdentificationHeader)
-        } else {
+        let mut is_valid = true;
+        is_valid &= result.num_output_channels() != 0;
+        is_valid &= result.output_sample_rate() != 0;
+        is_valid &= (result.data[29] & 1) != 0; // Framing flag
+        if is_valid {
             Ok(Some(result))
+        } else {
+            Err(Error::MalformedIdentificationHeader)
         }
     }
 
