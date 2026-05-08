@@ -225,3 +225,20 @@ fn no_change_preserves_output_gain() {
     assert_eq!(opusinfo_output_gain(&file), output_gain_after_rg);
     assert_eq!(opusinfo_r128_track_gain(&file), Some(db_to_fpg(R128_LUFS - REPLAY_GAIN_LUFS)));
 }
+
+#[test]
+// Running opusgain twice with the same preset produces identical file bytes,
+// i.e. the tool is idempotent across all presets.
+fn presets_are_idempotent() {
+    for preset in ["rg", "r128", "original", "no-change"] {
+        let (_dir, file) = reference_file();
+        let arg = format!("--preset={preset}");
+
+        run_ok(opusgain().arg(&arg).arg(&file));
+        let after_first = fs::read(&file).expect("read file");
+
+        run_ok(opusgain().arg(&arg).arg(&file));
+
+        assert_eq!(after_first, fs::read(&file).expect("read file"), "preset {preset} is not idempotent");
+    }
+}
