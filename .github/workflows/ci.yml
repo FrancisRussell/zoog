@@ -58,7 +58,10 @@ jobs:
 
   cargo-test:
     name: Cargo test
-    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        platform: [ubuntu-latest, macos-latest]
+    runs-on: ${{ matrix.platform }}
     steps:
       - uses: actions/checkout@v3
       - uses: FrancisRussell/ferrous-actions@v1
