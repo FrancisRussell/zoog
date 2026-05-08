@@ -1,3 +1,5 @@
+#![allow(dead_code)]
+
 use std::path::{Path, PathBuf};
 use std::process::Command;
 
@@ -6,6 +8,101 @@ pub fn zoogcomment() -> Command { Command::new(env!("CARGO_BIN_EXE_zoogcomment")
 pub fn opusgain() -> Command { Command::new(env!("CARGO_BIN_EXE_opusgain")) }
 
 pub fn make_tone_opus(dir: &Path) -> PathBuf { make_tone_opus_with_tags(dir, &[]) }
+
+/// Generate a stereo 1kHz / 48kHz Opus tone calibrated to a target BS.1770
+/// integrated loudness.
+///
+/// ## Derivation
+///
+/// The ffmpeg `sine` lavfi source generates a sine wave at amplitude 1/8 by
+/// default (documented in the ffmpeg lavfi sine filter).
+///
+/// The K-weighting filter in ITU-R BS.1770 has a magnitude response of |H| =
+/// 1.083640 at 1 kHz / 48 kHz. For a sine wave at amplitude A the mean square
+/// is A²/2, so the BS.1770 formula gives:
+///     LUFS = −0.691 + 10·log10(A²/2 · |H|²)
+///
+/// Stereo is used so that loudgain (libebur128) and opusgain agree on the
+/// measurement without ambiguity about mono dual-channel weighting.
+///
+/// Solving for A and expressing as a volume scale relative to the ffmpeg
+/// default of 1/8:     A      = sqrt(2 · 10^((LUFS + 0.691) / 10)) / |H|
+///     volume = A / (1/8) = 8A
+pub fn make_reference_opus(dir: &Path, target_lufs: f64) -> PathBuf {
+    // K-weighting filter magnitude at 1 kHz / 48 kHz per ITU-R BS.1770
+    const K_WEIGHT_1KHZ_48KHZ: f64 = 1.083640;
+    let a = f64::sqrt(2.0 * 10.0_f64.powf((target_lufs + 0.691) / 10.0)) / K_WEIGHT_1KHZ_48KHZ;
+    let volume = a * 8.0;
+    build_opus(dir, "reference.opus", 1000, 5, 2, Some(volume), &[])
+}
+
+pub fn make_silence_opus(dir: &Path) -> PathBuf {
+    let path = dir.join("silence.opus");
+    let status = Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=r=48000:cl=mono",
+            "-t",
+            "1",
+            "-c:a",
+            "libopus",
+            "-b:a",
+            "32k",
+        ])
+        .arg(&path)
+        .status()
+        .expect("ffmpeg must be installed");
+    assert!(status.success(), "ffmpeg failed to generate silence fixture");
+    path
+}
+
+fn build_opus(
+    dir: &Path, filename: &str, freq: u32, duration: u32, channels: u32, volume: Option<f64>, tags: &[(&str, &str)],
+) -> PathBuf {
+    let path = dir.join(filename);
+    let sine = format!("sine=frequency={freq}:duration={duration}");
+    let channels = channels.to_string();
+    let mut cmd = Command::new("ffmpeg");
+    cmd.args(["-y", "-loglevel", "error", "-f", "lavfi", "-i", &sine]);
+    if let Some(vol) = volume {
+        cmd.args(["-af", &format!("volume={vol}")]);
+    }
+    cmd.args(["-ar", "48000", "-ac", &channels, "-c:a", "libopus", "-b:a", "64k"]);
+    for (k, v) in tags {
+        cmd.arg("-metadata").arg(format!("{k}={v}"));
+    }
+    cmd.arg(&path);
+    assert!(cmd.status().expect("ffmpeg must be installed").success(), "ffmpeg failed to generate Opus fixture");
+    path
+}
+
+/// Read the output gain from an Opus file as a Q7.8 fixed-point integer.
+pub fn opusinfo_output_gain_q78(path: &Path) -> i32 {
+    let info = opusinfo_tags(path);
+    for line in info.lines() {
+        if let Some(rest) = line.trim().strip_prefix("Playback gain:") {
+            let db: f64 = rest.trim().trim_end_matches("dB").trim().parse().expect("parse playback gain");
+            return (db * 256.0).round() as i32;
+        }
+    }
+    panic!("Playback gain not found in opusinfo output:\n{info}");
+}
+
+/// Read the R128_TRACK_GAIN tag from an Opus file, returning None if absent.
+pub fn opusinfo_r128_track_gain(path: &Path) -> Option<i32> {
+    let info = opusinfo_tags(path);
+    for line in info.lines() {
+        if let Some(rest) = line.trim().strip_prefix("R128_TRACK_GAIN=") {
+            return Some(rest.trim().parse().expect("parse R128_TRACK_GAIN"));
+        }
+    }
+    None
+}
 
 pub fn make_tone_vorbis(dir: &Path) -> PathBuf {
     let wav = dir.join("tone.wav");
@@ -40,31 +137,7 @@ pub fn make_tone_vorbis(dir: &Path) -> PathBuf {
 
 /// Generate an Opus tone fixture with tags embedded via ffmpeg.
 pub fn make_tone_opus_with_tags(dir: &Path, tags: &[(&str, &str)]) -> PathBuf {
-    let path = dir.join("tone.opus");
-    let mut cmd = Command::new("ffmpeg");
-    cmd.args([
-        "-y",
-        "-loglevel",
-        "error",
-        "-f",
-        "lavfi",
-        "-i",
-        "sine=frequency=440:duration=1",
-        "-ar",
-        "48000",
-        "-ac",
-        "1",
-        "-c:a",
-        "libopus",
-        "-b:a",
-        "64k",
-    ]);
-    for (k, v) in tags {
-        cmd.arg("-metadata").arg(format!("{k}={v}"));
-    }
-    cmd.arg(&path);
-    assert!(cmd.status().expect("ffmpeg must be installed").success(), "ffmpeg failed");
-    path
+    build_opus(dir, "tone.opus", 440, 1, 1, None, tags)
 }
 
 /// Generate a Vorbis tone fixture then add tags via vorbiscomment.
