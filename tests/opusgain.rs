@@ -5,7 +5,8 @@ mod common;
 use std::path::PathBuf;
 
 use common::{
-    make_reference_opus, opusgain, opusinfo_output_gain_q78, opusinfo_r128_album_gain, opusinfo_r128_track_gain, run_ok,
+    make_reference_opus, make_silence_opus, opusgain, opusinfo_output_gain_q78, opusinfo_r128_album_gain,
+    opusinfo_r128_track_gain, run_ok,
 };
 use tempfile::TempDir;
 use zoog::R128_LUFS;
@@ -160,4 +161,29 @@ fn clear_removes_r128_tags() {
     assert!(opusinfo_r128_track_gain(&file).is_none(), "R128_TRACK_GAIN should be absent after --clear");
     assert!(opusinfo_r128_album_gain(&file).is_none(), "R128_ALBUM_GAIN should be absent after --clear");
     assert_eq!(opusinfo_output_gain_q78(&file), output_gain_before, "output gain should be unchanged by --clear");
+}
+
+#[test]
+// Silence produces NaN from the BS.1770 gated mean, which the analyzer maps to
+// 0 LUFS (peak volume) to avoid applying a massive positive gain. For r128
+// preset this results in a non-positive output gain (attenuating, not
+// dangerous) and R128_TRACK_GAIN of 0 (same as any file measured at 0 LUFS).
+// In album mode R128_ALBUM_GAIN is also 0 by the same reasoning.
+fn r128_preset_silence() {
+    let dir = TempDir::new().expect("create temp dir");
+    let file = make_silence_opus(dir.path());
+
+    run_ok(opusgain().args(["--preset=r128"]).arg(&file));
+
+    assert!(opusinfo_output_gain_q78(&file) <= 0, "output gain should not be a positive boost for silence");
+    assert_eq!(opusinfo_r128_track_gain(&file), Some(0));
+
+    run_ok(opusgain().args(["--album", "--preset=r128"]).arg(&file));
+
+    assert!(
+        opusinfo_output_gain_q78(&file) <= 0,
+        "output gain should not be a positive boost for silence in album mode"
+    );
+    assert_eq!(opusinfo_r128_track_gain(&file), Some(0));
+    assert_eq!(opusinfo_r128_album_gain(&file), Some(0));
 }
