@@ -30,6 +30,7 @@ wild = { version = "2.1.0", optional = true }
 [features]
 default = ["audiopus_sys/static", "cli"]
 cli = ["dep:clap", "dep:ctrlc", "dep:num_cpus", "dep:parking_lot", "dep:rayon", "dep:termcolor", "dep:wild"]
+integration-tests = []
 
 [dependencies.clap]
 version = "4.0.10"
