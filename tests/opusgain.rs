@@ -34,6 +34,8 @@ const LOUDNESS_EPSILON: Decibels = Decibels::new(0.2);
 
 fn db_to_fpg(db: Decibels) -> FixedPointGain { FixedPointGain::try_from(db).expect("gain in range") }
 
+static ALL_PRESETS: &[&str] = &["rg", "r128", "original", "no-change"];
+
 #[test]
 // rg preset targets -18 LUFS. R128_TRACK_GAIN is always (R128_LUFS - (-18)) *
 // 256 = -1280: the delta from -18 LUFS to the R128 reference, regardless of
@@ -171,41 +173,40 @@ fn clear_removes_r128_tags() {
 
 #[test]
 // Silence produces NaN from the BS.1770 gated mean, which the analyzer maps to
-// 0 LUFS (peak volume) to avoid applying a massive positive gain. For r128
-// preset this results in a non-positive output gain (attenuating, not
-// dangerous) and R128_TRACK_GAIN of 0 (same as any file measured at 0 LUFS).
-// In album mode R128_ALBUM_GAIN is also 0 by the same reasoning.
-fn r128_preset_silence() {
-    let dir = TempDir::new().expect("create temp dir");
-    let file = make_silence_opus(dir.path());
+// 0 LUFS (peak volume) to avoid applying a massive positive gain. For all
+// presets this must result in a non-positive output gain (attenuating, never
+// a dangerous boost), in both single-file and album mode.
+fn silence_does_not_produce_positive_gain() {
+    for preset in ALL_PRESETS {
+        let dir = TempDir::new().expect("create temp dir");
+        let file = make_silence_opus(dir.path());
+        let arg = format!("--preset={preset}");
 
-    run_ok(opusgain().args(["--preset=r128"]).arg(&file));
+        run_ok(opusgain().arg(&arg).arg(&file));
+        assert!(
+            opusinfo_output_gain(&file).as_decibels() <= Decibels::default(),
+            "preset {preset} produced a positive boost for silence"
+        );
 
-    assert!(
-        opusinfo_output_gain(&file).as_decibels() <= Decibels::default(),
-        "output gain should not be a positive boost for silence"
-    );
-    assert_eq!(opusinfo_r128_track_gain(&file), Some(FixedPointGain::default()));
-
-    run_ok(opusgain().args(["--album", "--preset=r128"]).arg(&file));
-
-    assert!(
-        opusinfo_output_gain(&file).as_decibels() <= Decibels::default(),
-        "output gain should not be a positive boost for silence in album mode"
-    );
-    assert_eq!(opusinfo_r128_track_gain(&file), Some(FixedPointGain::default()));
-    assert_eq!(opusinfo_r128_album_gain(&file), Some(FixedPointGain::default()));
+        run_ok(opusgain().args(["--album"]).arg(&arg).arg(&file));
+        assert!(
+            opusinfo_output_gain(&file).as_decibels() <= Decibels::default(),
+            "preset {preset} produced a positive boost for silence in album mode"
+        );
+    }
 }
 
 #[test]
-// Dry-run mode leaves the file bytes completely unchanged.
+// Dry-run mode leaves the file bytes completely unchanged, for all presets.
 fn dry_run_does_not_modify() {
-    let (_dir, file) = reference_file();
-    let before = fs::read(&file).expect("read file");
+    for preset in ALL_PRESETS {
+        let (_dir, file) = reference_file();
+        let before = fs::read(&file).expect("read file");
 
-    run_ok(opusgain().args(["--dry-run", "--preset=r128"]).arg(&file));
+        run_ok(opusgain().args(["--dry-run", &format!("--preset={preset}")]).arg(&file));
 
-    assert_eq!(before, fs::read(&file).expect("read file"));
+        assert_eq!(before, fs::read(&file).expect("read file"), "preset {preset} modified file in dry-run mode");
+    }
 }
 
 #[test]
@@ -230,7 +231,7 @@ fn no_change_preserves_output_gain() {
 // Running opusgain twice with the same preset produces identical file bytes,
 // i.e. the tool is idempotent across all presets.
 fn presets_are_idempotent() {
-    for preset in ["rg", "r128", "original", "no-change"] {
+    for preset in ALL_PRESETS {
         let (_dir, file) = reference_file();
         let arg = format!("--preset={preset}");
 
