@@ -71,6 +71,11 @@ jobs:
           profile: minimal
           default: true
       - uses: FrancisRussell/ferrous-actions@v1
+        name: Build library without cli feature
+        with:
+          command: cargo build
+          args: --lib --no-default-features --features audiopus_sys/static
+      - uses: FrancisRussell/ferrous-actions@v1
         name: Run tests
         with:
           command: cargo test

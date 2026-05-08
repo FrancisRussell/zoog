@@ -1,7 +1,7 @@
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::Arc;
 
-use zoog::interrupt::Interrupt;
+use crate::interrupt::Interrupt;
 
 pub type CtrlCRegistrationError = ctrlc::Error;
 
@@ -23,6 +23,7 @@ impl CtrlCChecker {
         Ok(result)
     }
 
+    #[must_use]
     pub fn is_running(&self) -> bool { self.running.load(Ordering::Relaxed) }
 }
 

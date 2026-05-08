@@ -7,6 +7,7 @@
   preserving modification time but with a small increment.
 * Add `--interpret-paths` and `--file-extensions` options to enable support for
   normalizing files in different ways in a single invocation.
+* Add colour support.
 
 ## 0.8.1
 
