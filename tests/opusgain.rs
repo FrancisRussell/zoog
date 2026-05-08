@@ -2,6 +2,7 @@
 
 mod common;
 
+use std::fs;
 use std::path::PathBuf;
 
 use common::{
@@ -186,4 +187,15 @@ fn r128_preset_silence() {
     );
     assert_eq!(opusinfo_r128_track_gain(&file), Some(0));
     assert_eq!(opusinfo_r128_album_gain(&file), Some(0));
+}
+
+#[test]
+// Dry-run mode leaves the file bytes completely unchanged.
+fn dry_run_does_not_modify() {
+    let (_dir, file) = reference_file();
+    let before = fs::read(&file).expect("read file");
+
+    run_ok(opusgain().args(["--dry-run", "--preset=r128"]).arg(&file));
+
+    assert_eq!(before, fs::read(&file).expect("read file"));
 }
