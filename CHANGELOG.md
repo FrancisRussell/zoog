@@ -15,6 +15,7 @@
 * Add `aarch64-apple-darwin` CI and release builds.
 * Run tests on `macos-latest` in addition to `ubuntu-latest`.
 * Add integration tests for `zoogcomment`.
+* Add integration tests for `opusgain`.
 
 ## 0.8.1
 
