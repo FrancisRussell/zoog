@@ -8,6 +8,7 @@
 * Add `--interpret-paths` and `--file-extensions` options to enable support for
   normalizing files in different ways in a single invocation.
 * Add colour support.
+* Fixed bug where the Vorbis Identification header could never fail validation.
 
 ## 0.8.1
 
