@@ -84,7 +84,7 @@ mod tests {
 
     #[test]
     fn positive_overflow() {
-        let max_gain = FixedPointGain { value: std::i16::MAX };
+        let max_gain = FixedPointGain { value: i16::MAX };
         let one = FixedPointGain { value: 1 };
         assert_eq!(max_gain.checked_add(one), None);
         assert_eq!(one.checked_add(max_gain), None);
@@ -92,7 +92,7 @@ mod tests {
 
     #[test]
     fn negative_overflow() {
-        let min_gain = FixedPointGain { value: std::i16::MIN };
+        let min_gain = FixedPointGain { value: i16::MIN };
         let neg_one = FixedPointGain { value: -1 };
         assert_eq!(min_gain.checked_add(neg_one), None);
         assert_eq!(neg_one.checked_add(min_gain), None);
@@ -100,13 +100,13 @@ mod tests {
 
     #[test]
     fn negate_lowest_value() {
-        let min_gain = FixedPointGain { value: std::i16::MIN };
+        let min_gain = FixedPointGain { value: i16::MIN };
         assert_eq!(min_gain.checked_neg(), None);
     }
 
     #[test]
     fn decibel_conversion() {
-        for value in std::i16::MIN..=std::i16::MAX {
+        for value in i16::MIN..=i16::MAX {
             let gain = FixedPointGain { value };
             let decibels = gain.as_decibels();
             let gain2 = FixedPointGain::try_from(decibels).unwrap();
