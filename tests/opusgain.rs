@@ -4,6 +4,7 @@ mod common;
 
 use std::fs;
 use std::path::PathBuf;
+use std::process::Command;
 
 use common::{
     make_reference_opus, make_silence_opus, opusgain, opusinfo_output_gain, opusinfo_r128_album_gain,
@@ -24,6 +25,12 @@ fn reference_file() -> (TempDir, PathBuf) {
     let dir = TempDir::new().expect("create temp dir");
     let file = make_reference_opus(dir.path(), REFERENCE_LUFS);
     (dir, file)
+}
+
+fn opusgain_cmd(flag: &str) -> Command {
+    let mut cmd = opusgain();
+    cmd.args(["--preset=rg", flag]);
+    cmd
 }
 
 // Maximum permissible deviation from the expected gain, covering both
@@ -197,15 +204,22 @@ fn silence_does_not_produce_positive_gain() {
 }
 
 #[test]
-// Dry-run mode leaves the file bytes completely unchanged, for all presets.
+// Dry-run mode (--dry-run and its alias -n) leaves the file bytes completely
+// unchanged, for all presets.
 fn dry_run_does_not_modify() {
-    for preset in ALL_PRESETS {
-        let (_dir, file) = reference_file();
-        let before = fs::read(&file).expect("read file");
+    for flag in ["--dry-run", "-n"] {
+        for preset in ALL_PRESETS {
+            let (_dir, file) = reference_file();
+            let before = fs::read(&file).expect("read file");
 
-        run_ok(opusgain().args(["--dry-run", &format!("--preset={preset}")]).arg(&file));
+            run_ok(opusgain().args([flag, &format!("--preset={preset}")]).arg(&file));
 
-        assert_eq!(before, fs::read(&file).expect("read file"), "preset {preset} modified file in dry-run mode");
+            assert_eq!(
+                before,
+                fs::read(&file).expect("read file"),
+                "{flag} with preset {preset} modified file in dry-run mode"
+            );
+        }
     }
 }
 
@@ -243,3 +257,18 @@ fn presets_are_idempotent() {
         assert_eq!(after_first, fs::read(&file).expect("read file"), "preset {preset} is not idempotent");
     }
 }
+
+#[test]
+// --mtime-strategy=preserve leaves the file's modification time unchanged after
+// rewriting.
+fn preserve_mtime_strategy() { common::test_preserve_mtime_strategy(reference_file, opusgain_cmd); }
+
+#[test]
+// --mtime-strategy=present updates the modification time to approximately the
+// current system time.
+fn present_mtime_strategy() { common::test_present_mtime_strategy(reference_file, opusgain_cmd); }
+
+#[test]
+// --mtime-strategy=minimal-increment (and its alias -M) nudges the modification
+// time by the smallest filesystem-detectable delta.
+fn minimal_increment_mtime_strategy() { common::test_minimal_increment_mtime_strategy(reference_file, opusgain_cmd); }

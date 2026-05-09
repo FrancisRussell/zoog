@@ -2,7 +2,9 @@
 
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::{Duration, SystemTime};
 
+use tempfile::TempDir;
 use zoog::header::FixedPointGain;
 
 pub fn zoogcomment() -> Command { Command::new(env!("CARGO_BIN_EXE_zoogcomment")) }
@@ -185,6 +187,13 @@ pub fn opusinfo_tags(path: &Path) -> String {
     String::from_utf8_lossy(&output.stdout).into_owned()
 }
 
+pub fn get_mtime(path: &Path) -> SystemTime { std::fs::metadata(path).expect("metadata").modified().expect("modified") }
+
+pub fn set_mtime(path: &Path, time: SystemTime) {
+    let file = std::fs::OpenOptions::new().write(true).open(path).expect("open for set_modified");
+    file.set_modified(time).expect("set_modified");
+}
+
 /// Read tags from a Vorbis file using vorbiscomment as an independent verifier.
 pub fn vorbiscomment_tags(path: &Path) -> String {
     let output = Command::new("vorbiscomment")
@@ -193,4 +202,41 @@ pub fn vorbiscomment_tags(path: &Path) -> String {
         .output()
         .expect("vorbiscomment must be installed (vorbis-tools)");
     String::from_utf8_lossy(&output.stdout).into_owned()
+}
+
+pub fn test_preserve_mtime_strategy(make_file: impl Fn() -> (TempDir, PathBuf), make_cmd: impl Fn(&str) -> Command) {
+    let (_dir, file) = make_file();
+    let original_mtime = SystemTime::now() - Duration::from_secs(3600);
+    set_mtime(&file, original_mtime);
+    run_ok(make_cmd("--mtime-strategy=preserve").arg(&file));
+    assert_eq!(get_mtime(&file), original_mtime, "--mtime-strategy=preserve should not change mtime");
+}
+
+pub fn test_present_mtime_strategy(make_file: impl Fn() -> (TempDir, PathBuf), make_cmd: impl Fn(&str) -> Command) {
+    let (_dir, file) = make_file();
+    let now = SystemTime::now();
+    let original_mtime = now - Duration::from_secs(3600);
+    set_mtime(&file, original_mtime);
+    run_ok(make_cmd("--mtime-strategy=present").arg(&file));
+    let new_mtime = get_mtime(&file);
+    assert!(new_mtime >= now, "--mtime-strategy=present should update mtime to now");
+    assert!(new_mtime <= now + Duration::from_secs(5), "--mtime-strategy=present should not set mtime into the future");
+}
+
+pub fn test_minimal_increment_mtime_strategy(
+    make_file: impl Fn() -> (TempDir, PathBuf), make_cmd: impl Fn(&str) -> Command,
+) {
+    for flag in ["--mtime-strategy=minimal-increment", "-M"] {
+        let (_dir, file) = make_file();
+        let now = SystemTime::now();
+        let original_mtime = now - Duration::from_secs(3600);
+        set_mtime(&file, original_mtime);
+        run_ok(make_cmd(flag).arg(&file));
+        let new_mtime = get_mtime(&file);
+        assert!(new_mtime > original_mtime, "{flag} should increase mtime");
+        assert!(
+            new_mtime < original_mtime + Duration::from_secs(5),
+            "{flag} should apply only a tiny delta, not update to present"
+        );
+    }
 }
