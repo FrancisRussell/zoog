@@ -190,6 +190,6 @@ mod tests {
         match CommentHeaderTest::try_parse(&header) {
             Err(Error::MalformedCommentHeader) => {}
             _ => panic!("Wrong error for malformed header"),
-        };
+        }
     }
 }

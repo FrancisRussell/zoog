@@ -119,7 +119,7 @@ mod tests {
         fn is_cow_borrowed(&self) -> bool;
     }
 
-    impl<'a, T> IntrospectCowBorrow for Cow<'a, T>
+    impl<T> IntrospectCowBorrow for Cow<'_, T>
     where
         T: ToOwned + ?Sized,
     {

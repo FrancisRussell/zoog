@@ -3,6 +3,8 @@
 mod common;
 
 use std::fs;
+use std::path::PathBuf;
+use std::process::Command;
 
 use common::{
     make_tone_opus, make_tone_opus_with_tags, make_tone_vorbis, make_tone_vorbis_with_tags, opusinfo_tags,
@@ -153,25 +155,60 @@ fn out_of_place_write() {
 }
 
 #[test]
-// Dry-run mode does not create the output file in out-of-place mode.
+// Dry-run mode (--dry-run and its alias -n) does not create the output file in
+// out-of-place mode.
 fn dry_run_does_not_create_output() {
-    let dir = TempDir::new().expect("create temp dir");
-    let input = make_tone_opus(dir.path());
-    let output = dir.path().join("output.opus");
+    for flag in ["--dry-run", "-n"] {
+        let dir = TempDir::new().expect("create temp dir");
+        let input = make_tone_opus(dir.path());
+        let output = dir.path().join("output.opus");
 
-    run_ok(zoogcomment().args(["-n", "-m", "-t", "ARTIST=Test"]).arg(&input).arg(&output));
+        run_ok(zoogcomment().args([flag, "-m", "-t", "ARTIST=Test"]).arg(&input).arg(&output));
 
-    assert!(!output.exists());
+        assert!(!output.exists(), "{flag} should not create output file in dry-run mode");
+    }
 }
 
 #[test]
-// Dry-run mode leaves the file contents completely unchanged.
+// Dry-run mode (--dry-run and its alias -n) leaves the file contents completely
+// unchanged.
 fn dry_run_does_not_modify() {
+    for flag in ["--dry-run", "-n"] {
+        let dir = TempDir::new().expect("create temp dir");
+        let file = make_tone_opus(dir.path());
+        let before = fs::read(&file).expect("read file");
+
+        run_ok(zoogcomment().args([flag, "-m", "-t", "ARTIST=Test"]).arg(&file));
+
+        assert_eq!(before, fs::read(&file).expect("read file"), "{flag} modified file in dry-run mode");
+    }
+}
+
+fn tone_opus_file() -> (TempDir, PathBuf) {
     let dir = TempDir::new().expect("create temp dir");
     let file = make_tone_opus(dir.path());
-    let before = fs::read(&file).expect("read file");
+    (dir, file)
+}
 
-    run_ok(zoogcomment().args(["-n", "-m", "-t", "ARTIST=Test"]).arg(&file));
+fn zoogcomment_cmd(flag: &str) -> Command {
+    let mut cmd = zoogcomment();
+    cmd.args(["-m", "-t", "ARTIST=Test", flag]);
+    cmd
+}
 
-    assert_eq!(before, fs::read(&file).expect("read file"));
+#[test]
+// --mtime-strategy=preserve leaves the file's modification time unchanged after
+// rewriting.
+fn preserve_mtime_strategy() { common::test_preserve_mtime_strategy(tone_opus_file, zoogcomment_cmd); }
+
+#[test]
+// --mtime-strategy=present updates the modification time to approximately the
+// current system time.
+fn present_mtime_strategy() { common::test_present_mtime_strategy(tone_opus_file, zoogcomment_cmd); }
+
+#[test]
+// --mtime-strategy=minimal-increment (and its alias -M) nudges the modification
+// time by the smallest filesystem-detectable delta.
+fn minimal_increment_mtime_strategy() {
+    common::test_minimal_increment_mtime_strategy(tone_opus_file, zoogcomment_cmd);
 }
