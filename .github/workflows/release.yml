@@ -12,18 +12,13 @@ jobs:
   create-release:
     name: Create release
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/create-release@v1
-        id: create_release
+      - uses: actions/checkout@v6
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGELOG.md
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          body_path: CHANGELOG.md
   build:
     name: Build binaries
     needs: create-release
@@ -44,7 +39,7 @@ jobs:
             apt_packages: gcc-mingw-w64-i686-posix
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v6
       - name: Install apt packages
         if: ${{ matrix.apt_packages != '' }}
         run: sudo apt-get install -y --no-install-recommends ${{ matrix.apt_packages }}
@@ -65,11 +60,8 @@ jobs:
         run: ./scripts/build-release ${{ github.ref }} ${{ matrix.target }}
         id: build_archive
       - name: Upload
-        uses: actions/upload-release-asset@v1.0.2
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.build_archive.outputs.path }}
-          asset_name: ${{ steps.build_archive.outputs.name }}
-          asset_content_type: ${{ steps.build_archive.outputs.content_type }}
+          files: ${{ steps.build_archive.outputs.path }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
