@@ -19,6 +19,9 @@ jobs:
             platform: macos-latest
           - target: x86_64-unknown-linux-musl
             apt_packages: musl-dev
+          - target: aarch64-unknown-linux-musl
+            platform: ubuntu-latest
+            apt_packages: musl-dev:aarch64
           - target: x86_64-pc-windows-msvc
             platform: windows-latest
           - target: i686-pc-windows-msvc
@@ -38,6 +41,11 @@ jobs:
           target: ${{ matrix.target }}
           profile: minimal
           default: true
+      - name: Add arm64 architecture
+        if: matrix.target == 'aarch64-unknown-linux-musl'
+        run: |
+          sudo dpkg --add-architecture aarch64
+          sudo apt-get update
       - name: Install apt packages
         if: ${{ matrix.apt_packages != '' }}
         run: sudo apt-get install -y --no-install-recommends ${{ matrix.apt_packages }}
