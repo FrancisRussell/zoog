@@ -6,6 +6,7 @@ use crate::{header, Codec, Error};
 
 const VORBIS_MIN_HEADER_SIZE: usize = 30;
 const VORBIS_MAGIC: &[u8] = b"\x01vorbis";
+const VORBIS_BLOCK_SIZES: &[u16] = &[64, 128, 256, 512, 1024, 2048, 4096, 8192];
 
 /// Allows querying and modification of a Vorbis identification header
 #[derive(Clone, Debug, PartialEq)]
@@ -29,6 +30,9 @@ impl header::IdHeader for IdHeader {
         let mut is_valid = true;
         is_valid &= result.num_output_channels() != 0;
         is_valid &= result.output_sample_rate() != 0;
+        is_valid &= VORBIS_BLOCK_SIZES.contains(&result.blocksize_0());
+        is_valid &= VORBIS_BLOCK_SIZES.contains(&result.blocksize_1());
+        is_valid &= result.blocksize_0() <= result.blocksize_1();
         is_valid &= (result.data[29] & 1) != 0; // Framing flag
         if is_valid {
             Ok(Some(result))
@@ -61,6 +65,12 @@ impl header::IdHeader for IdHeader {
 }
 
 impl IdHeader {
+    /// Length of the Vorbis short window
+    fn blocksize_0(&self) -> u16 { 1 << (self.data[28] & 0x0f) }
+
+    /// Length of the Vorbis long window
+    fn blocksize_1(&self) -> u16 { 1 << ((self.data[28] >> 4) & 0x0f) }
+
     /// The Vorbis version
     #[allow(clippy::missing_panics_doc)]
     #[must_use]
