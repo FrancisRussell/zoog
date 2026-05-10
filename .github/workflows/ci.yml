@@ -112,3 +112,27 @@ jobs:
         name: Clippy
         with:
           command: cargo clippy
+
+  check-licenses:
+    name: Check licenses
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: FrancisRussell/ferrous-actions@v1
+        name: Cargo cache
+        with:
+          command: cache
+      - uses: FrancisRussell/ferrous-actions@v1
+        name: Install Rustup
+        with:
+          command: install-rustup
+          toolchain: stable
+          profile: minimal
+          default: true
+      - uses: FrancisRussell/ferrous-actions@v1
+        name: Install cargo-about
+        with:
+          command: cargo install
+          args: cargo-about --locked --features cli
+      - name: Check third-party licenses
+        run: cargo about generate -c ./.about/config.toml ./.about/template.hbs

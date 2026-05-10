@@ -25,6 +25,7 @@ mkdir "${NAME}"
 cp -a "${TOP}/README.md" "${NAME}"
 cp -a "${TOP}/CHANGELOG.md" "${NAME}"
 cp -a "${TOP}/LICENSE" "${NAME}"
+cp -a "${TOP}/THIRD_PARTY_LICENSES.txt" "${NAME}"
 for BINARY in opusgain zoogcomment; do
   BINARY_PATH="${TOP}/target/${TARGET}/release/${BINARY}${EXE_SUFFIX}"
   if [ -f "${BINARY_PATH}" ]; then
