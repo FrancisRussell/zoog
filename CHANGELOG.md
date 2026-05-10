@@ -13,10 +13,11 @@
 * Add colour support.
 * Fixed bug where the Vorbis Identification header could never fail validation.
 * Add `aarch64-apple-darwin` CI and release builds.
-* Run tests on `macos-latest` in addition to `ubuntu-latest`.
+* Run tests on `macos-latest` and `windows-latest` in addition to `ubuntu-latest`.
 * Add integration tests for `zoogcomment`.
 * Add integration tests for `opusgain`.
-* Include third-party licenses in release builds.
+* Include third-party licenses in releases.
+* Switch Windows builds to use Windows runners and the MSVC Rust targets.
 
 ## 0.8.1
 

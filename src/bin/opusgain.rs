@@ -414,7 +414,9 @@ fn run(console_output: &Standard, mut cli: Cli, interrupt_checker: &CtrlCChecker
                             // Update timestamp if necessary
                             if !dry_run {
                                 let now = SystemTime::now();
-                                let outcome = std::fs::File::open(&input_path)
+                                let outcome = std::fs::OpenOptions::new()
+                                    .write(true) // write access required for set_modified on Windows
+                                    .open(&input_path)
                                     .and_then(|file| adjust_mtime(&file, input_file_modified, now, mtime_strategy))
                                     .map_err(|e| Error::FileMetadataWriteError(input_path.clone(), e))?;
                                 if !matches!(outcome, SetMtimeOutcome::Success) {

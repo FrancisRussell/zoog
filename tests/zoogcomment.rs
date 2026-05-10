@@ -21,6 +21,7 @@ fn list_opus() {
     assert!(run_and_stdout(zoogcomment().arg("-l").arg(&file)).contains("ARTIST=Test Artist"));
 }
 
+#[cfg(not(target_family = "windows"))]
 #[test]
 // Listing tags on an Ogg Vorbis file outputs the expected tag.
 fn list_vorbis() {
@@ -41,6 +42,7 @@ fn add_tag_opus() {
     assert!(opusinfo_tags(&file).contains("ARTIST=Test Artist"));
 }
 
+#[cfg(not(target_family = "windows"))]
 #[test]
 // A tag added to an Ogg Vorbis file is visible to vorbiscomment.
 fn add_tag_vorbis() {
@@ -65,6 +67,7 @@ fn replace_clears_existing_tags_opus() {
     assert!(!tags.contains("ARTIST=Original"));
 }
 
+#[cfg(not(target_family = "windows"))]
 #[test]
 // Replace mode removes all pre-existing tags from an Ogg Vorbis file.
 fn replace_clears_existing_tags_vorbis() {
@@ -92,6 +95,7 @@ fn delete_tag_opus() {
     assert!(tags.contains("TITLE=Song"));
 }
 
+#[cfg(not(target_family = "windows"))]
 #[test]
 // Deleting a tag by name from an Ogg Vorbis file removes it without affecting
 // other tags.
