@@ -1,0 +1,24 @@
+Third-Party Licenses
+====================
+
+This software includes the following third-party libraries:
+
+{{#each overview}}
+* {{{name}}} {{{version}}} ({{{license}}})
+{{/each}}
+
+================================================================================
+License Texts
+================================================================================
+
+{{#each licenses}}
+--------------------------------------------------------------------------------
+{{{name}}}
+
+Used by:
+{{#each used_by}}
+  * {{{this.crate.name}}} {{{this.crate.version}}}
+{{/each}}
+
+{{{text}}}
+{{/each}}

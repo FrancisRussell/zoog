@@ -16,6 +16,7 @@
 * Run tests on `macos-latest` in addition to `ubuntu-latest`.
 * Add integration tests for `zoogcomment`.
 * Add integration tests for `opusgain`.
+* Include third-party licenses in release builds.
 
 ## 0.8.1
 

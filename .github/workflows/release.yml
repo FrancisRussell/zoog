@@ -56,6 +56,13 @@ jobs:
         with:
           command: cargo build
           args: --release --target=${{ matrix.target }}
+      - uses: FrancisRussell/ferrous-actions@v1
+        name: Install cargo-about
+        with:
+          command: cargo install
+          args: cargo-about --locked --features cli
+      - name: Generate third-party licenses
+        run: cargo about generate -c ./.about/config.toml -o THIRD_PARTY_LICENSES.txt ./.about/template.hbs
       - name: Build Archive
         run: ./scripts/build-release ${{ github.ref }} ${{ matrix.target }}
         id: build_archive
