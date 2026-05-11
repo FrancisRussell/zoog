@@ -17,8 +17,8 @@ jobs:
             platform: macos-latest
           - target: aarch64-apple-darwin
             platform: macos-latest
-          - target: x86_64-unknown-linux-musl
-            apt_packages: musl-dev
+          - target: aarch64-unknown-linux-musl
+            platform: ubuntu-latest
           - target: x86_64-pc-windows-msvc
             platform: windows-latest
           - target: i686-pc-windows-msvc
@@ -38,9 +38,11 @@ jobs:
           target: ${{ matrix.target }}
           profile: minimal
           default: true
-      - name: Install apt packages
-        if: ${{ matrix.apt_packages != '' }}
-        run: sudo apt-get install -y --no-install-recommends ${{ matrix.apt_packages }}
+      - name: Set up Linux musl target
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/setup-linux-musl-target
+        with:
+          target: ${{ matrix.target }}
       - uses: FrancisRussell/ferrous-actions@v1
         name: Cargo build
         with:

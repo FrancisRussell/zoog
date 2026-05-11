@@ -1,0 +1,54 @@
+name: Set up Linux musl target
+description: Configures apt and installs musl-dev so Rust can cross-compile to a Linux musl target. Fails if not run on Ubuntu or invoked for a non-musl target.
+
+inputs:
+  target:
+    description: Rust target triple
+    required: true
+
+runs:
+  using: composite
+  steps:
+    - name: Determine dpkg architectures
+      id: determine_dpkg_arch
+      shell: bash
+      run: |
+        if [[ "$RUNNER_OS" != "Linux" ]] || [[ "$(lsb_release -is)" != "Ubuntu" ]]; then
+          echo "::error::This action only supports Ubuntu Linux runners"
+          exit 1
+        fi
+        if [[ "${{ inputs.target }}" != *-linux-musl ]]; then
+          echo "::error::This action only supports musl targets"
+          exit 1
+        fi
+        case $(echo "${{ inputs.target }}" | cut -d- -f1) in
+          x86_64)  DPKG_ARCH_TARGET=amd64 ;;
+          aarch64) DPKG_ARCH_TARGET=arm64 ;;
+          i686)    DPKG_ARCH_TARGET=i386  ;;
+          armv7*)  DPKG_ARCH_TARGET=armhf ;;
+        esac
+        DPKG_ARCH_HOST=$(dpkg --print-architecture)
+        echo "target=${DPKG_ARCH_TARGET}" >> "$GITHUB_OUTPUT"
+        echo "host=${DPKG_ARCH_HOST}" >> "$GITHUB_OUTPUT"
+    - name: Configure apt for cross-compilation
+      shell: bash
+      run: |
+        DPKG_ARCH_TARGET="${{ steps.determine_dpkg_arch.outputs.target }}"
+        DPKG_ARCH_HOST="${{ steps.determine_dpkg_arch.outputs.host }}"
+        if [[ "${DPKG_ARCH_HOST}" != "${DPKG_ARCH_TARGET}" ]]; then
+          is_regular_archive_arch() { [[ "$1" = "amd64" ]] || [[ "$1" = "i386" ]]; }
+          if is_regular_archive_arch "${DPKG_ARCH_HOST}" && ! is_regular_archive_arch "${DPKG_ARCH_TARGET}"; then
+            CODENAME=$(lsb_release -sc)
+            # Prevent apt from hard-erroring when fetching indices for the foreign arch from sources that only host amd64/i386
+            sudo sed -i "/^Types:/a Architectures: ${DPKG_ARCH_HOST}" /etc/apt/sources.list.d/*.sources 2>/dev/null || true
+            # Ubuntu's main archive only hosts amd64 and i386; all other arches (arm64, armhf, ppc64el, etc.) are on ports.ubuntu.com
+            for suite in "" "-updates" "-security"; do
+              echo "deb [arch=${DPKG_ARCH_TARGET}] http://ports.ubuntu.com/ubuntu-ports ${CODENAME}${suite} main restricted universe multiverse"
+            done | sudo tee /etc/apt/sources.list.d/ports-${DPKG_ARCH_TARGET}.list
+          fi
+          sudo dpkg --add-architecture ${DPKG_ARCH_TARGET}
+          sudo apt-get update
+        fi
+    - name: Install musl dev
+      shell: bash
+      run: sudo apt-get install -y --no-install-recommends "musl-dev:${{ steps.determine_dpkg_arch.outputs.target }}"
