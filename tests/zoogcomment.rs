@@ -5,6 +5,7 @@ mod common;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use common::{opusinfo_tags, run_and_stdout, run_ok};
 use tempfile::TempDir;
@@ -12,7 +13,7 @@ use tempfile::TempDir;
 fn zoogcomment() -> Command { Command::new(env!("CARGO_BIN_EXE_zoogcomment")) }
 
 fn make_tone_opus_with_tags(dir: &Path, tags: &[(&str, &str)]) -> PathBuf {
-    common::build_opus(dir, "tone.opus", 440, 1, 1, None, tags)
+    common::build_opus(dir, "tone.opus".as_ref(), 440, Duration::from_secs(1), 1, None, tags)
 }
 
 fn make_tone_opus(dir: &Path) -> PathBuf { make_tone_opus_with_tags(dir, &[]) }

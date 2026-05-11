@@ -5,6 +5,7 @@ mod common;
 use std::fs;
 use std::path::{Path, PathBuf};
 use std::process::Command;
+use std::time::Duration;
 
 use common::run_ok;
 use tempfile::TempDir;
@@ -43,29 +44,24 @@ fn make_silence_opus(dir: &Path) -> PathBuf {
 ///
 /// ## Derivation
 ///
-/// The ffmpeg `sine` lavfi source generates a sine wave at amplitude 1/8 by
-/// default (documented in the ffmpeg lavfi sine filter).
-///
 /// The K-weighting filter in ITU-R BS.1770 has a magnitude response of |H| =
-/// 1.083640 at 1 kHz / 48 kHz. For a sine wave at amplitude A the mean square
-/// is A²/2, so the BS.1770 formula gives:
-///     LUFS = −0.691 + 10·log10(A²/2 · |H|²)
+/// 1.083640 at 1 kHz / 48 kHz. `build_opus` generates each stereo channel at
+/// exactly amplitude A, so the BS.1770 stereo sum of both channels gives:
+///     LUFS = −0.691 + 10·log10(A²/2 · |H|² + A²/2 · |H|²)
+///          = −0.691 + 10·log10(A² · |H|²)
 ///
 /// Stereo is used so that loudgain (libebur128) and opusgain agree on the
 /// measurement without ambiguity about mono dual-channel weighting.
 ///
-/// Solving for A and expressing as a volume scale relative to the ffmpeg
-/// default of 1/8:
-///     A      = sqrt(2 · 10^((LUFS + 0.691) / 10)) / |H|
-///     volume = A / (1/8) = 8A
+/// Solving for A:
+///     A = 10^((LUFS + 0.691) / 20) / |H|
 fn make_reference_opus(dir: &Path, target_lufs: Decibels) -> PathBuf {
     // K-weighting filter magnitude at 1 kHz / 48 kHz per ITU-R BS.1770
     const K_WEIGHT_1KHZ_48KHZ: f64 = 1.083640;
     let lufs = target_lufs.as_f64();
-    let a = f64::sqrt(2.0 * 10.0_f64.powf((lufs + 0.691) / 10.0)) / K_WEIGHT_1KHZ_48KHZ;
-    let volume = a * 8.0;
+    let a = 10.0_f64.powf((lufs + 0.691) / 20.0) / K_WEIGHT_1KHZ_48KHZ;
     let filename = format!("{lufs}lufs.opus");
-    common::build_opus(dir, &filename, 1000, 5, 2, Some(volume), &[])
+    common::build_opus(dir, filename.as_ref(), 1000, Duration::from_secs(5), 2, Some(a), &[])
 }
 
 /// Read the output gain from an Opus file.

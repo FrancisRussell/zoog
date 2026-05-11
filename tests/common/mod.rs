@@ -1,21 +1,43 @@
+use std::ffi::OsStr;
 use std::path::{Path, PathBuf};
 use std::process::Command;
 use std::time::{Duration, SystemTime};
 
 use tempfile::TempDir;
 
+/// Generate an Ogg Opus file containing a sine tone at `amplitude` per channel
+/// (default 0.125, in [0.0, 1.0] relative to full scale). Uses `aevalsrc` to
+/// generate each channel directly at the specified amplitude with no implicit
+/// scaling.
 pub fn build_opus(
-    dir: &Path, filename: &str, freq: u32, duration: u32, channels: u32, volume: Option<f64>, tags: &[(&str, &str)],
+    dir: &Path, filename: &OsStr, freq: u16, duration: Duration, channels: u8, amplitude: Option<f64>,
+    tags: &[(&str, &str)],
 ) -> PathBuf {
     let path = dir.join(filename);
-    let sine = format!("sine=frequency={freq}:duration={duration}");
-    let channels = channels.to_string();
+    let amp = amplitude.unwrap_or(0.125);
+    let expr = format!("{amp}*sin(2*PI*{freq}*t)");
+    let exprs = (0..channels).map(|_| expr.as_str()).collect::<Vec<_>>().join("|");
+    let layout = match channels {
+        1 => "mono",
+        2 => "stereo",
+        n => panic!("unsupported channel count {n}"),
+    };
     let mut cmd = Command::new("ffmpeg");
-    cmd.args(["-y", "-loglevel", "error", "-f", "lavfi", "-i", &sine]);
-    if let Some(vol) = volume {
-        cmd.args(["-af", &format!("volume={vol}")]);
-    }
-    cmd.args(["-ar", "48000", "-ac", &channels, "-c:a", "libopus", "-b:a", "64k"]);
+    cmd.args([
+        "-y",
+        "-loglevel",
+        "error",
+        "-f",
+        "lavfi",
+        "-i",
+        &format!("aevalsrc={exprs}:c={layout}:s=48000:d={}", duration.as_secs_f64()),
+        "-ar",
+        "48000",
+        "-c:a",
+        "libopus",
+        "-b:a",
+        "64k",
+    ]);
     for (k, v) in tags {
         cmd.arg("-metadata").arg(format!("{k}={v}"));
     }
