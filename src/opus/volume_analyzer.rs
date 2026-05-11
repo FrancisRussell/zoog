@@ -88,12 +88,10 @@ impl DecodeState {
 
     pub fn get_windows(&self) -> Windows100ms<Vec<Power>> {
         let windows: Vec<_> = self.meters.iter().map(ChannelLoudnessMeter::as_100ms_windows).collect();
-        // See notes on `reduce_stero` in `bs1770` crate.
-        let power_scale_factor = match self.num_channels() {
-            1 => 2.0, // Since mono is still output to two devices
-            2 => 1.0,
-            n => panic!("Calculating power for number of channels {} not yet supported", n),
-        };
+        // EBU R128 (used by Opus) sums channel power, so a stereo file with identical
+        // channels measures ~3 dB louder than a mono file with the same
+        // content. ReplayGain instead averages channel power, making mono and
+        // dual-mono stereo equivalent.
         let num_windows = windows[0].len();
         for channel_windows in &windows {
             assert_eq!(num_windows, channel_windows.len(), "Channels had different amounts of audio");
@@ -107,7 +105,6 @@ impl DecodeState {
                 // semantically-valid operation
                 power += channel_windows[i].0;
             }
-            power *= power_scale_factor;
             result_windows.push(Power(power));
         }
         Windows100ms { inner: result_windows }

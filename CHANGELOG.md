@@ -17,6 +17,8 @@
 * Add integration tests for `zoogcomment` and `opusgain`.
 * Include third-party licenses in releases.
 * Switch Windows builds to use Windows runners and the MSVC Rust targets.
+* Fix loudness measurement of mono files to follow EBU R128 (channel power
+  summation) rather than ReplayGain (channel power averaging).
 
 ## 0.8.1
 
