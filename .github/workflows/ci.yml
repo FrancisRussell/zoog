@@ -83,7 +83,7 @@ jobs:
         name: Install Rustup
         with:
           command: install-rustup
-          toolchain: nightly
+          toolchain: stable
           profile: minimal
           default: true
       - uses: FrancisRussell/ferrous-actions@v1
@@ -117,6 +117,7 @@ jobs:
         name: Clippy
         with:
           command: cargo clippy
+          args: --all-features
 
   check-licenses:
     name: Check licenses
