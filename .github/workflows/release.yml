@@ -5,6 +5,9 @@ on:
     tags:
       - 'v*.*.*'
 
+permissions:
+  contents: write
+
 env:
   CMAKE_POLICY_VERSION_MINIMUM: 3.5
 
@@ -14,9 +17,21 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v6
+      - name: Detect prerelease
+        id: prerelease
+        run: |
+          VERSION_CORE="${{ github.ref_name }}"
+          VERSION_CORE="${VERSION_CORE%%+*}"
+          if echo "${VERSION_CORE}" | grep -q '-'; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
       - uses: softprops/action-gh-release@v2
         with:
           body_path: CHANGELOG.md
+          prerelease: ${{ steps.prerelease.outputs.value }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
   build:
@@ -73,5 +88,6 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: ${{ steps.build_archive.outputs.path }}
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
