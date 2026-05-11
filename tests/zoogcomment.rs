@@ -3,14 +3,73 @@
 mod common;
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use common::{
-    make_tone_opus, make_tone_opus_with_tags, make_tone_vorbis, make_tone_vorbis_with_tags, opusinfo_tags,
-    run_and_stdout, run_ok, vorbiscomment_tags, zoogcomment,
-};
+use common::{opusinfo_tags, run_and_stdout, run_ok};
 use tempfile::TempDir;
+
+fn zoogcomment() -> Command { Command::new(env!("CARGO_BIN_EXE_zoogcomment")) }
+
+fn make_tone_opus_with_tags(dir: &Path, tags: &[(&str, &str)]) -> PathBuf {
+    common::build_opus(dir, "tone.opus", 440, 1, 1, None, tags)
+}
+
+fn make_tone_opus(dir: &Path) -> PathBuf { make_tone_opus_with_tags(dir, &[]) }
+
+fn make_tone_vorbis(dir: &Path) -> PathBuf {
+    let wav = dir.join("tone.wav");
+    let ogg = dir.join("tone.ogg");
+    let status = Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "sine=frequency=440:duration=1",
+            "-ar",
+            "44100",
+            "-ac",
+            "1",
+        ])
+        .arg(&wav)
+        .status()
+        .expect("ffmpeg must be installed");
+    assert!(status.success(), "ffmpeg failed to generate WAV");
+    let status = Command::new("oggenc")
+        .args(["-Q", "-o"])
+        .arg(&ogg)
+        .arg(&wav)
+        .status()
+        .expect("oggenc must be installed (vorbis-tools)");
+    assert!(status.success(), "oggenc failed to encode Vorbis fixture");
+    ogg
+}
+
+/// Generate a Vorbis tone fixture then add tags via vorbiscomment.
+fn make_tone_vorbis_with_tags(dir: &Path, tags: &[(&str, &str)]) -> PathBuf {
+    let path = make_tone_vorbis(dir);
+    let mut cmd = Command::new("vorbiscomment");
+    cmd.arg("-a");
+    for (k, v) in tags {
+        cmd.arg("-t").arg(format!("{k}={v}"));
+    }
+    cmd.arg(&path);
+    assert!(cmd.status().expect("vorbiscomment must be installed").success(), "vorbiscomment failed");
+    path
+}
+
+/// Read tags from a Vorbis file using vorbiscomment as an independent verifier.
+fn vorbiscomment_tags(path: &Path) -> String {
+    let output = Command::new("vorbiscomment")
+        .arg("-l")
+        .arg(path)
+        .output()
+        .expect("vorbiscomment must be installed (vorbis-tools)");
+    String::from_utf8_lossy(&output.stdout).into_owned()
+}
 
 #[test]
 // Listing tags on an Opus file outputs the expected tag.
