@@ -3,16 +3,103 @@
 mod common;
 
 use std::fs;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::process::Command;
 
-use common::{
-    make_reference_opus, make_silence_opus, opusgain, opusinfo_output_gain, opusinfo_r128_album_gain,
-    opusinfo_r128_track_gain, run_ok,
-};
+use common::run_ok;
 use tempfile::TempDir;
 use zoog::header::FixedPointGain;
 use zoog::{Decibels, R128_LUFS, REPLAY_GAIN_LUFS};
+
+fn opusgain() -> Command { Command::new(env!("CARGO_BIN_EXE_opusgain")) }
+
+fn make_silence_opus(dir: &Path) -> PathBuf {
+    let path = dir.join("silence.opus");
+    let status = Command::new("ffmpeg")
+        .args([
+            "-y",
+            "-loglevel",
+            "error",
+            "-f",
+            "lavfi",
+            "-i",
+            "anullsrc=r=48000:cl=mono",
+            "-t",
+            "1",
+            "-c:a",
+            "libopus",
+            "-b:a",
+            "32k",
+        ])
+        .arg(&path)
+        .status()
+        .expect("ffmpeg must be installed");
+    assert!(status.success(), "ffmpeg failed to generate silence fixture");
+    path
+}
+
+/// Generate a stereo 1kHz / 48kHz Opus tone calibrated to a target BS.1770
+/// integrated loudness.
+///
+/// ## Derivation
+///
+/// The ffmpeg `sine` lavfi source generates a sine wave at amplitude 1/8 by
+/// default (documented in the ffmpeg lavfi sine filter).
+///
+/// The K-weighting filter in ITU-R BS.1770 has a magnitude response of |H| =
+/// 1.083640 at 1 kHz / 48 kHz. For a sine wave at amplitude A the mean square
+/// is A²/2, so the BS.1770 formula gives:
+///     LUFS = −0.691 + 10·log10(A²/2 · |H|²)
+///
+/// Stereo is used so that loudgain (libebur128) and opusgain agree on the
+/// measurement without ambiguity about mono dual-channel weighting.
+///
+/// Solving for A and expressing as a volume scale relative to the ffmpeg
+/// default of 1/8:
+///     A      = sqrt(2 · 10^((LUFS + 0.691) / 10)) / |H|
+///     volume = A / (1/8) = 8A
+fn make_reference_opus(dir: &Path, target_lufs: Decibels) -> PathBuf {
+    // K-weighting filter magnitude at 1 kHz / 48 kHz per ITU-R BS.1770
+    const K_WEIGHT_1KHZ_48KHZ: f64 = 1.083640;
+    let lufs = target_lufs.as_f64();
+    let a = f64::sqrt(2.0 * 10.0_f64.powf((lufs + 0.691) / 10.0)) / K_WEIGHT_1KHZ_48KHZ;
+    let volume = a * 8.0;
+    let filename = format!("{lufs}lufs.opus");
+    common::build_opus(dir, &filename, 1000, 5, 2, Some(volume), &[])
+}
+
+/// Read the output gain from an Opus file.
+fn opusinfo_output_gain(path: &Path) -> FixedPointGain {
+    let info = common::opusinfo_tags(path);
+    for line in info.lines() {
+        if let Some(rest) = line.trim().strip_prefix("Playback gain:") {
+            let db: f64 = rest.trim().trim_end_matches("dB").trim().parse().expect("parse playback gain");
+            return FixedPointGain::try_from(Decibels::from(db)).expect("playback gain out of range");
+        }
+    }
+    panic!("Playback gain not found in opusinfo output:\n{info}");
+}
+
+/// Read the R128_TRACK_GAIN tag from an Opus file, returning None if absent.
+fn opusinfo_r128_track_gain(path: &Path) -> Option<FixedPointGain> {
+    opusinfo_r128_tag(path, zoog::opus::TAG_TRACK_GAIN)
+}
+
+/// Read the R128_ALBUM_GAIN tag from an Opus file, returning None if absent.
+fn opusinfo_r128_album_gain(path: &Path) -> Option<FixedPointGain> {
+    opusinfo_r128_tag(path, zoog::opus::TAG_ALBUM_GAIN)
+}
+
+fn opusinfo_r128_tag(path: &Path, tag: &str) -> Option<FixedPointGain> {
+    let info = common::opusinfo_tags(path);
+    let prefix = format!("{tag}=");
+    for line in info.lines() {
+        if let Some(rest) = line.trim().strip_prefix(&prefix) {
+            return Some(rest.trim().parse().unwrap_or_else(|_| panic!("parse {tag}")));
+        }
+    }
+    None
+}
 
 // The reference tone is calibrated to this loudness per ITU-R BS.1770.
 const REFERENCE_LUFS: Decibels = Decibels::new(-20.0);
