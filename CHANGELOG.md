@@ -12,10 +12,9 @@
   normalizing files in different ways in a single invocation.
 * Add colour support.
 * Fixed bug where the Vorbis Identification header could never fail validation.
-* Add `aarch64-apple-darwin` CI and release builds.
+* Add `aarch64-apple-darwin` and `aarch64-unknown-linux-musl` CI and release builds.
 * Run tests on `macos-latest` and `windows-latest` in addition to `ubuntu-latest`.
-* Add integration tests for `zoogcomment`.
-* Add integration tests for `opusgain`.
+* Add integration tests for `zoogcomment` and `opusgain`.
 * Include third-party licenses in releases.
 * Switch Windows builds to use Windows runners and the MSVC Rust targets.
 
