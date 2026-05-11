@@ -117,6 +117,7 @@ jobs:
         name: Clippy
         with:
           command: cargo clippy
+          args: --all-features
 
   check-licenses:
     name: Check licenses
