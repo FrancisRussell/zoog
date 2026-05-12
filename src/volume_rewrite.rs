@@ -90,8 +90,8 @@ impl HeaderSummarize for GainsSummary {
             CodecHeaders::Opus(opus_header, comment_header) => {
                 let gains = OpusGains {
                     output: opus_header.get_output_gain().into(),
-                    track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).unwrap_or(None).map(Into::into),
-                    album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).unwrap_or(None).map(Into::into),
+                    track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).ok().flatten().map(Into::into),
+                    album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).ok().flatten().map(Into::into),
                 };
                 Ok(gains)
             }
