@@ -317,14 +317,8 @@ fn run(console_output: &Standard, mut cli: Cli, interrupt_checker: &CtrlCChecker
         };
 
         let output_gain_mode = match cli.output_gain_mode {
-            OutputGainSetting::Auto => {
-                if album_mode {
-                    OutputGainMode::Album
-                } else {
-                    OutputGainMode::Track
-                }
-            }
-            OutputGainSetting::Track => OutputGainMode::Track,
+            OutputGainSetting::Auto if album_mode => OutputGainMode::Album,
+            _ => OutputGainMode::Track,
         };
 
         // Prevent us from rewriting more than one file at once. This is to stop us
