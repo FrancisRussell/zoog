@@ -354,7 +354,7 @@ in this project. It served a similar purpose to `opusgain` but used the existing
 
 `zoog` was deprecated because the issues around whether it is possible to
 assume that a track is album normalized made it possible to break album
-normalization if it occured via the ouput gain value and not the
+normalization if it occurred via the output gain value and not the
 `R128_ALBUM_GAIN` tag.
 
 ### When should I use `opusgain` versus `loudgain`
