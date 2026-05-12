@@ -90,8 +90,8 @@ impl HeaderSummarize for GainsSummary {
             CodecHeaders::Opus(opus_header, comment_header) => {
                 let gains = OpusGains {
                     output: opus_header.get_output_gain().into(),
-                    track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).unwrap_or(None).map(Into::into),
-                    album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).unwrap_or(None).map(Into::into),
+                    track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).ok().flatten().map(Into::into),
+                    album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).ok().flatten().map(Into::into),
                 };
                 Ok(gains)
             }
@@ -130,12 +130,8 @@ impl HeaderRewrite for VolumeHeaderRewrite {
                     VolumeTarget::NoChange => opus_header.get_output_gain(),
                 };
                 opus_header.set_output_gain(new_header_gain);
-                let compute_gain = |volume| -> Result<Option<FixedPointGain>, Error> {
-                    if let Some(volume) = volume {
-                        FixedPointGain::try_from(R128_LUFS - volume - new_header_gain.into()).map(Some)
-                    } else {
-                        Ok(None)
-                    }
+                let compute_gain = |volume: Option<Decibels>| {
+                    volume.map(|v| FixedPointGain::try_from(R128_LUFS - v - new_header_gain.into())).transpose()
                 };
                 let track_gain_r128 = compute_gain(self.config.track_volume)?;
                 let album_gain_r128 = compute_gain(self.config.album_volume)?;

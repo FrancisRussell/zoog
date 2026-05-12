@@ -19,21 +19,19 @@ impl header::IdHeader for IdHeader {
         if data.len() < VORBIS_MIN_HEADER_SIZE {
             return Ok(None);
         }
-        let identical = data.iter().take(VORBIS_MAGIC.len()).eq(VORBIS_MAGIC.iter());
-        if !identical {
+        if !data.starts_with(VORBIS_MAGIC) {
             return Ok(None);
         }
         let result = IdHeader { data: data.to_vec() };
         if result.version() != 0 {
             return Err(Error::UnsupportedCodecVersion(Codec::Vorbis, u64::from(result.version())));
         }
-        let mut is_valid = true;
-        is_valid &= result.num_output_channels() != 0;
-        is_valid &= result.output_sample_rate() != 0;
-        is_valid &= VORBIS_BLOCK_SIZES.contains(&result.blocksize_0());
-        is_valid &= VORBIS_BLOCK_SIZES.contains(&result.blocksize_1());
-        is_valid &= result.blocksize_0() <= result.blocksize_1();
-        is_valid &= (result.data[29] & 1) != 0; // Framing flag
+        let is_valid = result.num_output_channels() != 0
+            && result.output_sample_rate() != 0
+            && VORBIS_BLOCK_SIZES.contains(&result.blocksize_0())
+            && VORBIS_BLOCK_SIZES.contains(&result.blocksize_1())
+            && result.blocksize_0() <= result.blocksize_1()
+            && (result.data[29] & 1) != 0; // Framing flag
         if is_valid {
             Ok(Some(result))
         } else {

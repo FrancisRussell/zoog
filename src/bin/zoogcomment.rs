@@ -287,6 +287,7 @@ fn read_comments_from_stdin(escaped: bool) -> Result<DiscreteCommentList, AppErr
     read_comments_from_read(stdin, escaped, error_map)
 }
 
+#[allow(clippy::too_many_lines)]
 fn run(console: &Standard, cli: Cli, interrupt_checker: &CtrlCChecker) -> Result<(), AppError> {
     let operation_mode = match (cli.list, cli.modify, cli.replace) {
         (_, false, false) => OperationMode::List,
