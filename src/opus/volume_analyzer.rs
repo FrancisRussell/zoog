@@ -227,11 +227,8 @@ impl VolumeAnalyzer {
     /// Returns the mean LUFS of all completed files submitted to the supplied
     /// volume analyzers
     pub fn mean_lufs_across_multiple<'a, I: IntoIterator<Item = &'a VolumeAnalyzer>>(analyzers: I) -> Decibels {
-        let mut windows: Vec<Power> = Vec::new();
-        for analyzer in analyzers {
-            windows.extend(analyzer.windows.inner.iter());
-        }
-        let windows = Windows100ms { inner: windows };
+        let inner: Vec<_> = analyzers.into_iter().flat_map(|a| a.windows.inner.iter().copied()).collect();
+        let windows = Windows100ms { inner };
         Self::gated_mean_to_lufs(windows.as_ref())
     }
 }
