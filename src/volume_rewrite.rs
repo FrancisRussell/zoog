@@ -130,12 +130,8 @@ impl HeaderRewrite for VolumeHeaderRewrite {
                     VolumeTarget::NoChange => opus_header.get_output_gain(),
                 };
                 opus_header.set_output_gain(new_header_gain);
-                let compute_gain = |volume| -> Result<Option<FixedPointGain>, Error> {
-                    if let Some(volume) = volume {
-                        FixedPointGain::try_from(R128_LUFS - volume - new_header_gain.into()).map(Some)
-                    } else {
-                        Ok(None)
-                    }
+                let compute_gain = |volume: Option<Decibels>| {
+                    volume.map(|v| FixedPointGain::try_from(R128_LUFS - v - new_header_gain.into())).transpose()
                 };
                 let track_gain_r128 = compute_gain(self.config.track_volume)?;
                 let album_gain_r128 = compute_gain(self.config.album_volume)?;
