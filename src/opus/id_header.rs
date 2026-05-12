@@ -22,8 +22,7 @@ impl header::IdHeader for IdHeader {
         if data.len() < OPUS_MIN_HEADER_SIZE {
             return Ok(None);
         }
-        let identical = data.iter().take(OPUS_MAGIC.len()).eq(OPUS_MAGIC.iter());
-        if !identical {
+        if !data.starts_with(OPUS_MAGIC) {
             return Ok(None);
         }
         let result = IdHeader { data: data.to_vec() };

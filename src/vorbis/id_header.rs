@@ -19,8 +19,7 @@ impl header::IdHeader for IdHeader {
         if data.len() < VORBIS_MIN_HEADER_SIZE {
             return Ok(None);
         }
-        let identical = data.iter().take(VORBIS_MAGIC.len()).eq(VORBIS_MAGIC.iter());
-        if !identical {
+        if !data.starts_with(VORBIS_MAGIC) {
             return Ok(None);
         }
         let result = IdHeader { data: data.to_vec() };
