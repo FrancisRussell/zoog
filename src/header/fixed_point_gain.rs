@@ -1,4 +1,3 @@
-use std::convert::TryFrom;
 use std::fmt::{Display, Formatter};
 use std::str::FromStr;
 
@@ -13,23 +12,29 @@ pub struct FixedPointGain {
 
 impl FixedPointGain {
     /// The underlying signed 16-bit integer representation
+    #[must_use]
     pub fn as_fixed_point(self) -> i16 { self.value }
 
     /// This value as Decibels
+    #[must_use]
     pub fn as_decibels(self) -> Decibels { Decibels::from(f64::from(self.value) / 256.0) }
 
     /// Construct from a fixed-point integer encoding
+    #[must_use]
     pub fn from_fixed_point(value: i16) -> FixedPointGain { FixedPointGain { value } }
 
     /// Does this value represent the identity gain?
+    #[must_use]
     pub fn is_zero(self) -> bool { self.value == 0 }
 
     /// Checked addition returning `None` on overflow or underflow.
+    #[must_use]
     pub fn checked_add(self, rhs: FixedPointGain) -> Option<FixedPointGain> {
         self.value.checked_add(rhs.value).map(|value| FixedPointGain { value })
     }
 
     /// Checked subtraction returning `None` on overflow or underflow.
+    #[must_use]
     pub fn checked_neg(self) -> Option<FixedPointGain> {
         self.value.checked_neg().map(|value| FixedPointGain { value })
     }
@@ -42,7 +47,7 @@ impl TryFrom<Decibels> for FixedPointGain {
         let fixed = (value.as_f64() * 256.0).round();
         #[allow(clippy::cast_possible_truncation)]
         let value = fixed as i16;
-        if (f64::from(value) - fixed).abs() < std::f64::EPSILON {
+        if (f64::from(value) - fixed).abs() < f64::EPSILON {
             Ok(FixedPointGain { value })
         } else {
             Err(Error::GainOutOfBounds)
@@ -79,7 +84,7 @@ mod tests {
 
     #[test]
     fn positive_overflow() {
-        let max_gain = FixedPointGain { value: std::i16::MAX };
+        let max_gain = FixedPointGain { value: i16::MAX };
         let one = FixedPointGain { value: 1 };
         assert_eq!(max_gain.checked_add(one), None);
         assert_eq!(one.checked_add(max_gain), None);
@@ -87,7 +92,7 @@ mod tests {
 
     #[test]
     fn negative_overflow() {
-        let min_gain = FixedPointGain { value: std::i16::MIN };
+        let min_gain = FixedPointGain { value: i16::MIN };
         let neg_one = FixedPointGain { value: -1 };
         assert_eq!(min_gain.checked_add(neg_one), None);
         assert_eq!(neg_one.checked_add(min_gain), None);
@@ -95,13 +100,13 @@ mod tests {
 
     #[test]
     fn negate_lowest_value() {
-        let min_gain = FixedPointGain { value: std::i16::MIN };
+        let min_gain = FixedPointGain { value: i16::MIN };
         assert_eq!(min_gain.checked_neg(), None);
     }
 
     #[test]
     fn decibel_conversion() {
-        for value in std::i16::MIN..=std::i16::MAX {
+        for value in i16::MIN..=i16::MAX {
             let gain = FixedPointGain { value };
             let decibels = gain.as_decibels();
             let gain2 = FixedPointGain::try_from(decibels).unwrap();

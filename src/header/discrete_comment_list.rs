@@ -13,6 +13,7 @@ impl DiscreteCommentList {
     fn keys_equal(k1: &str, k2: &str) -> bool { k1.eq_ignore_ascii_case(k2) }
 
     /// Allocates a list with the specified capacity
+    #[must_use]
     pub fn with_capacity(cap: usize) -> DiscreteCommentList {
         DiscreteCommentList { comments: Vec::with_capacity(cap) }
     }

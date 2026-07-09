@@ -3,7 +3,8 @@ use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 
 use tempfile::NamedTempFile;
-use zoog::Error;
+
+use crate::Error;
 
 #[derive(Debug)]
 enum FileEnum {
@@ -41,6 +42,7 @@ fn make_sibling_temporary_file(path: &Path, distinguisher: &OsStr) -> Result<Nam
 
 impl OutputFile {
     /// Creates a new output that discards all data written
+    #[must_use]
     pub fn new_sink() -> OutputFile { OutputFile { file_enum: FileEnum::Sink } }
 
     /// Writes to a temporary that replaces the specified path on `commit()`.

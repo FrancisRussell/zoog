@@ -15,7 +15,7 @@ be used to:
 * set the output gain value located in the Opus binary header inside Opus files
   so that the file plays at the loudness of the original encoded audio, or of
   that consistent with the
-  [ReplayGain](https://en.wikipedia.org/wiki/ReplayGain)  or [EBU R
+  [ReplayGain](https://wiki.hydrogenaudio.org/index.php?title=ReplayGain) or [EBU R
   128](https://en.wikipedia.org/wiki/EBU_R_128) standards.
 
 * write the Opus comment tags used by some music players to decide
@@ -95,9 +95,6 @@ The following options are available (run `opusgain --help` for usage):
   apply the calculated album gain, but this behaviour can be overridden using
   the `--output-gain-mode` option.
 
-* `-n, --dry-run`: Displays the same output that `opusgain` would otherwise
-  produce, but does not make any changes to the supplied files.
-
 * `-j N, --num-threads=N`: Use `N` threads for processing. The default is to use the
   number of cores detected on the system. Larger numbers will be rounded down
   to this value. To avoid high disk space usage during processing, or a large
@@ -106,6 +103,79 @@ The following options are available (run `opusgain --help` for usage):
 
 * `-c, --clear`: Remove all `R128` tags from the specified files. The output
   gain of each file is unchanged, regardless of the specified preset.
+
+* `--mtime-strategy=STRATEGY`: Controls how the modification time of files
+  is altered after being rewritten.
+
+  * `present` (default): The file's modification timestamp is set to the
+  current system time.
+
+  * `preserve`: The updated file's modification timestamp is set to the
+  modification time of the original file. Note that because Ogg files can
+  absorb small tag changes without altering file size, backup programs that
+  detect changes via modification time and file size may not detect that the
+  file has been updated.
+
+  * `minimal-increment`: A small delta is applied to the modification time of
+  the file. This delta is filesystem-dependent but on a modern filesystem is
+  likely to be in the order of a nanosecond. This strategy exists so that
+  backup programs which use modification time and/or filesize to detect file
+  changes correctly pick up changes, without significantly altering
+  modification time.
+
+* `-M`: Alias for `--mtime-strategy=minimal-increment`.
+
+* `-n, --dry-run`: Displays the same output that `opusgain` would otherwise
+  produce, but does not make any changes to the supplied files.
+
+* `-I PATH_PROCESSING_MODE, --interpret-paths=PATH_PROCESSING_MODE`
+
+  This option controls how the supplied paths are interpreted.
+
+  * `files-singles` (default): Each supplied path must be to a file. Files are
+    normalized independently, with any album tags being removed. It is an error
+    to supply a folder.
+
+  * `files-album`: Each supplied path must be to a file. Files are treated as
+    all belonging to the same album and album normalization tags will be
+    generated.  It is an error to supply a folder. This option is equivalent to
+    supplying the `-a` or `--album` flag.
+  
+  * `folders-are-albums`: Each file path supplied is treated as a single, with
+    album tags being removed. Each supplied folder path is explored (including
+    recursive traversal of sub-folders) with all found Opus files being treated
+    as part of a single album. This option therefore makes it possible to apply
+    multiple album normalizations in a single `opusgain` invocation. Which
+    files inside folders are considered Ogg Opus files is controlled by the
+    `--file-extensions` option.
+
+    For example, if you had the files:
+
+    ```
+    a.opus
+    album1/b.opus
+    album1/c.opus
+    album2/e.opus
+    album2/f.opus
+    d.opus
+    ```
+
+    Then `opusgain -I folders-are-albums *` in that folder would be expanded
+    (by the shell on Linux/MacOS or by `opusgain` on Windows) to `opusgain -I
+    folders-are-albums a.opus album1 album2 d.opus` with `a.opus` and `d.opus`
+    being treated as singles and `album1` and `album2` being normalized as
+    independent albums.
+
+* `-e FILE_EXTENSIONS`, `--file-extensions=FILE_EXTENSIONS`: When folders are
+  passed on the command line to be searched for files, this option determines
+  what file extensions are considered to be Ogg Opus files. Multiple extensions
+  may be supplied separated by commas. By default this value is `opus`, but
+  `ogg,opus` could be supplied to assume that all found `.ogg` files are Ogg
+  Opus as well.
+
+* `--colour=WHEN`, `--color=WHEN`: Controls whether coloured output is used.
+  Valid values are `auto` (default), `always` (use console APIs or fallback to
+  ANSI escape codes), `always-ansi` (emit ANSI escape codes) and `never`.
 
 If the internal gain and tag values are already correct for the specified files,
 `opusgain` will avoid rewriting them.
@@ -157,8 +227,33 @@ The following options are available (run `zoogcomment --help` for usage):
   line. If `-` is specified for the file name, tags will be written to standard
   output.
 
+* `--mtime-strategy=STRATEGY`: Controls how the modification time of files
+  is altered after being rewritten.
+
+  * `present` (default): The file's modification timestamp is set to the
+  current system time.
+
+  * `preserve`: The updated file's modification timestamp is set to the
+  modification time of the original file. Note that because Ogg files can
+  absorb small tag changes without altering file size, backup programs that
+  detect changes via modification time and file size may not detect that the
+  file has been updated.
+
+  * `minimal-increment`: A small delta is applied to the modification time of
+  the file. This delta is filesystem-dependent but on a modern filesystem is
+  likely to be in the order of a nanosecond. This strategy exists so that
+  backup programs which use modification time and/or filesize to detect file
+  changes correctly pick up changes, without significantly altering
+  modification time.
+
+* `-M`: Alias for `--mtime-strategy=minimal-increment`.
+
 * `-n, --dry-run`: Displays the same output that `zoogcomment` would otherwise
   produce, but does not make any changes to the filesystem.
+
+* `--colour=WHEN`, `--color=WHEN`: Controls whether coloured output is used.
+  Valid values are `auto` (default), `always` (use console APIs or fallback to
+  ANSI escape codes), `always-ansi` (emit ANSI escape codes) and `never`.
 
 `zoogcomment` only has knowledge of UTF-8. Usage on systems where UTF-8 is not
 the character encoding scheme in use may encounter issues.
@@ -196,8 +291,7 @@ $ cargo install zoog
 ## Releases
 
 Zoog binaries for Windows, MacOS and Linux can be found on the [releases
-page](https://github.com/FrancisRussell/zoog/releases/). Only the Linux
-binaries have undergone any testing at present.
+page](https://github.com/FrancisRussell/zoog/releases/).
 
 ## About Ogg Opus Volume Normalization
 
@@ -260,7 +354,7 @@ in this project. It served a similar purpose to `opusgain` but used the existing
 
 `zoog` was deprecated because the issues around whether it is possible to
 assume that a track is album normalized made it possible to break album
-normalization if it occured via the ouput gain value and not the
+normalization if it occurred via the output gain value and not the
 `R128_ALBUM_GAIN` tag.
 
 ### When should I use `opusgain` versus `loudgain`
@@ -281,6 +375,18 @@ normalization.
 Applying `opusgain` to various test files then reviewing the diagnostic output
 and `R128` tags generated by [loudgain](https://github.com/Moonbase59/loudgain)
 when applied to the rewritten files is helpful in this regard.
+
+### When you say the loudness of ReplayGain do you mean 1.0 or 2.0?
+
+In terms of loudness, `opusgain`'s implementation matches [ReplayGain
+2.0](https://wiki.hydrogenaudio.org/index.php?title=Revised_ReplayGain_specification)
+in that it uses EBU R 128 for loudness calculations and targets -18 LUFS.
+[ReplayGain
+1.0](https://wiki.hydrogenaudio.org/index.php?title=Original_ReplayGain_specification)
+used a loudness calculation that's generally considered inferior and targets
+a volume of 89 dB SPL. The -18 LUFS level of ReplayGain 2.0 was chosen to
+attempt to match the loudness of ReplayGain 1.0 though since the algorithms are
+different this value was apparently chosen via empirical analysis.
 
 ## Disclaimer
 

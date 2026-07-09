@@ -1,5 +1,5 @@
-use rand::distributions::{Standard, Uniform};
-use rand::Rng;
+use rand::distr::{StandardUniform, Uniform};
+use rand::{Rng, RngExt as _};
 
 use crate::{header, Error};
 
@@ -8,18 +8,19 @@ const MAX_COMMENTS: usize = 128;
 
 pub(crate) fn random_string<R: Rng>(engine: &mut R, is_key: bool) -> String {
     let min_len = usize::from(is_key);
-    let len_distr = Uniform::new_inclusive(min_len, MAX_STRING_LENGTH);
+    let len_distr =
+        Uniform::new_inclusive(min_len, MAX_STRING_LENGTH).expect("Unable to construct length distribution");
     let len = engine.sample(len_distr);
     let mut result = String::new();
     result.reserve(len);
     if is_key {
         let valid_chars: Vec<char> = (' '..='<').chain('>'..='}').collect();
-        let char_index_dist = Uniform::new(0, valid_chars.len());
+        let char_index_dist = Uniform::new(0, valid_chars.len()).expect("Unable to construct character distribution");
         for _ in 0..len {
             result.push(valid_chars[engine.sample(char_index_dist)]);
         }
     } else {
-        for c in engine.sample_iter(&Standard).take(len) {
+        for c in engine.sample_iter(&StandardUniform).take(len) {
             result.push(c);
         }
     }
@@ -29,7 +30,8 @@ pub(crate) fn random_string<R: Rng>(engine: &mut R, is_key: bool) -> String {
 pub(crate) fn create_random_header<H: header::CommentHeader + Default, R: Rng>(engine: &mut R) -> H {
     let mut header = H::default();
     header.set_vendor(&random_string(engine, false));
-    let num_comments_dist = Uniform::new_inclusive(0, MAX_COMMENTS);
+    let num_comments_dist =
+        Uniform::new_inclusive(0, MAX_COMMENTS).expect("Unable to create comment count distribution");
     let num_comments = engine.sample(num_comments_dist);
     for _ in 0..num_comments {
         let key = random_string(engine, true);

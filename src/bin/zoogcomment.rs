@@ -1,25 +1,25 @@
 #![warn(clippy::pedantic)]
 #![allow(clippy::uninlined_format_args)]
 
-#[path = "../ctrlc_handling.rs"]
-mod ctrlc_handling;
-
-#[path = "../output_file.rs"]
-mod output_file;
-
 use std::borrow::Cow;
 use std::collections::{HashMap, HashSet};
-use std::convert::Into;
 use std::fs::File;
 use std::io::{self, BufRead, BufReader, BufWriter, Read, Seek as _, Write as _};
 use std::ops::BitOrAssign;
 use std::path::{Path, PathBuf};
+use std::process::ExitCode;
+use std::time::SystemTime;
 
 use clap::Parser;
+use console_output::{ConsoleOutput as _, Standard};
 use ctrlc_handling::CtrlCChecker;
+use logging::{error, warn};
 use output_file::OutputFile;
+use termcolor::ColorChoice;
 use thiserror::Error;
 use zoog::comment_rewrite::{CommentHeaderRewrite, CommentHeaderSummary, CommentRewriterAction, CommentRewriterConfig};
+use zoog::frontend::filesystem::{adjust_mtime, SetMtimeOutcome, TimestampUpdateMode};
+use zoog::frontend::{console_output, ctrlc_handling, logging, output_file};
 use zoog::header::{parse_comment, validate_comment_field_name, CommentList, DiscreteCommentList};
 use zoog::header_rewriter::{rewrite_stream_with_interrupt, SubmitResult};
 use zoog::{escaping, Error};
@@ -42,14 +42,25 @@ enum AppError {
     StandardInputReadError(io::Error),
 }
 
-fn main() {
-    if let Err(e) = main_impl() {
-        match e {
-            AppError::LibraryError(e) => eprintln!("Aborted due to error: {}", e),
-            AppError::SilentExit => {}
-            e => eprintln!("{}", e),
+fn main() -> ExitCode {
+    let cli = Cli::parse_from(wild::args_os());
+    let console = Standard::new(cli.colour);
+    let interrupt_checker = match CtrlCChecker::new() {
+        Ok(c) => c,
+        Err(e) => {
+            error!(&console, "{}", AppError::CtrlCRegistration(e));
+            return ExitCode::FAILURE;
         }
-        std::process::exit(1);
+    };
+    if let Err(e) = run(&console, cli, &interrupt_checker) {
+        match e {
+            AppError::LibraryError(e) => error!(&console, "Aborted due to error: {}", e),
+            AppError::SilentExit => {}
+            e => error!(&console, "{}", e),
+        }
+        ExitCode::FAILURE
+    } else {
+        ExitCode::SUCCESS
     }
 }
 
@@ -99,6 +110,19 @@ struct Cli {
     /// Output file (cannot be specified in list mode)
     #[clap(conflicts_with = "list")]
     output_file: Option<PathBuf>,
+
+    #[clap(long, value_enum, default_value_t = TimestampUpdateMode::Present, conflicts_with = "minimize_mtime_change")]
+    /// Strategy to use for setting modification time of rewritten files.
+    mtime_strategy: TimestampUpdateMode,
+
+    #[clap(short = 'M', action)]
+    /// Alias for --mtime-strategy=minimal-increment.
+    minimize_mtime_change: bool,
+
+    #[clap(long = "colour", alias = "color", value_parser = clap::value_parser!(ColorChoice), default_value = "auto", value_name = "WHEN")]
+    /// Control whether colour is used in output [possible values: always,
+    /// always-ansi, auto, never]
+    colour: ColorChoice,
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -140,7 +164,7 @@ impl BitOrAssign for ValueMatch {
                 if rhs.len() > lhs.len() {
                     std::mem::swap(&mut rhs, &mut lhs);
                 }
-                lhs.extend(rhs.into_iter());
+                lhs.extend(rhs);
                 ValueMatch::ContainedIn(lhs)
             }
             _ => ValueMatch::All,
@@ -186,14 +210,15 @@ where
 }
 
 /// Try to protect user against passing a media file as a tags file
-fn validate_comment_filename(path: &Path) -> Result<(), AppError> {
+fn validate_comment_filename<C: console_output::ConsoleOutput>(path: &Path, console: &C) -> Result<(), AppError> {
     if let Some(ext) = path.extension() {
         let mut ext = ext.to_string_lossy().to_string();
         ext.make_ascii_lowercase();
         if OGG_OPUS_EXTENSIONS.iter().any(|e| ext == *e) {
-            eprintln!(
-                "Based on the file extension {:?} looks like it might be a media file. Refusing to use it for tags.",
-                path
+            warn!(
+                console,
+                "Based on the file extension {} looks like it might be a media file. Refusing to use it for tags.",
+                path.display()
             );
             return Err(AppError::SilentExit);
         }
@@ -262,25 +287,26 @@ fn read_comments_from_stdin(escaped: bool) -> Result<DiscreteCommentList, AppErr
     read_comments_from_read(stdin, escaped, error_map)
 }
 
-fn main_impl() -> Result<(), AppError> {
-    let interrupt_checker = CtrlCChecker::new()?;
-    let cli = Cli::parse_from(wild::args_os());
+#[allow(clippy::too_many_lines)]
+fn run(console: &Standard, cli: Cli, interrupt_checker: &CtrlCChecker) -> Result<(), AppError> {
     let operation_mode = match (cli.list, cli.modify, cli.replace) {
         (_, false, false) => OperationMode::List,
         (false, true, false) => OperationMode::Modify,
         (false, false, true) => OperationMode::Replace,
         _ => {
-            eprintln!("Invalid combination of modes passed");
+            error!(console, "Invalid combination of modes passed");
             return Err(AppError::SilentExit);
         }
     };
 
     for comment_file in [&cli.tags_in, &cli.tags_out].iter().copied().flatten() {
-        validate_comment_filename(comment_file)?;
+        validate_comment_filename(comment_file, console)?;
     }
 
     let dry_run = cli.dry_run;
     let escape = cli.escapes;
+    let mtime_strategy =
+        if cli.minimize_mtime_change { TimestampUpdateMode::MinimalIncrement } else { cli.mtime_strategy };
     let delete_tags = parse_delete_comment_args(cli.delete, escape)?;
     let append = {
         let mut append = parse_new_comment_args(cli.tags, escape)?;
@@ -298,6 +324,7 @@ fn main_impl() -> Result<(), AppError> {
     let action = match operation_mode {
         OperationMode::List => CommentRewriterAction::NoChange,
         OperationMode::Modify => {
+            #[allow(clippy::type_complexity)]
             let retain: Box<dyn Fn(&str, &str) -> bool> = Box::new(|k, v| !delete_tags.matches(k, v));
             CommentRewriterAction::Modify { retain, append }
         }
@@ -308,6 +335,11 @@ fn main_impl() -> Result<(), AppError> {
     let input_path = cli.input_file;
     let output_path = cli.output_file.unwrap_or_else(|| input_path.clone());
     let input_file = File::open(&input_path).map_err(|e| Error::FileOpenError(input_path.clone(), e))?;
+    let input_file_modified = input_file
+        .metadata()
+        .and_then(|metadata| metadata.modified())
+        .map_err(|e| Error::FileMetadataReadError(input_path.clone(), e))?;
+
     let mut input_file = BufReader::new(input_file);
 
     let mut output_file = match operation_mode {
@@ -326,18 +358,18 @@ fn main_impl() -> Result<(), AppError> {
             &mut input_file,
             &mut output_file,
             abort_on_unchanged,
-            &interrupt_checker,
+            interrupt_checker,
         )
     };
     let mut commit = false;
     match rewrite_result {
         Err(e) => {
-            eprintln!("Failure during processing of {}.", input_path.display());
+            error!(&console, "Failure during processing of {}.", input_path.display());
             return Err(e.into());
         }
         Ok(SubmitResult::Good) => {
             // We finished processing the file but never got the headers
-            eprintln!("File {} appeared to be oddly truncated. Doing nothing.", input_path.display());
+            warn!(&console, "File {} appeared to be oddly truncated. Doing nothing.", input_path.display());
         }
         Ok(SubmitResult::HeadersUnchanged(comments)) => match operation_mode {
             OperationMode::List => {
@@ -352,7 +384,7 @@ fn main_impl() -> Result<(), AppError> {
                     }
                     comment_file.commit()?;
                 } else {
-                    comments.write_as_text(io::stdout(), escape).map_err(Error::ConsoleIoError)?;
+                    comments.write_as_text(io::stdout(), escape).map_err(Error::WriteError)?;
                 }
             }
             OperationMode::Modify | OperationMode::Replace => {
@@ -367,7 +399,7 @@ fn main_impl() -> Result<(), AppError> {
                     // Copy the input file to the output file
                     input_file.rewind().map_err(Error::ReadError)?;
                     std::io::copy(&mut input_file, &mut output_file)
-                        .map_err(|e| Error::FileCopy(input_path, output_path, e))?;
+                        .map_err(|e| Error::FileCopy(input_path, output_path.clone(), e))?;
                     commit = true;
                 }
             }
@@ -375,10 +407,22 @@ fn main_impl() -> Result<(), AppError> {
         Ok(SubmitResult::HeadersChanged { .. }) => {
             commit = true;
         }
-    };
+    }
     drop(input_file); // Important for Windows so we can overwrite
     if commit {
         output_file.commit()?;
+        // Update timestamp if necessary
+        if !dry_run {
+            let now = SystemTime::now();
+            let outcome = std::fs::OpenOptions::new()
+                .write(true) // write access required for set_modified on Windows
+                .open(&output_path)
+                .and_then(|file| adjust_mtime(&file, input_file_modified, now, mtime_strategy))
+                .map_err(|e| Error::FileMetadataWriteError(output_path.clone(), e))?;
+            if !matches!(outcome, SetMtimeOutcome::Success) {
+                warn!(&console, "Modification time update on {}: {}.", output_path.display(), outcome);
+            }
+        }
     } else {
         output_file.abort()?;
     }

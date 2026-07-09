@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased
+
+* **Bugfix:** Fix loudness measurement of mono files to follow EBU R128
+  (channel power summation) rather than ReplayGain (channel power averaging).
+* Bump `tempfile` minimum version to avoid `RUSTSEC-2023-0018`.
+* Replace `--minimize-mtime-change` option in `opusgain` and `zoogcomment` with
+  `--mtime-strategy`, which supports three modes: `present` (set to current
+  system time, default), `preserve` (restore original modification time), and
+  `minimal-increment` (apply the smallest filesystem-detectable increment to the
+  original modification time).
+* Add `--interpret-paths` and `--file-extensions` options to enable support for
+  normalizing files in different ways in a single invocation.
+* Add colour support.
+* Fixed bug where the Vorbis Identification header could never fail validation.
+* Add `aarch64-apple-darwin` and `aarch64-unknown-linux-musl` CI and release builds.
+* Run tests on `macos-latest` and `windows-latest` in addition to `ubuntu-latest`.
+* Add integration tests for `zoogcomment` and `opusgain`.
+* Include third-party licenses in releases.
+* Switch Windows builds to use Windows runners and the MSVC Rust targets.
+
 ## 0.8.1
 
 * Fix `zoogcomment` so that in the no-change out-of-place case it does not

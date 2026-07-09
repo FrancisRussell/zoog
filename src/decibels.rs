@@ -1,5 +1,5 @@
 use std::fmt::{Display, Formatter};
-use std::ops::{Add, Sub};
+use std::ops::{Add, Neg, Sub};
 
 /// Represents a Decibel-valued sound level
 #[derive(Copy, Clone, Debug)]
@@ -9,6 +9,7 @@ pub struct Decibels {
 
 impl Decibels {
     /// The Decibel value as an `f64`.
+    #[must_use]
     pub fn as_f64(&self) -> f64 { self.inner }
 }
 
@@ -21,6 +22,7 @@ impl From<f64> for Decibels {
 }
 
 impl Decibels {
+    #[must_use]
     pub const fn new(value: f64) -> Decibels { Decibels { inner: value } }
 }
 
@@ -30,10 +32,29 @@ impl Display for Decibels {
     }
 }
 
+impl PartialEq for Decibels {
+    fn eq(&self, other: &Decibels) -> bool { self.inner == other.inner }
+}
+
+impl PartialOrd for Decibels {
+    fn partial_cmp(&self, other: &Decibels) -> Option<std::cmp::Ordering> { self.inner.partial_cmp(&other.inner) }
+}
+
+impl Decibels {
+    #[must_use]
+    pub fn abs(self) -> Decibels { Decibels { inner: self.inner.abs() } }
+}
+
 impl Sub for Decibels {
     type Output = Decibels;
 
     fn sub(self, other: Decibels) -> Decibels { Decibels { inner: self.inner - other.inner } }
+}
+
+impl Neg for Decibels {
+    type Output = Decibels;
+
+    fn neg(self) -> Decibels { Decibels { inner: -self.inner } }
 }
 
 impl Add for Decibels {

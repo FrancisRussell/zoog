@@ -1,5 +1,10 @@
-[target.x86_64-pc-windows-gnu]
-rustflags = [ "-C", "link-arg=-lssp" ]
+# Cross-linker for aarch64 musl — provided by the musl-dev:arm64 apt package.
+[target.aarch64-unknown-linux-musl]
+linker = "aarch64-linux-musl-gcc"
 
-[target.i686-pc-windows-gnu]
-rustflags = [ "-C", "link-arg=-lssp" ]
+# Link the CRT statically so the binaries run on Windows without a separate runtime install.
+[target.x86_64-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]
+
+[target.i686-pc-windows-msvc]
+rustflags = ["-C", "target-feature=+crt-static"]

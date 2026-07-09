@@ -1,5 +1,3 @@
-use std::convert::{Into, TryFrom};
-
 use crate::header::{CommentList, FixedPointGain};
 use crate::header_rewriter::{CodecHeaders, HeaderRewrite, HeaderSummarize};
 use crate::opus::{TAG_ALBUM_GAIN, TAG_TRACK_GAIN};
@@ -45,6 +43,7 @@ pub struct VolumeRewriterConfig {
 impl VolumeRewriterConfig {
     /// Computes the source volume that will be used for the output gain
     /// calculation
+    #[must_use]
     pub fn volume_for_output_gain_calculation(&self) -> Option<Decibels> {
         match self.output_gain_mode {
             OutputGainMode::Album => self.album_volume,
@@ -55,6 +54,7 @@ impl VolumeRewriterConfig {
 
 impl VolumeTarget {
     /// A description intended to be friendly for printing
+    #[must_use]
     pub fn to_friendly_string(&self) -> String {
         match *self {
             VolumeTarget::ZeroGain => String::from("original input"),
@@ -90,8 +90,8 @@ impl HeaderSummarize for GainsSummary {
             CodecHeaders::Opus(opus_header, comment_header) => {
                 let gains = OpusGains {
                     output: opus_header.get_output_gain().into(),
-                    track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).unwrap_or(None).map(Into::into),
-                    album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).unwrap_or(None).map(Into::into),
+                    track_r128: comment_header.get_gain_from_tag(TAG_TRACK_GAIN).ok().flatten().map(Into::into),
+                    album_r128: comment_header.get_gain_from_tag(TAG_ALBUM_GAIN).ok().flatten().map(Into::into),
                 };
                 Ok(gains)
             }
@@ -108,6 +108,7 @@ pub struct VolumeHeaderRewrite {
 }
 
 impl VolumeHeaderRewrite {
+    #[must_use]
     pub fn new(config: VolumeRewriterConfig) -> VolumeHeaderRewrite { VolumeHeaderRewrite { config } }
 }
 
@@ -129,12 +130,8 @@ impl HeaderRewrite for VolumeHeaderRewrite {
                     VolumeTarget::NoChange => opus_header.get_output_gain(),
                 };
                 opus_header.set_output_gain(new_header_gain);
-                let compute_gain = |volume| -> Result<Option<FixedPointGain>, Error> {
-                    if let Some(volume) = volume {
-                        FixedPointGain::try_from(R128_LUFS - volume - new_header_gain.into()).map(Some)
-                    } else {
-                        Ok(None)
-                    }
+                let compute_gain = |volume: Option<Decibels>| {
+                    volume.map(|v| FixedPointGain::try_from(R128_LUFS - v - new_header_gain.into())).transpose()
                 };
                 let track_gain_r128 = compute_gain(self.config.track_volume)?;
                 let album_gain_r128 = compute_gain(self.config.album_volume)?;

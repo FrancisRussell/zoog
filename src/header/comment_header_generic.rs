@@ -99,7 +99,10 @@ impl<S> CommentHeaderGeneric<S> {
 }
 
 impl<S: CommentHeaderSpecifics> CommentList for CommentHeaderGeneric<S> {
-    type Iter<'b> = <DiscreteCommentList as CommentList>::Iter<'b> where Self: 'b;
+    type Iter<'b>
+        = <DiscreteCommentList as CommentList>::Iter<'b>
+    where
+        Self: 'b;
 
     fn len(&self) -> usize { self.user_comments.len() }
 
@@ -122,7 +125,7 @@ impl<S: CommentHeaderSpecifics> CommentList for CommentHeaderGeneric<S> {
 
 #[cfg(test)]
 mod tests {
-    use rand::rngs::SmallRng;
+    use rand::rngs::StdRng;
     use rand::SeedableRng;
 
     use super::*;
@@ -158,7 +161,7 @@ mod tests {
 
     #[test]
     fn parse_and_encode_is_identity() {
-        let mut rng = SmallRng::seed_from_u64(19489);
+        let mut rng = StdRng::seed_from_u64(19489);
         for _ in 0..NUM_IDENTITY_TESTS {
             let header_data_original = {
                 let header: CommentHeaderTest = create_random_header(&mut rng);
@@ -187,6 +190,6 @@ mod tests {
         match CommentHeaderTest::try_parse(&header) {
             Err(Error::MalformedCommentHeader) => {}
             _ => panic!("Wrong error for malformed header"),
-        };
+        }
     }
 }

@@ -50,7 +50,8 @@ where
 }
 
 /// Escapes a string slice using `vorbiscomment`-style escaping
-pub fn escape_str(value: &str) -> Cow<str> {
+#[must_use]
+pub fn escape_str(value: &str) -> Cow<'_, str> {
     if value.contains(ESCAPED_CHARS) {
         EscapingIterator::new(value.chars()).collect()
     } else {
@@ -71,7 +72,7 @@ pub enum EscapeDecodeError {
 }
 
 /// Unescapes a string slice using `vorbiscomment`-style escaping
-pub fn unescape_str(value: &str) -> Result<Cow<str>, EscapeDecodeError> {
+pub fn unescape_str(value: &str) -> Result<Cow<'_, str>, EscapeDecodeError> {
     if !value.contains(ESCAPE_CHAR) {
         return Ok(value.into());
     }
@@ -118,17 +119,11 @@ mod tests {
         fn is_cow_borrowed(&self) -> bool;
     }
 
-    impl<'a, T> IntrospectCowBorrow for Cow<'a, T>
+    impl<T> IntrospectCowBorrow for Cow<'_, T>
     where
         T: ToOwned + ?Sized,
     {
-        fn is_cow_owned(&self) -> bool {
-            if let Cow::Owned(_) = self {
-                true
-            } else {
-                false
-            }
-        }
+        fn is_cow_owned(&self) -> bool { matches!(self, Cow::Owned(_)) }
 
         fn is_cow_borrowed(&self) -> bool { !self.is_cow_owned() }
     }

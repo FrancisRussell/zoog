@@ -88,12 +88,10 @@ impl DecodeState {
 
     pub fn get_windows(&self) -> Windows100ms<Vec<Power>> {
         let windows: Vec<_> = self.meters.iter().map(ChannelLoudnessMeter::as_100ms_windows).collect();
-        // See notes on `reduce_stero` in `bs1770` crate.
-        let power_scale_factor = match self.num_channels() {
-            1 => 2.0, // Since mono is still output to two devices
-            2 => 1.0,
-            n => panic!("Calculating power for number of channels {} not yet supported", n),
-        };
+        // EBU R128 (used by Opus) sums channel power, so a stereo file with identical
+        // channels measures ~3 dB louder than a mono file with the same
+        // content. ReplayGain instead averages channel power, making mono and
+        // dual-mono stereo equivalent.
         let num_windows = windows[0].len();
         for channel_windows in &windows {
             assert_eq!(num_windows, channel_windows.len(), "Channels had different amounts of audio");
@@ -107,7 +105,6 @@ impl DecodeState {
                 // semantically-valid operation
                 power += channel_windows[i].0;
             }
-            power *= power_scale_factor;
             result_windows.push(Power(power));
         }
         Windows100ms { inner: result_windows }
@@ -138,7 +135,7 @@ impl Default for VolumeAnalyzer {
 
 impl VolumeAnalyzer {
     /// Submits a new Ogg packet to the analyzer
-    #[allow(clippy::needless_pass_by_value)]
+    #[allow(clippy::needless_pass_by_value, clippy::missing_panics_doc)]
     pub fn submit(&mut self, packet: Packet) -> Result<(), Error> {
         let packet_serial = packet.stream_serial();
         match self.state {
@@ -215,23 +212,23 @@ impl VolumeAnalyzer {
 
     /// Returns the mean LUFS of all completed files submitted to the volume
     /// analyzer so far
+    #[must_use]
     pub fn mean_lufs(&self) -> Decibels { Self::gated_mean_to_lufs(self.windows.as_ref()) }
 
     /// Returns the LUFS of all tracks submitted ot the volume analyzer so far
+    #[must_use]
     pub fn track_lufs(&self) -> Vec<Decibels> { self.track_loudness.clone() }
 
     /// Returns the volume of the most recent track submitted to the volume
     /// analyzer
+    #[must_use]
     pub fn last_track_lufs(&self) -> Option<Decibels> { self.track_loudness.last().copied() }
 
     /// Returns the mean LUFS of all completed files submitted to the supplied
     /// volume analyzers
     pub fn mean_lufs_across_multiple<'a, I: IntoIterator<Item = &'a VolumeAnalyzer>>(analyzers: I) -> Decibels {
-        let mut windows: Vec<Power> = Vec::new();
-        for analyzer in analyzers {
-            windows.extend(analyzer.windows.inner.iter());
-        }
-        let windows = Windows100ms { inner: windows };
+        let inner: Vec<_> = analyzers.into_iter().flat_map(|a| a.windows.inner.iter().copied()).collect();
+        let windows = Windows100ms { inner };
         Self::gated_mean_to_lufs(windows.as_ref())
     }
 }

@@ -66,13 +66,9 @@ pub trait CommentList {
     /// Attempts to parse the first mapping for the specified key as the
     /// fixed-point Decibel representation used in Opus comment headers.
     fn get_gain_from_tag(&self, tag: &str) -> Result<Option<FixedPointGain>, Error> {
-        let parsed =
-            self.get_first(tag).map(|v| v.parse::<FixedPointGain>().map_err(|_| Error::InvalidR128Tag(v.into())));
-        match parsed {
-            Some(Ok(v)) => Ok(Some(v)),
-            Some(Err(e)) => Err(e),
-            None => Ok(None),
-        }
+        self.get_first(tag)
+            .map(|v| v.parse::<FixedPointGain>().map_err(|_| Error::InvalidR128Tag(v.into())))
+            .transpose()
     }
 
     /// Sets the specified tag to the supplied gain using the fixed-point

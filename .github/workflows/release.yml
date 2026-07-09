@@ -5,55 +5,89 @@ on:
     tags:
       - 'v*.*.*'
 
+permissions:
+  contents: write
+
+env:
+  CMAKE_POLICY_VERSION_MINIMUM: 3.5
+
 jobs:
   create-release:
     name: Create release
     runs-on: ubuntu-latest
-    outputs:
-      upload_url: ${{ steps.create_release.outputs.upload_url }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions/create-release@v1
-        id: create_release
+      - uses: actions/checkout@v6
+      - name: Detect prerelease
+        id: prerelease
+        run: |
+          VERSION_CORE="${{ github.ref_name }}"
+          VERSION_CORE="${VERSION_CORE%%+*}"
+          if echo "${VERSION_CORE}" | grep -q '-'; then
+            echo "value=true" >> "$GITHUB_OUTPUT"
+          else
+            echo "value=false" >> "$GITHUB_OUTPUT"
+          fi
+        shell: bash
+      - uses: softprops/action-gh-release@v2
+        with:
+          body_path: CHANGELOG.md
+          prerelease: ${{ steps.prerelease.outputs.value }}
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          tag_name: ${{ github.ref }}
-          release_name: Release ${{ github.ref }}
-          body_path: CHANGELOG.md
   build:
     name: Build binaries
     needs: create-release
     strategy:
       matrix:
-        target: [x86_64-unknown-linux-musl, x86_64-pc-windows-gnu, i686-pc-windows-gnu]
+        target: [x86_64-unknown-linux-musl]
         platform: [ubuntu-latest]
         include:
           - target: x86_64-apple-darwin
             platform: macos-latest
+          - target: aarch64-apple-darwin
+            platform: macos-latest
+          - target: aarch64-unknown-linux-musl
+            platform: ubuntu-latest
+          - target: x86_64-pc-windows-msvc
+            platform: windows-latest
+          - target: i686-pc-windows-msvc
+            platform: windows-latest
     runs-on: ${{ matrix.platform }}
     steps:
-      - uses: actions/checkout@v3
-      - uses: actions-rs/toolchain@v1
+      - uses: actions/checkout@v6
+      - name: Set up Linux musl target
+        if: runner.os == 'Linux'
+        uses: ./.github/actions/setup-linux-musl-target
         with:
-          toolchain: nightly
+          target: ${{ matrix.target }}
+      - uses: FrancisRussell/ferrous-actions@v1
+        name: Install Rustup
+        with:
+          command: install-rustup
+          toolchain: stable
           target: ${{ matrix.target }}
           profile: minimal
-          override: true
-      - uses: actions-rs/cargo@v1
-        with: 
-          use-cross: true
-          command: build
+          default: true
+      - uses: FrancisRussell/ferrous-actions@v1
+        name: Build
+        with:
+          command: cargo build
           args: --release --target=${{ matrix.target }}
+      - uses: FrancisRussell/ferrous-actions@v1
+        name: Install cargo-about
+        with:
+          command: cargo install
+          args: cargo-about --locked --features cli
+      - name: Generate third-party licenses
+        run: cargo about generate -c ./.about/config.toml -o THIRD_PARTY_LICENSES.txt ./.about/template.hbs
       - name: Build Archive
         run: ./scripts/build-release ${{ github.ref }} ${{ matrix.target }}
         id: build_archive
+        shell: bash
       - name: Upload
-        uses: actions/upload-release-asset@v1.0.2
+        uses: softprops/action-gh-release@v2
         with:
-          upload_url: ${{ needs.create-release.outputs.upload_url }}
-          asset_path: ${{ steps.build_archive.outputs.path }}
-          asset_name: ${{ steps.build_archive.outputs.name }}
-          asset_content_type: ${{ steps.build_archive.outputs.content_type }}
+          files: ${{ steps.build_archive.outputs.path }}
+          fail_on_unmatched_files: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

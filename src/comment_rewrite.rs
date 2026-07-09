@@ -10,6 +10,7 @@ use crate::Error;
 pub enum CommentRewriterAction<'a> {
     NoChange,
     Modify {
+        #[allow(clippy::type_complexity)]
         #[derivative(Debug = "ignore")]
         retain: Box<dyn Fn(&str, &str) -> bool + 'a>,
         append: DiscreteCommentList,
@@ -32,6 +33,7 @@ pub struct CommentHeaderRewrite<'a> {
 }
 
 impl CommentHeaderRewrite<'_> {
+    #[must_use]
     pub fn new(config: CommentRewriterConfig) -> CommentHeaderRewrite { CommentHeaderRewrite { config } }
 }
 

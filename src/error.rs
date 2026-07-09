@@ -90,10 +90,6 @@ pub enum Error {
     #[error("Opus error: `{0}`")]
     OpusError(opus::Error),
 
-    /// An IO error occurred when interacting with the console
-    #[error("Console IO error: `{0}`")]
-    ConsoleIoError(std::io::Error),
-
     /// An invalid thread count was specified
     #[error("An invalid number of threads was specified")]
     InvalidThreadCount,
@@ -137,4 +133,15 @@ pub enum Error {
     /// Audio parameters changed
     #[error("Channel count and/or sample rate changed between concatenated audio streams")]
     UnexpectedAudioParametersChange,
+
+    /// An error occurred reading the file metadata
+    #[error("Unable to read metadata from file `{0}` due to `{1}`")]
+    FileMetadataReadError(PathBuf, std::io::Error),
+
+    /// An error occurred writing the file metadata
+    #[error("Unable to write metadata to file `{0}` due to `{1}`")]
+    FileMetadataWriteError(PathBuf, std::io::Error),
+
+    #[error("Path had unexpected file-type: `{0}`")]
+    UnhandledFileType(PathBuf),
 }

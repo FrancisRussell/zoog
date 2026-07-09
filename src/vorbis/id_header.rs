@@ -6,6 +6,7 @@ use crate::{header, Codec, Error};
 
 const VORBIS_MIN_HEADER_SIZE: usize = 30;
 const VORBIS_MAGIC: &[u8] = b"\x01vorbis";
+const VORBIS_BLOCK_SIZES: &[u16] = &[64, 128, 256, 512, 1024, 2048, 4096, 8192];
 
 /// Allows querying and modification of a Vorbis identification header
 #[derive(Clone, Debug, PartialEq)]
@@ -18,22 +19,23 @@ impl header::IdHeader for IdHeader {
         if data.len() < VORBIS_MIN_HEADER_SIZE {
             return Ok(None);
         }
-        let identical = data.iter().take(VORBIS_MAGIC.len()).eq(VORBIS_MAGIC.iter());
-        if !identical {
+        if !data.starts_with(VORBIS_MAGIC) {
             return Ok(None);
         }
         let result = IdHeader { data: data.to_vec() };
         if result.version() != 0 {
             return Err(Error::UnsupportedCodecVersion(Codec::Vorbis, u64::from(result.version())));
         }
-        let mut invalid = false;
-        invalid &= result.num_output_channels() == 0;
-        invalid &= result.output_sample_rate() == 0;
-        invalid &= (result.data[29] & 1) != 0;
-        if invalid {
-            Err(Error::MalformedIdentificationHeader)
-        } else {
+        let is_valid = result.num_output_channels() != 0
+            && result.output_sample_rate() != 0
+            && VORBIS_BLOCK_SIZES.contains(&result.blocksize_0())
+            && VORBIS_BLOCK_SIZES.contains(&result.blocksize_1())
+            && result.blocksize_0() <= result.blocksize_1()
+            && (result.data[29] & 1) != 0; // Framing flag
+        if is_valid {
             Ok(Some(result))
+        } else {
+            Err(Error::MalformedIdentificationHeader)
         }
     }
 
@@ -61,7 +63,15 @@ impl header::IdHeader for IdHeader {
 }
 
 impl IdHeader {
+    /// Length of the Vorbis short window
+    fn blocksize_0(&self) -> u16 { 1 << (self.data[28] & 0x0f) }
+
+    /// Length of the Vorbis long window
+    fn blocksize_1(&self) -> u16 { 1 << ((self.data[28] >> 4) & 0x0f) }
+
     /// The Vorbis version
+    #[allow(clippy::missing_panics_doc)]
+    #[must_use]
     pub fn version(&self) -> u32 {
         let mut reader = Cursor::new(&self.data[7..11]);
         reader.read_u32::<LittleEndian>().expect("Error reading version")
