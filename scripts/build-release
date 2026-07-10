@@ -51,6 +51,10 @@ else
 fi
 
 mv "${OUTPUT}" "${TOP}"
-echo "path=${TOP}/${OUTPUT}" >> "${GITHUB_OUTPUT}"
+OUTPUT_PATH="${TOP}/${OUTPUT}"
+if command -v cygpath > /dev/null 2>&1; then
+  OUTPUT_PATH="$(cygpath -w "${OUTPUT_PATH}")"
+fi
+echo "path=${OUTPUT_PATH}" >> "${GITHUB_OUTPUT}"
 echo "name=${OUTPUT}" >> "${GITHUB_OUTPUT}"
 echo "content_type=${CONTENT_TYPE}" >> "${GITHUB_OUTPUT}"
