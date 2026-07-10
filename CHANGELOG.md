@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.9.0
 
 * **Bugfix:** Fix loudness measurement of mono files to follow EBU R128
   (channel power summation) rather than ReplayGain (channel power averaging).
