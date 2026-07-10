@@ -28,7 +28,7 @@ jobs:
             echo "value=false" >> "$GITHUB_OUTPUT"
           fi
         shell: bash
-      - uses: softprops/action-gh-release@v2
+      - uses: softprops/action-gh-release@v3
         with:
           body_path: CHANGELOG.md
           prerelease: ${{ steps.prerelease.outputs.value }}
@@ -86,7 +86,7 @@ jobs:
         id: build_archive
         shell: bash
       - name: Upload
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@v3
         with:
           files: ${{ steps.build_archive.outputs.path }}
           fail_on_unmatched_files: true
